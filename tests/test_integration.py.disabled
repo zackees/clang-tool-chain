@@ -1,0 +1,365 @@
+"""
+Integration tests for clang-tool-chain with real binaries.
+
+These tests require actual Clang binaries to be installed in the assets directory.
+They will be skipped if binaries are not found.
+
+Run with:
+    pytest tests/test_integration.py
+    pytest tests/test_integration.py -v
+    pytest tests/test_integration.py -k "test_compile_c"
+"""
+
+import contextlib
+import os
+import platform
+import subprocess
+import tempfile
+import unittest
+
+from clang_tool_chain.wrapper import get_platform_binary_dir
+
+
+class IntegrationTestBase(unittest.TestCase):
+    """Base class for integration tests with binary availability check."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Check if binaries are available before running tests."""
+        try:
+            cls.binary_dir = get_platform_binary_dir()
+            cls.binaries_available = cls.binary_dir.exists()
+        except Exception:
+            cls.binaries_available = False
+
+        if not cls.binaries_available:
+            import warnings
+
+            warnings.warn(
+                "Clang binaries not found - integration tests will be skipped. "
+                "Run 'python scripts/download_binaries.py --current-only' to download and install them.",
+                stacklevel=2,
+            )
+
+    def setUp(self):
+        """Set up test fixtures."""
+        if not self.binaries_available:
+            self.skipTest("Clang binaries not installed")
+
+        # Create temporary directory for test outputs
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test outputs."""
+        if hasattr(self, "temp_dir"):
+            import shutil
+
+            with contextlib.suppress(Exception):
+                shutil.rmtree(self.temp_dir)
+
+    def get_output_path(self, filename):
+        """Get path for output file in temp directory."""
+        return os.path.join(self.temp_dir, filename)
+
+    def get_exe_name(self, base_name):
+        """Get executable name with platform-specific extension."""
+        if platform.system() == "Windows":
+            return f"{base_name}.exe"
+        return base_name
+
+
+class CompilationTests(IntegrationTestBase):
+    """Tests for C/C++ compilation."""
+
+    def test_compile_c_hello_world(self):
+        """Test compiling a simple C program."""
+        # Create a simple C source file
+        source_file = self.get_output_path("hello.c")
+        with open(source_file, "w") as f:
+            f.write(
+                "#include <stdio.h>\n" "int main(void) {\n" '    printf("Hello, World!\\n");\n' "    return 0;\n" "}\n"
+            )
+
+        # Compile the program
+        exe_name = self.get_exe_name("hello")
+        output_file = self.get_output_path(exe_name)
+
+        result = subprocess.run(
+            ["clang-tool-chain-c", source_file, "-o", output_file],
+            capture_output=True,
+            text=True,
+        )
+
+        # Check compilation succeeded
+        self.assertEqual(result.returncode, 0, f"Compilation failed: {result.stderr}")
+        self.assertTrue(os.path.exists(output_file), "Output executable not created")
+
+        # Run the compiled program
+        run_result = subprocess.run([output_file], capture_output=True, text=True)
+        self.assertEqual(run_result.returncode, 0, "Execution failed")
+        self.assertIn("Hello, World!", run_result.stdout)
+
+    def test_compile_cpp_hello_world(self):
+        """Test compiling a simple C++ program."""
+        # Create a simple C++ source file
+        source_file = self.get_output_path("hello.cpp")
+        with open(source_file, "w") as f:
+            f.write(
+                "#include <iostream>\n"
+                "int main() {\n"
+                '    std::cout << "Hello, C++!" << std::endl;\n'
+                "    return 0;\n"
+                "}\n"
+            )
+
+        # Compile the program
+        exe_name = self.get_exe_name("hello_cpp")
+        output_file = self.get_output_path(exe_name)
+
+        result = subprocess.run(
+            ["clang-tool-chain-cpp", source_file, "-o", output_file],
+            capture_output=True,
+            text=True,
+        )
+
+        # Check compilation succeeded
+        self.assertEqual(result.returncode, 0, f"Compilation failed: {result.stderr}")
+        self.assertTrue(os.path.exists(output_file), "Output executable not created")
+
+        # Run the compiled program
+        run_result = subprocess.run([output_file], capture_output=True, text=True)
+        self.assertEqual(run_result.returncode, 0, "Execution failed")
+        self.assertIn("Hello, C++!", run_result.stdout)
+
+    def test_compile_with_optimization(self):
+        """Test compiling with optimization flags."""
+        source_file = self.get_output_path("test.c")
+        with open(source_file, "w") as f:
+            f.write("int main(void) { return 0; }\n")
+
+        for opt_level in ["-O0", "-O1", "-O2", "-O3", "-Os"]:
+            with self.subTest(optimization=opt_level):
+                exe_name = self.get_exe_name(f"test_{opt_level.replace('-', '')}")
+                output_file = self.get_output_path(exe_name)
+
+                result = subprocess.run(
+                    [
+                        "clang-tool-chain-c",
+                        opt_level,
+                        source_file,
+                        "-o",
+                        output_file,
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+
+                self.assertEqual(
+                    result.returncode,
+                    0,
+                    f"Compilation with {opt_level} failed: {result.stderr}",
+                )
+                self.assertTrue(os.path.exists(output_file))
+
+
+class MultiFileCompilationTests(IntegrationTestBase):
+    """Tests for multi-file compilation and linking."""
+
+    def test_separate_compilation_and_linking(self):
+        """Test compiling multiple files separately and linking."""
+        # Create header file
+        header_file = self.get_output_path("math.h")
+        with open(header_file, "w") as f:
+            f.write("int add(int a, int b);\n")
+
+        # Create library source
+        lib_source = self.get_output_path("math.c")
+        with open(lib_source, "w") as f:
+            f.write('#include "math.h"\n' "int add(int a, int b) { return a + b; }\n")
+
+        # Create main source
+        main_source = self.get_output_path("main.c")
+        with open(main_source, "w") as f:
+            f.write(
+                "#include <stdio.h>\n"
+                '#include "math.h"\n'
+                "int main(void) {\n"
+                '    printf("2 + 3 = %d\\n", add(2, 3));\n'
+                "    return 0;\n"
+                "}\n"
+            )
+
+        # Compile library to object file
+        lib_obj = self.get_output_path("math.o")
+        result = subprocess.run(
+            ["clang-tool-chain-c", "-c", lib_source, "-o", lib_obj],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"Library compilation failed: {result.stderr}")
+        self.assertTrue(os.path.exists(lib_obj))
+
+        # Compile main to object file
+        main_obj = self.get_output_path("main.o")
+        result = subprocess.run(
+            ["clang-tool-chain-c", "-c", main_source, "-o", main_obj],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"Main compilation failed: {result.stderr}")
+        self.assertTrue(os.path.exists(main_obj))
+
+        # Link object files
+        exe_name = self.get_exe_name("program")
+        output_file = self.get_output_path(exe_name)
+        result = subprocess.run(
+            ["clang-tool-chain-c", main_obj, lib_obj, "-o", output_file],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"Linking failed: {result.stderr}")
+        self.assertTrue(os.path.exists(output_file))
+
+        # Run the program
+        run_result = subprocess.run([output_file], capture_output=True, text=True)
+        self.assertEqual(run_result.returncode, 0)
+        self.assertIn("2 + 3 = 5", run_result.stdout)
+
+
+class BinaryUtilitiesTests(IntegrationTestBase):
+    """Tests for binary utilities (ar, nm, objdump, etc.)."""
+
+    def setUp(self):
+        """Set up test fixtures and compile a test program."""
+        super().setUp()
+
+        # Create and compile a simple test program
+        source_file = self.get_output_path("test.c")
+        with open(source_file, "w") as f:
+            f.write("int my_function(int x) { return x * 2; }\n" "int main(void) { return my_function(21); }\n")
+
+        exe_name = self.get_exe_name("test")
+        self.test_exe = self.get_output_path(exe_name)
+
+        result = subprocess.run(
+            ["clang-tool-chain-c", source_file, "-o", self.test_exe],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.skipTest(f"Could not compile test program: {result.stderr}")
+
+    def test_llvm_nm(self):
+        """Test llvm-nm symbol listing."""
+        result = subprocess.run(
+            ["clang-tool-chain-nm", self.test_exe],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"llvm-nm failed: {result.stderr}")
+        # Should contain our function names
+        self.assertTrue(
+            "my_function" in result.stdout or "my_function" in result.stderr,
+            "Symbol 'my_function' not found in nm output",
+        )
+
+    def test_llvm_objdump(self):
+        """Test llvm-objdump disassembly."""
+        result = subprocess.run(
+            ["clang-tool-chain-objdump", "-d", self.test_exe],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"llvm-objdump failed: {result.stderr}")
+        # Output should contain disassembly
+        self.assertTrue(len(result.stdout) > 0, "No disassembly output")
+
+    def test_llvm_ar_create_archive(self):
+        """Test creating static library with llvm-ar."""
+        # Create an object file
+        source_file = self.get_output_path("lib.c")
+        with open(source_file, "w") as f:
+            f.write("int lib_func(void) { return 42; }\n")
+
+        obj_file = self.get_output_path("lib.o")
+        result = subprocess.run(
+            ["clang-tool-chain-c", "-c", source_file, "-o", obj_file],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(os.path.exists(obj_file))
+
+        # Create archive
+        archive_file = self.get_output_path("libtest.a")
+        result = subprocess.run(
+            ["clang-tool-chain-ar", "rcs", archive_file, obj_file],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"llvm-ar failed: {result.stderr}")
+        self.assertTrue(os.path.exists(archive_file))
+
+        # List archive contents
+        result = subprocess.run(
+            ["clang-tool-chain-ar", "t", archive_file],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("lib.o", result.stdout)
+
+    def test_llvm_strip(self):
+        """Test stripping symbols with llvm-strip."""
+        # Copy the test executable
+        stripped_exe = self.get_output_path(self.get_exe_name("test_stripped"))
+        import shutil
+
+        shutil.copy2(self.test_exe, stripped_exe)
+
+        # Strip the executable
+        result = subprocess.run(
+            ["clang-tool-chain-strip", stripped_exe],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"llvm-strip failed: {result.stderr}")
+
+        # Check that file still exists and is executable
+        self.assertTrue(os.path.exists(stripped_exe))
+
+        # Stripped file should typically be smaller (but not always)
+        stripped_size = os.path.getsize(stripped_exe)
+        # Just verify it's a reasonable size, not necessarily smaller
+        self.assertGreater(stripped_size, 0)
+
+
+class VersionTests(IntegrationTestBase):
+    """Tests for version checking."""
+
+    def test_clang_version(self):
+        """Test clang version command."""
+        result = subprocess.run(
+            ["clang-tool-chain-c", "--version"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        # Should mention clang and version number
+        output = result.stdout.lower()
+        self.assertTrue("clang" in output or "llvm" in output)
+
+    def test_clangpp_version(self):
+        """Test clang++ version command."""
+        result = subprocess.run(
+            ["clang-tool-chain-cpp", "--version"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        output = result.stdout.lower()
+        self.assertTrue("clang" in output or "llvm" in output)
+
+
+if __name__ == "__main__":
+    unittest.main()

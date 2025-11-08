@@ -1,0 +1,175 @@
+name: Binary/Platform Issue
+description: Report issues with binary downloads, compatibility, or platform-specific problems
+title: "[Binary]: "
+labels: ["binary", "platform", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is for issues related to:
+        - Binary download failures
+        - Platform-specific compilation errors
+        - Missing dependencies
+        - Binary stripping or size issues
+        - Platform detection problems
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Issue Description
+      description: Describe the binary or platform issue you're experiencing.
+      placeholder: What problem are you encountering with the binaries or platform support?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What type of binary/platform issue is this?
+      options:
+        - Download failure
+        - Extraction failure
+        - Missing binary
+        - Binary crashes
+        - Compilation error with wrapper
+        - Linking error
+        - Platform detection incorrect
+        - Missing dependencies
+        - Binary size issue
+        - Performance issue
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Which platform are you using?
+      options:
+        - Windows x86_64
+        - Windows ARM64
+        - macOS x86_64 (Intel)
+        - macOS ARM64 (Apple Silicon)
+        - Linux x86_64
+        - Linux ARM64
+        - Other (specify in description)
+    validations:
+      required: true
+
+  - type: textarea
+    id: system-info
+    attributes:
+      label: Detailed System Information
+      description: |
+        Please provide detailed system information.
+        Run `clang-tool-chain info` and paste the output here.
+      value: |
+        OS: [e.g., Windows 11 22H2, macOS 14.5, Ubuntu 22.04.3 LTS]
+        Kernel: [e.g., Darwin 23.5.0, Linux 5.15.0-84-generic]
+        Architecture: [e.g., x86_64, aarch64, arm64]
+        Python Version: [e.g., 3.11.5]
+        clang-tool-chain Version: [e.g., 0.0.1]
+        Installation Method: [e.g., pip, git]
+
+        System libraries:
+        - glibc: [Linux only, e.g., 2.35]
+        - MSVC Runtime: [Windows only, if applicable]
+        - Other: [Any other relevant system info]
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Provide detailed steps to reproduce the issue.
+      placeholder: |
+        1. Run command '...'
+        2. Observe error '...'
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command Run
+      description: |
+        What command did you run that caused the issue?
+        This will be automatically formatted as code.
+      render: shell
+      placeholder: |
+        clang-tool-chain-c hello.c -o hello
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error Output
+      description: |
+        Provide the complete error output or log.
+        This will be automatically formatted as code.
+      render: shell
+      placeholder: Paste complete error output here...
+    validations:
+      required: true
+
+  - type: textarea
+    id: binary-info
+    attributes:
+      label: Binary Information
+      description: |
+        If the issue is with a specific binary, provide information about it.
+        Run commands like: `file <binary>`, `ldd <binary>` (Linux), `otool -L <binary>` (macOS), `dumpbin /dependents <binary>` (Windows)
+      render: shell
+      placeholder: Output of binary inspection commands...
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: Have you found any workaround for this issue?
+      placeholder: If you found a temporary solution, describe it here...
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen on this platform?
+      placeholder: Describe the expected behavior...
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: |
+        Add any other context about the problem:
+        - Does this work on other platforms?
+        - Does the system clang work?
+        - Any security software that might interfere?
+      placeholder: Additional information...
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched for similar issues in the issue tracker
+          required: true
+        - label: I have verified system requirements are met
+          required: true
+        - label: I have included complete error output
+          required: true
+        - label: I have tested with system clang (if available) for comparison
+          required: false
