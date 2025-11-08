@@ -1,0 +1,7 @@
+{
+  "latest": "19.1.7",
+  "19.1.7": {
+    "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/darwin/arm64/llvm-19.1.7-darwin-arm64.tar.zst",
+    "sha256": "88f7a28456ed0318dbd96b951a0a5fb93444d309d3eb3cda59143bf92826e60f"
+  }
+}

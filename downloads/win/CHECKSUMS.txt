@@ -1,0 +1,65 @@
+# Checksums for llvm-21.1.5-win-x86_64.tar.zst
+
+## SHA256
+3c21e45edeee591fe8ead5427d25b62ddb26c409575b41db03d6777c77bba44f
+
+## MD5
+d2f7f276885cc93539b9bf6efc14ad2d
+
+## File Information
+Filename: llvm-21.1.5-win-x86_64.tar.zst
+Size: 51.53 MB (54,030,336 bytes)
+Format: tar.zst (tar with zstd compression level 22)
+Contents: LLVM/Clang 21.1.5 toolchain for Windows x86_64
+Created: November 2024
+
+## Verification
+
+### Linux/macOS/MSYS2
+```bash
+# Verify SHA256
+sha256sum -c llvm-21.1.5-win-x86_64.tar.zst.sha256
+
+# Verify MD5
+md5sum -c llvm-21.1.5-win-x86_64.tar.zst.md5
+```
+
+### PowerShell (Windows)
+```powershell
+# Verify SHA256
+$hash = (Get-FileHash -Algorithm SHA256 llvm-21.1.5-win-x86_64.tar.zst).Hash
+if ($hash -eq "3C21E45EDEEE591FE8EAD5427D25B62DDB26C409575B41DB03D6777C77BBA44F") {
+    Write-Host "✓ SHA256 checksum verified" -ForegroundColor Green
+} else {
+    Write-Host "✗ SHA256 checksum FAILED" -ForegroundColor Red
+}
+```
+
+### Python
+```python
+import hashlib
+
+def verify_sha256(filename, expected_hash):
+    sha256 = hashlib.sha256()
+    with open(filename, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            sha256.update(chunk)
+    
+    actual = sha256.hexdigest()
+    if actual == expected_hash:
+        print("✓ SHA256 verified")
+        return True
+    else:
+        print(f"✗ SHA256 mismatch!\nExpected: {expected_hash}\nActual:   {actual}")
+        return False
+
+verify_sha256('llvm-21.1.5-win-x86_64.tar.zst', 
+              '3c21e45edeee591fe8ead5427d25b62ddb26c409575b41db03d6777c77bba44f')
+```
+
+## Quick Verification
+
+```bash
+# One-line SHA256 check
+echo "3c21e45edeee591fe8ead5427d25b62ddb26c409575b41db03d6777c77bba44f  llvm-21.1.5-win-x86_64.tar.zst" | sha256sum -c -
+```

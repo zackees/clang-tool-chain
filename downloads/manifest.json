@@ -1,0 +1,39 @@
+{
+  "platforms": [
+    {
+      "platform": "win",
+      "architectures": [
+        {
+          "arch": "x86_64",
+          "manifest_path": "win/x86_64/manifest.json"
+        }
+      ]
+    },
+    {
+      "platform": "linux",
+      "architectures": [
+        {
+          "arch": "x86_64",
+          "manifest_path": "linux/x86_64/manifest.json"
+        },
+        {
+          "arch": "arm64",
+          "manifest_path": "linux/arm64/manifest.json"
+        }
+      ]
+    },
+    {
+      "platform": "darwin",
+      "architectures": [
+        {
+          "arch": "x86_64",
+          "manifest_path": "darwin/x86_64/manifest.json"
+        },
+        {
+          "arch": "arm64",
+          "manifest_path": "darwin/arm64/manifest.json"
+        }
+      ]
+    }
+  ]
+}
