@@ -1,14 +1,589 @@
 """
-Main entry point.
+Main entry point for clang-tool-chain CLI.
+
+Provides commands for managing and using the LLVM toolchain.
 """
 
+import argparse
+import os
+import shutil
+import subprocess
 import sys
+
+from . import wrapper
+
+try:
+    from .__version__ import __llvm_version__, __version__
+except ImportError:
+    __version__ = "unknown"
+    __llvm_version__ = "unknown"
+
+
+def cmd_info(args):
+    """Display information about the toolchain installation."""
+    print("Clang Tool Chain - LLVM/Clang Distribution")
+    print("=" * 60)
+    print()
+
+    # Platform information
+    try:
+        platform_name, arch = wrapper.get_platform_info()
+        print(f"Platform:     {platform_name}")
+        print(f"Architecture: {arch}")
+        print()
+    except RuntimeError as e:
+        print(f"Error detecting platform: {e}")
+        return 1
+
+    # Assets directory
+    assets_dir = wrapper.get_assets_dir()
+    print(f"Assets directory: {assets_dir}")
+    print(f"Assets exist:     {assets_dir.exists()}")
+    print()
+
+    # Binary directory
+    try:
+        bin_dir = wrapper.get_platform_binary_dir()
+        print(f"Binary directory: {bin_dir}")
+        print("Binaries installed: Yes")
+        print()
+
+        # List available tools
+        if bin_dir.exists():
+            binaries = sorted(
+                [f.stem for f in bin_dir.iterdir() if f.is_file()],
+                key=str.lower,
+            )
+            print(f"Available tools ({len(binaries)}):")
+            for binary in binaries:
+                print(f"  - {binary}")
+    except RuntimeError:
+        print("Binaries installed: No")
+        print()
+        print("To install binaries, run:")
+        print("  python scripts/download_binaries.py --current-only")
+        print("  python scripts/strip_binaries.py <extracted_dir> <output_dir> --platform <platform>")
+
+    return 0
+
+
+def cmd_version(args):
+    """Display version of a specific tool."""
+    tool_name: str = args.tool
+
+    # Map common names to actual tool names
+    tool_map = {
+        "c": "clang",
+        "cpp": "clang++",
+        "c++": "clang++",
+        "ld": "lld",
+    }
+
+    actual_tool: str = tool_map.get(tool_name, tool_name)
+
+    try:
+        wrapper.find_tool_binary(actual_tool)
+        result = wrapper.run_tool(actual_tool, ["--version"])
+        return result
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+
+def cmd_list_tools(args):
+    """List all available wrapper tools."""
+    print("Available clang-tool-chain commands:")
+    print("=" * 60)
+    print()
+
+    tools = [
+        ("clang-tool-chain-c", "C compiler (clang)"),
+        ("clang-tool-chain-cpp", "C++ compiler (clang++)"),
+        ("clang-tool-chain-ld", "LLVM linker (lld/lld-link)"),
+        ("clang-tool-chain-ar", "Archive tool (llvm-ar)"),
+        ("clang-tool-chain-nm", "Symbol table viewer (llvm-nm)"),
+        ("clang-tool-chain-objdump", "Object file dumper (llvm-objdump)"),
+        ("clang-tool-chain-objcopy", "Object copying tool (llvm-objcopy)"),
+        ("clang-tool-chain-ranlib", "Archive index generator (llvm-ranlib)"),
+        ("clang-tool-chain-strip", "Symbol stripper (llvm-strip)"),
+        ("clang-tool-chain-readelf", "ELF file reader (llvm-readelf)"),
+        ("clang-tool-chain-as", "LLVM assembler (llvm-as)"),
+        ("clang-tool-chain-dis", "LLVM disassembler (llvm-dis)"),
+        ("clang-tool-chain-format", "Code formatter (clang-format)"),
+        ("clang-tool-chain-tidy", "Static analyzer (clang-tidy)"),
+    ]
+
+    for cmd, desc in tools:
+        print(f"  {cmd:30s} - {desc}")
+
+    print()
+    print("sccache integration (requires sccache in PATH):")
+    print("=" * 60)
+    print()
+
+    sccache_tools = [
+        ("clang-tool-chain-sccache", "Direct sccache access (stats, management)"),
+        ("clang-tool-chain-sccache-c", "sccache + C compiler (clang)"),
+        ("clang-tool-chain-sccache-cpp", "sccache + C++ compiler (clang++)"),
+    ]
+
+    for cmd, desc in sccache_tools:
+        print(f"  {cmd:30s} - {desc}")
+
+    print()
+    print("For more information, run:")
+    print("  clang-tool-chain info")
+
+    return 0
+
+
+def cmd_path(args):
+    """Display the path to the binary directory or a specific tool."""
+    try:
+        if args.tool:
+            tool_name: str = args.tool
+            # Map common names to actual tool names
+            tool_map = {
+                "c": "clang",
+                "cpp": "clang++",
+                "c++": "clang++",
+                "ld": "lld",
+            }
+
+            actual_tool: str = tool_map.get(tool_name, tool_name)
+            tool_path = wrapper.find_tool_binary(actual_tool)
+            print(tool_path)
+        else:
+            bin_dir = wrapper.get_platform_binary_dir()
+            print(bin_dir)
+        return 0
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+
+def cmd_package_version(args):
+    """Display the package version and target LLVM version."""
+    print(f"clang-tool-chain version: {__version__}")
+    print(f"Target LLVM version: {__llvm_version__}")
+    print()
+
+    if args.verbose:
+        # Show more detailed version information
+        print("Package Information:")
+        print("=" * 60)
+        print("  Package:       clang-tool-chain")
+        print(f"  Version:       {__version__}")
+        print(f"  LLVM Version:  {__llvm_version__}")
+        print()
+
+        # Try to get actual clang version from installed binaries
+        try:
+            platform_name, arch = wrapper.get_platform_info()
+            print("Platform Information:")
+            print(f"  Platform:      {platform_name}")
+            print(f"  Architecture:  {arch}")
+            print()
+
+            # Try to get installed clang version
+            try:
+                wrapper.find_tool_binary("clang")
+                print("Installed LLVM/Clang:")
+                result = wrapper.run_tool("clang", ["--version"])
+                if result != 0:
+                    print("  (Unable to determine version)")
+            except RuntimeError:
+                print("Installed LLVM/Clang:")
+                print("  Not installed yet")
+                print()
+                print("To install binaries, run:")
+                print("  python scripts/download_binaries.py --current-only")
+                print("  python scripts/strip_binaries.py <extracted_dir> <output_dir> --platform <platform>")
+        except RuntimeError as e:
+            print(f"Error: {e}", file=sys.stderr)
+
+    return 0
 
 
 def main() -> int:
-    """Main entry point for the template_python_cmd package."""
-    print("Replace with a CLI entry point.")
-    return 0
+    """Main entry point for the clang-tool-chain CLI."""
+    parser = argparse.ArgumentParser(
+        prog="clang-tool-chain",
+        description="LLVM/Clang toolchain management and wrapper utilities",
+        epilog="For more information, visit: https://github.com/your-repo/clang-tool-chain",
+    )
+
+    subparsers = parser.add_subparsers(
+        dest="command",
+        help="Available commands",
+    )
+
+    # info command
+    parser_info = subparsers.add_parser(
+        "info",
+        help="Display information about the toolchain installation",
+    )
+    parser_info.set_defaults(func=cmd_info)
+
+    # version command
+    parser_version = subparsers.add_parser(
+        "version",
+        help="Display version of a specific tool",
+    )
+    parser_version.add_argument(
+        "tool",
+        help="Tool name (e.g., clang, clang++, lld)",
+    )
+    parser_version.set_defaults(func=cmd_version)
+
+    # list-tools command
+    parser_list = subparsers.add_parser(
+        "list-tools",
+        help="List all available wrapper tools",
+    )
+    parser_list.set_defaults(func=cmd_list_tools)
+
+    # path command
+    parser_path = subparsers.add_parser(
+        "path",
+        help="Display the path to the binary directory or a specific tool",
+    )
+    parser_path.add_argument(
+        "tool",
+        nargs="?",
+        help="Tool name (optional, prints binary directory if not specified)",
+    )
+    parser_path.set_defaults(func=cmd_path)
+
+    # package-version command
+    parser_pkg_version = subparsers.add_parser(
+        "package-version",
+        help="Display the package version and target LLVM version",
+    )
+    parser_pkg_version.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Show detailed version information including installed LLVM version",
+    )
+    parser_pkg_version.set_defaults(func=cmd_package_version)
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    # If no command specified, show help
+    if not args.command:
+        parser.print_help()
+        return 0
+
+    # Execute command
+    return args.func(args)
+
+
+def sccache_main() -> int:
+    """
+    Entry point for direct sccache passthrough command.
+
+    This command allows users to run sccache directly for commands like:
+    - clang-tool-chain-sccache --show-stats
+    - clang-tool-chain-sccache --zero-stats
+    - clang-tool-chain-sccache --start-server
+    - clang-tool-chain-sccache --stop-server
+    """
+    args = sys.argv[1:]
+
+    # Check if sccache is available in PATH
+    sccache_path = shutil.which("sccache")
+
+    if sccache_path is None:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: sccache not found in PATH", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print("The clang-tool-chain-sccache command requires sccache to be installed", file=sys.stderr)
+        print("and available in your system PATH.", file=sys.stderr)
+        print(file=sys.stderr)
+        print("Installation options:", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  1. Install via pip:", file=sys.stderr)
+        print("     pip install clang-tool-chain[sccache]", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  2. Install via cargo:", file=sys.stderr)
+        print("     cargo install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  3. Install via system package manager:", file=sys.stderr)
+        print("     # Debian/Ubuntu", file=sys.stderr)
+        print("     sudo apt install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("     # RHEL/CentOS/Fedora", file=sys.stderr)
+        print("     sudo yum install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("     # macOS", file=sys.stderr)
+        print("     brew install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  4. Download binary from GitHub:", file=sys.stderr)
+        print("     https://github.com/mozilla/sccache/releases", file=sys.stderr)
+        print(file=sys.stderr)
+        print("After installation, verify with:", file=sys.stderr)
+        print("  sccache --version", file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
+
+    # Build command: sccache <args>
+    cmd = [sccache_path] + args
+
+    # Execute with platform-appropriate method
+    platform_name, _ = wrapper.get_platform_info()
+
+    try:
+        if platform_name == "win":
+            # Windows: use subprocess
+            result = subprocess.run(cmd)
+            return result.returncode
+        else:
+            # Unix: use exec to replace current process
+            os.execv(sccache_path, cmd)
+            # This line is never reached on Unix
+            return 0
+    except FileNotFoundError as e:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: Failed to execute sccache", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print(f"sccache was found at: {sccache_path}", file=sys.stderr)
+        print("But it could not be executed. This may indicate:", file=sys.stderr)
+        print("  - The binary is corrupted", file=sys.stderr)
+        print("  - Missing execute permissions", file=sys.stderr)
+        print("  - Missing system dependencies", file=sys.stderr)
+        print(file=sys.stderr)
+        print(f"Error details: {e}", file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
+    except Exception as e:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: Unexpected error during execution", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print(f"Command: {' '.join(cmd)}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
+        print(file=sys.stderr)
+        print("Please report this issue at:", file=sys.stderr)
+        print("  https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
+
+
+def sccache_c_main() -> int:
+    """
+    Entry point for sccache + clang C compiler wrapper.
+
+    This command wraps the clang C compiler with sccache for compilation caching.
+    """
+    args = sys.argv[1:]
+
+    # Check if sccache is available in PATH
+    sccache_path = shutil.which("sccache")
+
+    if sccache_path is None:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: sccache not found in PATH", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print("The clang-tool-chain-sccache-c command requires sccache to be installed", file=sys.stderr)
+        print("and available in your system PATH.", file=sys.stderr)
+        print(file=sys.stderr)
+        print("Installation options:", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  1. Install via pip:", file=sys.stderr)
+        print("     pip install clang-tool-chain[sccache]", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  2. Install via cargo:", file=sys.stderr)
+        print("     cargo install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  3. Install via system package manager:", file=sys.stderr)
+        print("     # Debian/Ubuntu", file=sys.stderr)
+        print("     sudo apt install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("     # RHEL/CentOS/Fedora", file=sys.stderr)
+        print("     sudo yum install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("     # macOS", file=sys.stderr)
+        print("     brew install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  4. Download binary from GitHub:", file=sys.stderr)
+        print("     https://github.com/mozilla/sccache/releases", file=sys.stderr)
+        print(file=sys.stderr)
+        print("After installation, verify with:", file=sys.stderr)
+        print("  sccache --version", file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
+
+    # Find the clang binary from clang-tool-chain
+    try:
+        clang_path = wrapper.find_tool_binary("clang")
+    except RuntimeError as e:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: Failed to locate clang binary", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print(str(e), file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
+
+    # Build command: sccache <clang_path> <args>
+    cmd = [sccache_path, str(clang_path)] + args
+
+    # Execute with platform-appropriate method
+    platform_name, _ = wrapper.get_platform_info()
+
+    try:
+        if platform_name == "win":
+            # Windows: use subprocess
+            result = subprocess.run(cmd)
+            return result.returncode
+        else:
+            # Unix: use exec to replace current process
+            os.execv(sccache_path, cmd)
+            # This line is never reached on Unix
+            return 0
+    except FileNotFoundError as e:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: Failed to execute sccache", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print(f"sccache was found at: {sccache_path}", file=sys.stderr)
+        print("But it could not be executed. This may indicate:", file=sys.stderr)
+        print("  - The binary is corrupted", file=sys.stderr)
+        print("  - Missing execute permissions", file=sys.stderr)
+        print("  - Missing system dependencies", file=sys.stderr)
+        print(file=sys.stderr)
+        print(f"Error details: {e}", file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
+    except Exception as e:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: Unexpected error during execution", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print(f"Command: {' '.join(cmd)}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
+        print(file=sys.stderr)
+        print("Please report this issue at:", file=sys.stderr)
+        print("  https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
+
+
+def sccache_cpp_main() -> int:
+    """
+    Entry point for sccache + clang++ C++ compiler wrapper.
+
+    This command wraps the clang++ C++ compiler with sccache for compilation caching.
+    """
+    args = sys.argv[1:]
+
+    # Check if sccache is available in PATH
+    sccache_path = shutil.which("sccache")
+
+    if sccache_path is None:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: sccache not found in PATH", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print("The clang-tool-chain-sccache-cpp command requires sccache to be installed", file=sys.stderr)
+        print("and available in your system PATH.", file=sys.stderr)
+        print(file=sys.stderr)
+        print("Installation options:", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  1. Install via pip:", file=sys.stderr)
+        print("     pip install clang-tool-chain[sccache]", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  2. Install via cargo:", file=sys.stderr)
+        print("     cargo install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  3. Install via system package manager:", file=sys.stderr)
+        print("     # Debian/Ubuntu", file=sys.stderr)
+        print("     sudo apt install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("     # RHEL/CentOS/Fedora", file=sys.stderr)
+        print("     sudo yum install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("     # macOS", file=sys.stderr)
+        print("     brew install sccache", file=sys.stderr)
+        print(file=sys.stderr)
+        print("  4. Download binary from GitHub:", file=sys.stderr)
+        print("     https://github.com/mozilla/sccache/releases", file=sys.stderr)
+        print(file=sys.stderr)
+        print("After installation, verify with:", file=sys.stderr)
+        print("  sccache --version", file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
+
+    # Find the clang++ binary from clang-tool-chain
+    try:
+        clang_cpp_path = wrapper.find_tool_binary("clang++")
+    except RuntimeError as e:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: Failed to locate clang++ binary", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print(str(e), file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
+
+    # Build command: sccache <clang++_path> <args>
+    cmd = [sccache_path, str(clang_cpp_path)] + args
+
+    # Execute with platform-appropriate method
+    platform_name, _ = wrapper.get_platform_info()
+
+    try:
+        if platform_name == "win":
+            # Windows: use subprocess
+            result = subprocess.run(cmd)
+            return result.returncode
+        else:
+            # Unix: use exec to replace current process
+            os.execv(sccache_path, cmd)
+            # This line is never reached on Unix
+            return 0
+    except FileNotFoundError as e:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: Failed to execute sccache", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print(f"sccache was found at: {sccache_path}", file=sys.stderr)
+        print("But it could not be executed. This may indicate:", file=sys.stderr)
+        print("  - The binary is corrupted", file=sys.stderr)
+        print("  - Missing execute permissions", file=sys.stderr)
+        print("  - Missing system dependencies", file=sys.stderr)
+        print(file=sys.stderr)
+        print(f"Error details: {e}", file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
+    except Exception as e:
+        print("=" * 70, file=sys.stderr)
+        print("ERROR: Unexpected error during execution", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(file=sys.stderr)
+        print(f"Command: {' '.join(cmd)}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
+        print(file=sys.stderr)
+        print("Please report this issue at:", file=sys.stderr)
+        print("  https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
+        print(file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

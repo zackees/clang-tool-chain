@@ -12,7 +12,6 @@ __pycache__/
 build/
 develop-eggs/
 dist/
-downloads/
 eggs/
 .eggs/
 lib/
@@ -158,3 +157,9 @@ activate
 prod_env/
 data/
 /zcmds/bin/
+
+# LLVM/Clang binaries and downloads
+# Note: assets/ directory IS committed to git (binaries included in repo)
+# Only downloads/ and extracted archives are excluded
+LLVM-*/
+clang+llvm-*/

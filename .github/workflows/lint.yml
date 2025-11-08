@@ -1,0 +1,41 @@
+name: Linting
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install uv
+      run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    - name: Install dependencies
+      run: |
+        uv venv
+        uv pip install -e ".[dev]"
+
+    - name: Run ruff (linter)
+      run: uv run ruff check src tests
+
+    - name: Run black (formatter check)
+      run: uv run black --check src tests
+
+    - name: Run isort (import sorting check)
+      run: uv run isort --check-only --profile black src tests
+
+    - name: Run mypy (type checker)
+      run: uv run mypy src tests
+      continue-on-error: true

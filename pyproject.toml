@@ -28,7 +28,10 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
     "Topic :: Software Development :: Compilers",
 ]
-dependencies = []
+dependencies = [
+    "fasteners>=0.19.0",
+    "pyzstd>=0.16.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -41,6 +44,10 @@ dev = [
     "ruff>=0.3.0",
     "pyright>=1.1.350",
     "pre-commit>=3.6.0",
+    "sccache>=0.7.0",
+]
+sccache = [
+    "sccache>=0.7.0",
 ]
 
 [project.urls]
@@ -50,9 +57,42 @@ Issues = "https://github.com/zackees/clang-tool-chain/issues"
 
 [project.scripts]
 clang-tool-chain = "clang_tool_chain.cli:main"
+# Download utilities
+clang-tool-chain-fetch = "clang_tool_chain.fetch:main"
+clang-tool-chain-paths = "clang_tool_chain.paths:main"
+clang-tool-chain-fetch-archive = "clang_tool_chain.downloads.fetch_and_archive:main"
+# Build utility
+clang-tool-chain-build = "clang_tool_chain.wrapper:build_main"
+# Compilers
+clang-tool-chain-c = "clang_tool_chain.wrapper:clang_main"
+clang-tool-chain-cpp = "clang_tool_chain.wrapper:clang_cpp_main"
+# Linker and Archiver
+clang-tool-chain-ld = "clang_tool_chain.wrapper:lld_main"
+clang-tool-chain-ar = "clang_tool_chain.wrapper:llvm_ar_main"
+# Binary Utilities
+clang-tool-chain-nm = "clang_tool_chain.wrapper:llvm_nm_main"
+clang-tool-chain-objdump = "clang_tool_chain.wrapper:llvm_objdump_main"
+clang-tool-chain-objcopy = "clang_tool_chain.wrapper:llvm_objcopy_main"
+clang-tool-chain-ranlib = "clang_tool_chain.wrapper:llvm_ranlib_main"
+clang-tool-chain-strip = "clang_tool_chain.wrapper:llvm_strip_main"
+clang-tool-chain-readelf = "clang_tool_chain.wrapper:llvm_readelf_main"
+# Additional Tools
+clang-tool-chain-as = "clang_tool_chain.wrapper:llvm_as_main"
+clang-tool-chain-dis = "clang_tool_chain.wrapper:llvm_dis_main"
+clang-tool-chain-format = "clang_tool_chain.wrapper:clang_format_main"
+clang-tool-chain-tidy = "clang_tool_chain.wrapper:clang_tidy_main"
+# sccache Integration
+clang-tool-chain-sccache = "clang_tool_chain.cli:sccache_main"
+clang-tool-chain-sccache-c = "clang_tool_chain.cli:sccache_c_main"
+clang-tool-chain-sccache-cpp = "clang_tool_chain.cli:sccache_cpp_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clang_tool_chain"]
+# Include assets directory (LLVM binaries) if it exists
+# Note: assets/ should be populated before building the package
+include = [
+    "src/clang_tool_chain/assets/**/*",
+]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -152,8 +192,9 @@ exclude_lines = [
 
 # Pyright configuration
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "scripts"]
 exclude = ["**/__pycache__", "build", "dist"]
+extraPaths = ["scripts"]
 pythonVersion = "3.10"
 typeCheckingMode = "basic"
 reportMissingImports = true

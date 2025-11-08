@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or Discussion
+    url: https://github.com/llvm/llvm-project/discussions
+    about: Ask questions or start discussions about LLVM/Clang usage (upstream project)
+  - name: Security Vulnerability
+    url: https://github.com/YOUR_USERNAME/clang-tool-chain/security/advisories/new
+    about: Report security vulnerabilities privately (replace YOUR_USERNAME with actual username)
