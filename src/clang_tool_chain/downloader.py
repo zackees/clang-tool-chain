@@ -423,20 +423,29 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
         try:
             logger.info(f"Extracting tar archive to {temp_extract_dir}")
             with tarfile.open(temp_tar, "r") as tar:
-                # Extract all members manually to handle hardlinks properly
-                # The 'data' filter in Python 3.12+ converts hardlinks to regular files,
-                # but it fails to copy the file content when the target doesn't exist yet.
-                # We need to extract in correct order: regular files first, then hardlinks
-                logger.debug("Extracting regular files and directories first")
+                # Extract all members using extractall, then convert hardlinks to regular files
+                # This is necessary because:
+                # 1. Python 3.12+ extraction filters can interfere with hardlinks
+                # 2. Hardlinks may not work correctly across all platforms
+                # 3. We want independent file copies for distribution anyway
+                logger.debug("Extracting archive with extractall (preserving hardlinks)")
 
-                # First pass: extract all non-hardlink members
-                for member in tar.getmembers():
-                    if not member.islnk():
-                        tar.extract(member, temp_extract_dir)
+                import sys
 
-                # Second pass: handle hardlinks by copying from their targets
-                logger.debug("Processing hardlinks")
+                # For Python 3.12+, use filter="tar" to allow hardlinks
+                # The "data" filter blocks hardlinks and causes issues
+                if sys.version_info >= (3, 12):
+                    logger.debug("Using Python 3.12+ tar extraction with 'tar' filter")
+                    tar.extractall(temp_extract_dir, filter="tar")
+                else:
+                    logger.debug("Using legacy tar extraction")
+                    tar.extractall(temp_extract_dir)
+
+                # Convert hardlinks to independent files
+                # Find all hardlinks and replace them with copies
+                logger.debug("Converting hardlinks to independent files")
                 hardlink_count = 0
+
                 for member in tar.getmembers():
                     if member.islnk():
                         # member.linkname is the target of the hardlink
@@ -444,14 +453,27 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                         link_target = temp_extract_dir / member.linkname
                         link_path = temp_extract_dir / member.name
 
-                        if link_target.exists():
-                            # Copy the target file to create the hardlink destination
-                            logger.debug(f"Creating hardlink copy: {member.name} -> {member.linkname}")
-                            link_path.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy2(link_target, link_path)
-                            hardlink_count += 1
-                        else:
-                            logger.warning(f"Hardlink target not found: {member.linkname} for {member.name}")
+                        if link_target.exists() and link_path.exists():
+                            # Both files exist - check if they're still hardlinked
+                            if link_target.stat().st_ino == link_path.stat().st_ino:
+                                # They're hardlinked, break the link by copying
+                                logger.debug(f"Breaking hardlink: {member.name} -> {member.linkname}")
+                                with tempfile.NamedTemporaryFile(delete=False, dir=link_path.parent) as tmp_file:
+                                    tmp_path = Path(tmp_file.name)
+
+                                shutil.copy2(link_target, tmp_path)
+                                link_path.unlink()
+                                tmp_path.rename(link_path)
+                                hardlink_count += 1
+                        elif not link_path.exists():
+                            # Hardlink wasn't created, copy the target
+                            if link_target.exists():
+                                logger.debug(f"Creating missing hardlink copy: {member.name}")
+                                link_path.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(link_target, link_path)
+                                hardlink_count += 1
+                            else:
+                                logger.warning(f"Hardlink target not found: {member.linkname} for {member.name}")
 
                 logger.info(f"Tar extraction complete ({hardlink_count} hardlinks converted to files)")
 
