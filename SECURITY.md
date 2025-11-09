@@ -78,7 +78,7 @@ Instead, report security issues to:
 
 - **Email**: security@example.com (replace with actual security contact)
 - **GitHub Security Advisories**: Use GitHub's private vulnerability reporting at:
-  https://github.com/yourusername/clang-tool-chain/security/advisories/new
+  https://github.com/zackees/clang-tool-chain/security/advisories/new
 
 ### What to Include
 
@@ -326,8 +326,8 @@ We appreciate security researchers who help keep `clang-tool-chain` secure:
 ## Contact
 
 - **Security Issues**: security@example.com (private)
-- **General Issues**: https://github.com/yourusername/clang-tool-chain/issues (public)
-- **Discussions**: https://github.com/yourusername/clang-tool-chain/discussions
+- **General Issues**: https://github.com/zackees/clang-tool-chain/issues (public)
+- **Discussions**: https://github.com/zackees/clang-tool-chain/discussions
 - **Project Maintainers**: See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Legal
