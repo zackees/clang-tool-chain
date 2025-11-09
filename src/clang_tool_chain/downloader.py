@@ -445,7 +445,14 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                             shutil.copy2(link_target_path, target_path)
                             extracted_files[member.name] = str(target_path)
                         else:
-                            logger.warning(f"Hardlink target not yet extracted: {member.linkname} for {member.name}")
+                            logger.error(f"Hardlink target missing: {member.linkname} (needed for {member.name})")
+                            logger.error(f"  Expected at: {link_target_path}")
+                            logger.error(f"  Target exists: {link_target_path.exists()}")
+                            if link_target_path.parent.exists():
+                                logger.error(f"  Parent dir contents: {list(link_target_path.parent.iterdir())[:10]}")
+                            raise RuntimeError(
+                                f"Cannot create hardlink {member.name}: target {member.linkname} not found"
+                            )
                     else:
                         # Regular file, directory, or symlink - extract normally
                         import sys
@@ -458,6 +465,11 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
 
                         if member.isfile():
                             extracted_files[member.name] = str(target_path)
+                            # Verify the file was actually extracted
+                            if not target_path.exists():
+                                logger.error(f"File not extracted: {member.name}")
+                                logger.error(f"  Expected at: {target_path}")
+                                raise RuntimeError(f"Failed to extract {member.name}")
 
                 # Count how many hardlinks we copied
                 hardlink_count = sum(1 for m in tar.getmembers() if m.islnk())
