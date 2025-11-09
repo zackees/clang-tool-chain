@@ -639,6 +639,16 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
 
         fix_file_permissions(install_dir)
 
+        # On Linux, copy clang++ to clang for convenience
+        if platform == "linux":
+            bin_dir = install_dir / "bin"
+            clang_cpp = bin_dir / "clang++"
+            clang = bin_dir / "clang"
+            if clang_cpp.exists() and not clang.exists():
+                if verbose:
+                    print("Copying clang++ to clang on Linux...")
+                shutil.copy2(clang_cpp, clang)
+
         # Force filesystem sync to ensure all extracted files are fully written to disk
         # This prevents "Text file busy" errors when another thread/process tries to
         # execute the binaries immediately after we release the lock and see done.txt

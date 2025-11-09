@@ -31,6 +31,7 @@ classifiers = [
 dependencies = [
     "fasteners>=0.19.0",
     "pyzstd>=0.16.0",
+    "uv-iso-env>=1.0.0",
 ]
 
 [project.optional-dependencies]

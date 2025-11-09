@@ -5,12 +5,10 @@ Provides commands for managing and using the LLVM toolchain.
 """
 
 import argparse
-import os
-import shutil
 import subprocess
 import sys
 
-from . import wrapper
+from . import sccache_runner, wrapper
 
 try:
     from .__version__ import __llvm_version__, __version__
@@ -480,91 +478,11 @@ def sccache_main() -> int:
     - clang-tool-chain-sccache --zero-stats
     - clang-tool-chain-sccache --start-server
     - clang-tool-chain-sccache --stop-server
+
+    If sccache is not found in PATH, automatically uses iso-env to run it in an isolated environment.
     """
     args = sys.argv[1:]
-
-    # Check if sccache is available in PATH
-    sccache_path = shutil.which("sccache")
-
-    if sccache_path is None:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: sccache not found in PATH", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print("The clang-tool-chain-sccache command requires sccache to be installed", file=sys.stderr)
-        print("and available in your system PATH.", file=sys.stderr)
-        print(file=sys.stderr)
-        print("Installation options:", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  1. Install via pip:", file=sys.stderr)
-        print("     pip install clang-tool-chain[sccache]", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  2. Install via cargo:", file=sys.stderr)
-        print("     cargo install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  3. Install via system package manager:", file=sys.stderr)
-        print("     # Debian/Ubuntu", file=sys.stderr)
-        print("     sudo apt install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("     # RHEL/CentOS/Fedora", file=sys.stderr)
-        print("     sudo yum install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("     # macOS", file=sys.stderr)
-        print("     brew install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  4. Download binary from GitHub:", file=sys.stderr)
-        print("     https://github.com/mozilla/sccache/releases", file=sys.stderr)
-        print(file=sys.stderr)
-        print("After installation, verify with:", file=sys.stderr)
-        print("  sccache --version", file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
-
-    # Build command: sccache <args>
-    cmd = [sccache_path] + args
-
-    # Execute with platform-appropriate method
-    platform_name, _ = wrapper.get_platform_info()
-
-    try:
-        if platform_name == "win":
-            # Windows: use subprocess
-            result = subprocess.run(cmd)
-            return result.returncode
-        else:
-            # Unix: use exec to replace current process
-            os.execv(sccache_path, cmd)
-            # This line is never reached on Unix
-            return 0
-    except FileNotFoundError as e:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: Failed to execute sccache", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print(f"sccache was found at: {sccache_path}", file=sys.stderr)
-        print("But it could not be executed. This may indicate:", file=sys.stderr)
-        print("  - The binary is corrupted", file=sys.stderr)
-        print("  - Missing execute permissions", file=sys.stderr)
-        print("  - Missing system dependencies", file=sys.stderr)
-        print(file=sys.stderr)
-        print(f"Error details: {e}", file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
-    except Exception as e:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: Unexpected error during execution", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print(f"Command: {' '.join(cmd)}", file=sys.stderr)
-        print(f"Error: {e}", file=sys.stderr)
-        print(file=sys.stderr)
-        print("Please report this issue at:", file=sys.stderr)
-        print("  https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
+    return sccache_runner.run_sccache(args)
 
 
 def sccache_c_main() -> int:
@@ -572,46 +490,9 @@ def sccache_c_main() -> int:
     Entry point for sccache + clang C compiler wrapper.
 
     This command wraps the clang C compiler with sccache for compilation caching.
+    If sccache is not found in PATH, automatically uses iso-env to run it in an isolated environment.
     """
     args = sys.argv[1:]
-
-    # Check if sccache is available in PATH
-    sccache_path = shutil.which("sccache")
-
-    if sccache_path is None:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: sccache not found in PATH", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print("The clang-tool-chain-sccache-c command requires sccache to be installed", file=sys.stderr)
-        print("and available in your system PATH.", file=sys.stderr)
-        print(file=sys.stderr)
-        print("Installation options:", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  1. Install via pip:", file=sys.stderr)
-        print("     pip install clang-tool-chain[sccache]", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  2. Install via cargo:", file=sys.stderr)
-        print("     cargo install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  3. Install via system package manager:", file=sys.stderr)
-        print("     # Debian/Ubuntu", file=sys.stderr)
-        print("     sudo apt install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("     # RHEL/CentOS/Fedora", file=sys.stderr)
-        print("     sudo yum install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("     # macOS", file=sys.stderr)
-        print("     brew install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  4. Download binary from GitHub:", file=sys.stderr)
-        print("     https://github.com/mozilla/sccache/releases", file=sys.stderr)
-        print(file=sys.stderr)
-        print("After installation, verify with:", file=sys.stderr)
-        print("  sccache --version", file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
 
     # Find the clang binary from clang-tool-chain
     try:
@@ -626,50 +507,7 @@ def sccache_c_main() -> int:
         print("=" * 70, file=sys.stderr)
         return 1
 
-    # Build command: sccache <clang_path> <args>
-    cmd = [sccache_path, str(clang_path)] + args
-
-    # Execute with platform-appropriate method
-    platform_name, _ = wrapper.get_platform_info()
-
-    try:
-        if platform_name == "win":
-            # Windows: use subprocess
-            result = subprocess.run(cmd)
-            return result.returncode
-        else:
-            # Unix: use exec to replace current process
-            os.execv(sccache_path, cmd)
-            # This line is never reached on Unix
-            return 0
-    except FileNotFoundError as e:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: Failed to execute sccache", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print(f"sccache was found at: {sccache_path}", file=sys.stderr)
-        print("But it could not be executed. This may indicate:", file=sys.stderr)
-        print("  - The binary is corrupted", file=sys.stderr)
-        print("  - Missing execute permissions", file=sys.stderr)
-        print("  - Missing system dependencies", file=sys.stderr)
-        print(file=sys.stderr)
-        print(f"Error details: {e}", file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
-    except Exception as e:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: Unexpected error during execution", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print(f"Command: {' '.join(cmd)}", file=sys.stderr)
-        print(f"Error: {e}", file=sys.stderr)
-        print(file=sys.stderr)
-        print("Please report this issue at:", file=sys.stderr)
-        print("  https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
+    return sccache_runner.run_sccache_with_compiler(str(clang_path), args)
 
 
 def sccache_cpp_main() -> int:
@@ -677,46 +515,9 @@ def sccache_cpp_main() -> int:
     Entry point for sccache + clang++ C++ compiler wrapper.
 
     This command wraps the clang++ C++ compiler with sccache for compilation caching.
+    If sccache is not found in PATH, automatically uses iso-env to run it in an isolated environment.
     """
     args = sys.argv[1:]
-
-    # Check if sccache is available in PATH
-    sccache_path = shutil.which("sccache")
-
-    if sccache_path is None:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: sccache not found in PATH", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print("The clang-tool-chain-sccache-cpp command requires sccache to be installed", file=sys.stderr)
-        print("and available in your system PATH.", file=sys.stderr)
-        print(file=sys.stderr)
-        print("Installation options:", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  1. Install via pip:", file=sys.stderr)
-        print("     pip install clang-tool-chain[sccache]", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  2. Install via cargo:", file=sys.stderr)
-        print("     cargo install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  3. Install via system package manager:", file=sys.stderr)
-        print("     # Debian/Ubuntu", file=sys.stderr)
-        print("     sudo apt install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("     # RHEL/CentOS/Fedora", file=sys.stderr)
-        print("     sudo yum install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("     # macOS", file=sys.stderr)
-        print("     brew install sccache", file=sys.stderr)
-        print(file=sys.stderr)
-        print("  4. Download binary from GitHub:", file=sys.stderr)
-        print("     https://github.com/mozilla/sccache/releases", file=sys.stderr)
-        print(file=sys.stderr)
-        print("After installation, verify with:", file=sys.stderr)
-        print("  sccache --version", file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
 
     # Find the clang++ binary from clang-tool-chain
     try:
@@ -731,50 +532,7 @@ def sccache_cpp_main() -> int:
         print("=" * 70, file=sys.stderr)
         return 1
 
-    # Build command: sccache <clang++_path> <args>
-    cmd = [sccache_path, str(clang_cpp_path)] + args
-
-    # Execute with platform-appropriate method
-    platform_name, _ = wrapper.get_platform_info()
-
-    try:
-        if platform_name == "win":
-            # Windows: use subprocess
-            result = subprocess.run(cmd)
-            return result.returncode
-        else:
-            # Unix: use exec to replace current process
-            os.execv(sccache_path, cmd)
-            # This line is never reached on Unix
-            return 0
-    except FileNotFoundError as e:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: Failed to execute sccache", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print(f"sccache was found at: {sccache_path}", file=sys.stderr)
-        print("But it could not be executed. This may indicate:", file=sys.stderr)
-        print("  - The binary is corrupted", file=sys.stderr)
-        print("  - Missing execute permissions", file=sys.stderr)
-        print("  - Missing system dependencies", file=sys.stderr)
-        print(file=sys.stderr)
-        print(f"Error details: {e}", file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
-    except Exception as e:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: Unexpected error during execution", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print(f"Command: {' '.join(cmd)}", file=sys.stderr)
-        print(f"Error: {e}", file=sys.stderr)
-        print(file=sys.stderr)
-        print("Please report this issue at:", file=sys.stderr)
-        print("  https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
+    return sccache_runner.run_sccache_with_compiler(str(clang_cpp_path), args)
 
 
 if __name__ == "__main__":
