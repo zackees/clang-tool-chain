@@ -286,7 +286,17 @@ def _add_macos_sysroot_if_needed(args: list[str]) -> list[str]:
     """
     Add -isysroot flag for macOS if needed to find system headers.
 
-    This function automatically detects the macOS SDK path and adds it to
+    On macOS, system headers (like stdio.h, iostream) are NOT in /usr/include.
+    Instead, they're only available in SDK bundles provided by Xcode or Command Line Tools.
+    Standalone clang binaries cannot automatically find these headers without help.
+
+    This function implements LLVM's official three-tier SDK detection strategy
+    (see LLVM patch D136315: https://reviews.llvm.org/D136315):
+    1. Explicit -isysroot flag (user override)
+    2. SDKROOT environment variable (Xcode/xcrun standard)
+    3. Automatic xcrun --show-sdk-path (fallback detection)
+
+    The function automatically detects the macOS SDK path and adds it to
     the compiler arguments, unless:
     - User has disabled it via CLANG_TOOL_CHAIN_NO_SYSROOT=1
     - User has already specified -isysroot in the arguments
@@ -299,6 +309,10 @@ def _add_macos_sysroot_if_needed(args: list[str]) -> list[str]:
 
     Returns:
         Modified arguments with -isysroot prepended if needed
+
+    References:
+        - LLVM D136315: Try to guess SDK root with xcrun when unspecified
+        - Apple no longer ships headers in /usr/include since macOS 10.14 Mojave
     """
     # Check if user wants to disable automatic sysroot
     if os.environ.get("CLANG_TOOL_CHAIN_NO_SYSROOT") == "1":
@@ -469,12 +483,21 @@ def run_tool(tool_name: str, args: list[str] | None = None) -> int:
 
     Raises:
         RuntimeError: If the tool cannot be found
+
+    Environment Variables (macOS only):
+        SDKROOT: Custom SDK path to use (standard macOS variable)
+        CLANG_TOOL_CHAIN_NO_SYSROOT: Set to '1' to disable automatic -isysroot injection
     """
     if args is None:
         args = sys.argv[1:]
 
     tool_path = find_tool_binary(tool_name)
 
+    # Add macOS SDK path automatically for clang/clang++ if not already specified
+    platform_name, _ = get_platform_info()
+    if platform_name == "darwin" and tool_name in ("clang", "clang++"):
+        logger.debug("Checking if macOS sysroot needs to be added")
+        args = _add_macos_sysroot_if_needed(args)
     # Build command
     cmd = [str(tool_path)] + args
 

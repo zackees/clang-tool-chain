@@ -76,6 +76,40 @@ clang-tool-chain-sccache --version        # Show sccache version
 - Requires sccache to be available in your PATH
 - If sccache is not found, the commands will fail with clear installation instructions
 
+### macOS SDK Detection (Automatic)
+
+On macOS, system headers (like `stdio.h` and `iostream`) are NOT located in `/usr/include`. Since macOS 10.14 Mojave, Apple only provides headers through SDK bundles in Xcode or Command Line Tools. Standalone clang binaries cannot automatically find these headers without help.
+
+**Automatic SDK Detection:**
+
+This package implements LLVM's official three-tier SDK detection strategy (based on [LLVM patch D136315](https://reviews.llvm.org/D136315)):
+
+1. **Explicit `-isysroot` flag**: User-provided SDK path takes priority
+2. **`SDKROOT` environment variable**: Standard macOS/Xcode environment variable
+3. **Automatic `xcrun --show-sdk-path`**: Fallback detection when nothing else specified
+
+The wrapper automatically injects `-isysroot` when compiling on macOS, ensuring system headers are found without manual configuration.
+
+**Environment Variables:**
+```bash
+# Disable automatic SDK detection (not recommended)
+export CLANG_TOOL_CHAIN_NO_SYSROOT=1
+
+# Use custom SDK path (standard macOS variable)
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+```
+
+**Requirements:**
+- macOS users must have Xcode Command Line Tools installed: `xcode-select --install`
+- SDK is automatically detected via `xcrun` - no manual configuration needed
+
+**Behavior:**
+- Automatic `-isysroot` injection is skipped when:
+  - User explicitly provides `-isysroot` in arguments
+  - `SDKROOT` environment variable is set
+  - Freestanding compilation flags are used (`-nostdinc`, `-nostdinc++`, `-nostdlib`, `-ffreestanding`)
+  - `CLANG_TOOL_CHAIN_NO_SYSROOT=1` is set
+
 ### Testing
 ```bash
 # Quick diagnostic test of the toolchain installation
