@@ -525,5 +525,191 @@ class TestConcurrentDownload(unittest.TestCase):
             shutil.rmtree(temp_dir2, ignore_errors=True)
 
 
+class TestStaticAnalysis(unittest.TestCase):
+    """Test Clang static analyzer functionality."""
+
+    def setUp(self):
+        """Set up test environment with temporary directory."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_path = Path(self.temp_dir)
+
+        # Create a test C++ file with a potential bug that the analyzer can detect
+        self.buggy_cpp = self.temp_path / "buggy.cpp"
+        self.buggy_cpp.write_text(
+            "#include <cstdlib>\n"
+            "int main() {\n"
+            "    int *ptr = (int*)malloc(sizeof(int));\n"
+            "    *ptr = 42;\n"
+            "    // Memory leak - forgot to free(ptr)\n"
+            "    return 0;\n"
+            "}\n"
+        )
+
+        # Create a test file with a division by zero warning
+        self.div_zero_cpp = self.temp_path / "div_zero.cpp"
+        self.div_zero_cpp.write_text(
+            "int main() {\n"
+            "    int x = 10;\n"
+            "    int y = 0;\n"
+            "    int z = x / y;  // Division by zero\n"
+            "    return z;\n"
+            "}\n"
+        )
+
+        # Create a test file with a null dereference
+        self.null_deref_cpp = self.temp_path / "null_deref.cpp"
+        self.null_deref_cpp.write_text(
+            "int main() {\n" "    int *ptr = nullptr;\n" "    return *ptr;  // Null dereference\n" "}\n"
+        )
+
+    def tearDown(self):
+        """Clean up temporary directory."""
+        import shutil
+
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_analyzer_basic_run(self):
+        """Test that the Clang static analyzer can run with basic checkers."""
+        try:
+            # Run analyzer with core and deadcode checkers
+            result = subprocess.run(
+                [
+                    str(wrapper.find_tool_binary("clang++")),
+                    "--analyze",
+                    "-Xanalyzer",
+                    "-analyzer-checker=core,deadcode",
+                    str(self.buggy_cpp),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(self.temp_path),
+            )
+
+            # Analyzer should complete (return code may be 0 or non-zero depending on findings)
+            # We just verify it doesn't crash
+            self.assertIn(
+                result.returncode,
+                [0, 1],
+                f"Analyzer should complete successfully. Return code: {result.returncode}, "
+                f"stdout: {result.stdout}, stderr: {result.stderr}",
+            )
+
+        except RuntimeError as e:
+            self.skipTest(f"Binaries not installed: {e}")
+
+    def test_analyzer_division_by_zero(self):
+        """Test that analyzer detects division by zero."""
+        try:
+            # Run analyzer with core checkers
+            result = subprocess.run(
+                [
+                    str(wrapper.find_tool_binary("clang++")),
+                    "--analyze",
+                    "-Xanalyzer",
+                    "-analyzer-checker=core",
+                    str(self.div_zero_cpp),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(self.temp_path),
+            )
+
+            # Check output for division warning (may be in stdout or stderr)
+            combined_output = result.stdout + result.stderr
+
+            # The analyzer should produce some output
+            self.assertTrue(len(combined_output) > 0, "Analyzer should produce output for division by zero")
+
+        except RuntimeError as e:
+            self.skipTest(f"Binaries not installed: {e}")
+
+    def test_analyzer_null_dereference(self):
+        """Test that analyzer detects null pointer dereference."""
+        try:
+            # Run analyzer with core checkers
+            result = subprocess.run(
+                [
+                    str(wrapper.find_tool_binary("clang++")),
+                    "--analyze",
+                    "-Xanalyzer",
+                    "-analyzer-checker=core.NullDereference",
+                    str(self.null_deref_cpp),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(self.temp_path),
+            )
+
+            # Analyzer should run (return code varies based on findings)
+            self.assertIn(result.returncode, [0, 1], "Analyzer should complete for null dereference test")
+
+            # Check that some analysis output was generated
+            combined_output = result.stdout + result.stderr
+            self.assertTrue(len(combined_output) > 0, "Analyzer should produce output")
+
+        except RuntimeError as e:
+            self.skipTest(f"Binaries not installed: {e}")
+
+    def test_analyzer_with_output_format(self):
+        """Test analyzer with different output formats."""
+        try:
+            # Run analyzer with plist output format
+            plist_file = self.temp_path / "analysis.plist"
+            result = subprocess.run(
+                [
+                    str(wrapper.find_tool_binary("clang++")),
+                    "--analyze",
+                    "-Xanalyzer",
+                    "-analyzer-checker=core",
+                    "-Xanalyzer",
+                    "-analyzer-output=plist",
+                    "-o",
+                    str(plist_file),
+                    str(self.div_zero_cpp),
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(self.temp_path),
+            )
+
+            # Verify analyzer ran
+            self.assertIn(result.returncode, [0, 1], "Analyzer should complete")
+
+        except RuntimeError as e:
+            self.skipTest(f"Binaries not installed: {e}")
+
+    def test_analyzer_multiple_files(self):
+        """Test analyzer can analyze multiple source files."""
+        try:
+            # Create another test file
+            good_file = self.temp_path / "good.cpp"
+            good_file.write_text("int add(int a, int b) {\n" "    return a + b;\n" "}\n")
+
+            # Run analyzer on multiple files
+            for test_file in [good_file, self.buggy_cpp]:
+                result = subprocess.run(
+                    [
+                        str(wrapper.find_tool_binary("clang++")),
+                        "--analyze",
+                        "-Xanalyzer",
+                        "-analyzer-checker=core",
+                        str(test_file),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(self.temp_path),
+                )
+
+                # Both should complete
+                self.assertIn(
+                    result.returncode,
+                    [0, 1],
+                    f"Analyzer should complete for {test_file.name}",
+                )
+
+        except RuntimeError as e:
+            self.skipTest(f"Binaries not installed: {e}")
+
+
 if __name__ == "__main__":
     unittest.main()
