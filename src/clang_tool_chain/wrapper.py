@@ -19,8 +19,8 @@ from . import downloader
 # Configure logging for GitHub Actions and general debugging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stderr)]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stderr)],
 )
 logger = logging.getLogger(__name__)
 
