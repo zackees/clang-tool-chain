@@ -2,6 +2,6 @@
   "latest": "19.1.7",
   "19.1.7": {
     "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/darwin/x86_64/llvm-19.1.7-darwin-x86_64.tar.zst",
-    "sha256": "1e4c1636ca93bb7ec680c0d5c9f0ac9522b8f95248bc0a51cf54e2de882fa48b"
+    "sha256": "49a5f3868fce32eb57e0185f9e91a190d946e648fb0869b78ba50a53d16372c5"
   }
 }
