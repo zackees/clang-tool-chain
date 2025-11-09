@@ -15,9 +15,10 @@ import shutil
 import sys
 import tarfile
 from pathlib import Path
+from typing import Any
 
 
-def expand_zst_archive(archive_path, output_dir, keep_hardlinks=False):
+def expand_zst_archive(archive_path: Path | str, output_dir: Path | str, keep_hardlinks: bool = False) -> Path:
     """
     Expand a tar.zst archive.
 
@@ -128,7 +129,7 @@ def expand_zst_archive(archive_path, output_dir, keep_hardlinks=False):
     return extracted_root
 
 
-def convert_hardlinks_to_files(bin_dir, inode_to_files):
+def convert_hardlinks_to_files(bin_dir: Path, inode_to_files: dict[int, list[Any]]) -> None:
     """Convert hard links to independent file copies."""
     import tempfile
 
@@ -156,7 +157,7 @@ def convert_hardlinks_to_files(bin_dir, inode_to_files):
             print(f"    - {filename} (converted to independent file)")
 
 
-def verify_extraction(extracted_dir, original_dir=None):
+def verify_extraction(extracted_dir: Path | str, original_dir: Path | str | None = None) -> bool:
     """Verify extracted files."""
     import hashlib
 
@@ -165,7 +166,7 @@ def verify_extraction(extracted_dir, original_dir=None):
 
     if not bin_dir.exists():
         print(f"Warning: bin directory not found in {extracted_dir}")
-        return
+        return False
 
     print("\n" + "=" * 70)
     print("VERIFICATION")
@@ -197,7 +198,7 @@ def verify_extraction(extracted_dir, original_dir=None):
 
         if not original_bin.exists():
             print(f"Warning: Original bin directory not found: {original_bin}")
-            return
+            return False
 
         all_match = True
         for filename, extracted_hash in sorted(hashes.items()):
@@ -234,7 +235,7 @@ def verify_extraction(extracted_dir, original_dir=None):
     return True
 
 
-def main():
+def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Expand tar.zst archive")

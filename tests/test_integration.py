@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -20,7 +21,7 @@ from clang_tool_chain import wrapper
 class TestHelloWorldCompilation(unittest.TestCase):
     """Test complete compilation workflows with Hello World programs."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test environment with temporary directory."""
         self.temp_dir = tempfile.mkdtemp()
         self.temp_path = Path(self.temp_dir)
@@ -60,13 +61,13 @@ class TestHelloWorldCompilation(unittest.TestCase):
             "}\n"
         )
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up temporary directory."""
         import shutil
 
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_one_shot_c_compilation(self):
+    def test_one_shot_c_compilation(self) -> None:
         """Test compiling C source directly to executable in one step."""
         try:
             platform_name, _ = wrapper.get_platform_info()
@@ -85,7 +86,7 @@ class TestHelloWorldCompilation(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_one_shot_cpp_compilation(self):
+    def test_one_shot_cpp_compilation(self) -> None:
         """Test compiling C++ source directly to executable in one step."""
         try:
             platform_name, _ = wrapper.get_platform_info()
@@ -104,7 +105,7 @@ class TestHelloWorldCompilation(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_separate_compile_and_link(self):
+    def test_separate_compile_and_link(self) -> None:
         """Test compiling to object file then linking separately."""
         try:
             platform_name, _ = wrapper.get_platform_info()
@@ -128,7 +129,7 @@ class TestHelloWorldCompilation(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_static_library_creation_and_linking(self):
+    def test_static_library_creation_and_linking(self) -> None:
         """Test creating a static library with llvm-ar and linking against it."""
         try:
             platform_name, _ = wrapper.get_platform_info()
@@ -171,7 +172,7 @@ class TestHelloWorldCompilation(unittest.TestCase):
         sys.platform.startswith("linux") or sys.platform.startswith("darwin"),
         "Thin archives are primarily a Unix feature",
     )
-    def test_thin_archive_creation(self):
+    def test_thin_archive_creation(self) -> None:
         """Test creating a thin archive (archive with references instead of embedded objects)."""
         try:
             helper_obj = self.temp_path / "helper.o"
@@ -202,7 +203,7 @@ class TestHelloWorldCompilation(unittest.TestCase):
 class TestBinaryUtilities(unittest.TestCase):
     """Test LLVM binary analysis and manipulation utilities."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test environment with compiled object file."""
         self.temp_dir = tempfile.mkdtemp()
         self.temp_path = Path(self.temp_dir)
@@ -226,13 +227,13 @@ class TestBinaryUtilities(unittest.TestCase):
         except RuntimeError:
             self.obj_file = None
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up temporary directory."""
         import shutil
 
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_llvm_nm_list_symbols(self):
+    def test_llvm_nm_list_symbols(self) -> None:
         """Test llvm-nm can list symbols from object file."""
         if self.obj_file is None or not self.obj_file.exists():
             self.skipTest("Test object file not available")
@@ -253,7 +254,7 @@ class TestBinaryUtilities(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_llvm_objdump_disassemble(self):
+    def test_llvm_objdump_disassemble(self) -> None:
         """Test llvm-objdump can disassemble object file."""
         if self.obj_file is None or not self.obj_file.exists():
             self.skipTest("Test object file not available")
@@ -275,7 +276,7 @@ class TestBinaryUtilities(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_llvm_readelf_headers(self):
+    def test_llvm_readelf_headers(self) -> None:
         """Test llvm-readelf can read ELF headers."""
         if self.obj_file is None or not self.obj_file.exists():
             self.skipTest("Test object file not available")
@@ -299,7 +300,7 @@ class TestBinaryUtilities(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_llvm_strip_debug_info(self):
+    def test_llvm_strip_debug_info(self) -> None:
         """Test llvm-strip can remove debug information from binary."""
         if self.obj_file is None or not self.obj_file.exists():
             self.skipTest("Test object file not available")
@@ -331,7 +332,7 @@ class TestBinaryUtilities(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_llvm_objcopy_section_manipulation(self):
+    def test_llvm_objcopy_section_manipulation(self) -> None:
         """Test llvm-objcopy can manipulate sections in object file."""
         if self.obj_file is None or not self.obj_file.exists():
             self.skipTest("Test object file not available")
@@ -355,7 +356,7 @@ class TestBinaryUtilities(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_llvm_ranlib_generate_index(self):
+    def test_llvm_ranlib_generate_index(self) -> None:
         """Test llvm-ranlib can generate index for static library."""
         try:
             # Create an object file
@@ -386,7 +387,7 @@ class TestBinaryUtilities(unittest.TestCase):
 class TestCompilerVersions(unittest.TestCase):
     """Test that all major tools can report their versions."""
 
-    def test_clang_version(self):
+    def test_clang_version(self) -> None:
         """Test clang --version works."""
         try:
             result = subprocess.run(
@@ -397,7 +398,7 @@ class TestCompilerVersions(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_clang_cpp_version(self):
+    def test_clang_cpp_version(self) -> None:
         """Test clang++ --version works."""
         try:
             result = subprocess.run(
@@ -408,7 +409,7 @@ class TestCompilerVersions(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_llvm_ar_version(self):
+    def test_llvm_ar_version(self) -> None:
         """Test llvm-ar --version works."""
         try:
             result = subprocess.run(
@@ -425,7 +426,7 @@ class TestCompilerVersions(unittest.TestCase):
 class TestConcurrentDownload(unittest.TestCase):
     """Test that concurrent downloads are properly synchronized."""
 
-    def test_concurrent_download_locking(self):
+    def test_concurrent_download_locking(self) -> None:
         """
         Test that multiple concurrent compile processes handle download locking correctly.
 
@@ -470,7 +471,7 @@ class TestConcurrentDownload(unittest.TestCase):
             out2 = Path(temp_dir2) / ("test2.exe" if platform_name == "win" else "test2")
 
             # Function to compile
-            def compile_file(source, output):
+            def compile_file(source: Path, output: Path) -> dict[str, Any]:
                 start_time = time.time()
                 try:
                     result = wrapper.run_tool("clang", [str(source), "-o", str(output)])
@@ -528,7 +529,7 @@ class TestConcurrentDownload(unittest.TestCase):
 class TestStaticAnalysis(unittest.TestCase):
     """Test Clang static analyzer functionality."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test environment with temporary directory."""
         self.temp_dir = tempfile.mkdtemp()
         self.temp_path = Path(self.temp_dir)
@@ -562,13 +563,13 @@ class TestStaticAnalysis(unittest.TestCase):
             "int main() {\n" "    int *ptr = nullptr;\n" "    return *ptr;  // Null dereference\n" "}\n"
         )
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up temporary directory."""
         import shutil
 
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_analyzer_basic_run(self):
+    def test_analyzer_basic_run(self) -> None:
         """Test that the Clang static analyzer can run with basic checkers."""
         try:
             # Run analyzer with core and deadcode checkers
@@ -597,7 +598,7 @@ class TestStaticAnalysis(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_analyzer_division_by_zero(self):
+    def test_analyzer_division_by_zero(self) -> None:
         """Test that analyzer detects division by zero."""
         try:
             # Run analyzer with core checkers
@@ -623,7 +624,7 @@ class TestStaticAnalysis(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_analyzer_null_dereference(self):
+    def test_analyzer_null_dereference(self) -> None:
         """Test that analyzer detects null pointer dereference."""
         try:
             # Run analyzer with core checkers
@@ -650,7 +651,7 @@ class TestStaticAnalysis(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_analyzer_with_output_format(self):
+    def test_analyzer_with_output_format(self) -> None:
         """Test analyzer with different output formats."""
         try:
             # Run analyzer with plist output format
@@ -678,7 +679,7 @@ class TestStaticAnalysis(unittest.TestCase):
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
-    def test_analyzer_multiple_files(self):
+    def test_analyzer_multiple_files(self) -> None:
         """Test analyzer can analyze multiple source files."""
         try:
             # Create another test file

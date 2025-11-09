@@ -119,8 +119,8 @@ Installing LLVM/Clang traditionally requires:
 
 The package uses a **two-tier manifest system** for version management:
 
-1. **Root Manifest** (`downloads/manifest.json`) - Indexes all platforms and architectures
-2. **Platform Manifests** (`downloads/{platform}/{arch}/manifest.json`) - Contains version info, download URLs, and SHA256 checksums
+1. **Root Manifest** (`downloads/clang/manifest.json`) - Indexes all platforms and architectures
+2. **Platform Manifests** (`downloads/clang/{platform}/{arch}/manifest.json`) - Contains version info, download URLs, and SHA256 checksums
 
 **On first use:**
 ```
@@ -824,7 +824,7 @@ clang-tool-chain-fetch-archive \
 6. ✅ Compresses with **zstd level 22** (94.3% reduction!)
 7. ✅ Generates checksums (SHA256, MD5)
 8. ✅ Names archive: `llvm-{version}-{platform}-{arch}.tar.zst`
-9. ✅ Places in `downloads/{platform}/{arch}/`
+9. ✅ Places in `downloads/clang/{platform}/{arch}/`
 10. ✅ Updates platform manifest with URLs and checksums
 
 **Result:** 51.53 MB archive (from 902 MB original) for Windows x86_64!
@@ -965,15 +965,15 @@ After creating archives, update the manifest files:
 
 1. **Generate SHA256 checksum:**
    ```bash
-   sha256sum downloads/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst
+   sha256sum downloads/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst
    ```
 
-2. **Update platform manifest** (`downloads/win/x86_64/manifest.json`):
+2. **Update platform manifest** (`downloads/clang/win/x86_64/manifest.json`):
    ```json
    {
      "latest": "21.1.5",
      "21.1.5": {
-       "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst",
+       "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst",
        "sha256": "3c21e45edeee591fe8ead5427d25b62ddb26c409575b41db03d6777c77bba44f"
      }
    }
@@ -981,7 +981,7 @@ After creating archives, update the manifest files:
 
 3. **Commit and push:**
    ```bash
-   git add downloads/
+   git add downloads/clang/
    git commit -m "chore: add LLVM 21.1.5 for Windows x86_64"
    git push
    ```
@@ -996,7 +996,7 @@ If you need to manually install binaries (e.g., for offline environments):
 
 1. **Download archive:**
    ```bash
-   wget https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst
+   wget https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst
    ```
 
 2. **Extract to installation directory:**
@@ -1206,7 +1206,7 @@ ls ~/.clang-tool-chain/
 2. **Retry the command** (temporary network issue)
 3. **Check GitHub raw content access:**
    ```bash
-   curl -I https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/manifest.json
+   curl -I https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/manifest.json
    ```
 4. **Clear partial downloads:**
    ```bash
@@ -1294,7 +1294,7 @@ Security is a top priority for this project.
 - **Automatic:** SHA256 checksums are verified during download (enabled by default)
 - **Manifest-Based:** Checksums stored in version-controlled manifests
 - **Protection:** Detects corrupted downloads, MITM attacks, and file tampering
-- **Transparency:** All checksums visible in `downloads/{platform}/{arch}/manifest.json`
+- **Transparency:** All checksums visible in `downloads/clang/{platform}/{arch}/manifest.json`
 
 ### Safe Extraction
 

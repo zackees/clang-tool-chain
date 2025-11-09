@@ -13,9 +13,9 @@ This script automates the entire process:
 8. Places final archive in downloads/{platform}/{arch}/
 
 Usage:
-    python downloads/fetch_and_archive.py --platform win --arch x86_64
-    python downloads/fetch_and_archive.py --platform linux --arch x86_64
-    python downloads/fetch_and_archive.py --platform darwin --arch arm64
+    python -m clang_tool_chain.downloads.fetch_and_archive --platform win --arch x86_64
+    python -m clang_tool_chain.downloads.fetch_and_archive --platform linux --arch x86_64
+    python -m clang_tool_chain.downloads.fetch_and_archive --platform darwin --arch arm64
 
 Requirements:
     - Python 3.7+
@@ -32,6 +32,7 @@ import sys
 import tarfile
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 # ============================================================================
 # Configuration
@@ -101,14 +102,14 @@ ESSENTIAL_BINARIES = {
 # ============================================================================
 
 
-def print_section(title):
+def print_section(title: str) -> None:
     """Print a formatted section header."""
     print("\n" + "=" * 70)
     print(title)
     print("=" * 70)
 
 
-def download_file(url, output_path, show_progress=True):
+def download_file(url: str, output_path: Path | str, show_progress: bool = True) -> None:
     """Download a file with progress indication."""
     print(f"Downloading from: {url}")
     print(f"Saving to: {output_path}")
@@ -119,7 +120,7 @@ def download_file(url, output_path, show_progress=True):
     # Create breadcrumb file to mark download in progress
     breadcrumb_path.touch()
 
-    def report_progress(block_num, block_size, total_size):
+    def report_progress(block_num: int, block_size: int, total_size: int) -> None:
         if show_progress and total_size > 0:
             downloaded = block_num * block_size
             percent = min(100, (downloaded / total_size) * 100)
@@ -141,7 +142,7 @@ def download_file(url, output_path, show_progress=True):
         raise
 
 
-def get_file_hash(filepath, algorithm="md5"):
+def get_file_hash(filepath: Path | str, algorithm: str = "md5") -> str:
     """Calculate hash of a file."""
     h = hashlib.new(algorithm)
     with open(filepath, "rb") as f:
@@ -150,7 +151,7 @@ def get_file_hash(filepath, algorithm="md5"):
     return h.hexdigest()
 
 
-def find_binaries(directory, extensions=None):
+def find_binaries(directory: Path | str, extensions: list[str] | None = None) -> list[Path]:
     """Find all binary files in a directory."""
     if extensions is None:
         extensions = [".exe", ""]  # Windows executables and Unix executables (no extension)
@@ -170,7 +171,7 @@ def find_binaries(directory, extensions=None):
     return binaries
 
 
-def should_exclude_lib_file(file_path):
+def should_exclude_lib_file(file_path: Path | str) -> bool:
     """
     Determine if a library file should be excluded to reduce size.
 
@@ -209,7 +210,7 @@ def should_exclude_lib_file(file_path):
 # ============================================================================
 
 
-def download_llvm(platform, arch, work_dir):
+def download_llvm(platform: str, arch: str, work_dir: Path) -> Path:
     """Download LLVM binaries for the specified platform and architecture."""
     print_section("STEP 1: DOWNLOAD LLVM BINARIES")
 
@@ -253,7 +254,7 @@ def download_llvm(platform, arch, work_dir):
 # ============================================================================
 
 
-def extract_archive(archive_path, extract_dir):
+def extract_archive(archive_path: Path, extract_dir: Path) -> Path:
     """Extract the downloaded archive."""
     print_section("STEP 2: EXTRACT ARCHIVE")
 
@@ -434,7 +435,7 @@ def extract_archive(archive_path, extract_dir):
 # ============================================================================
 
 
-def strip_extras(extracted_dir, output_dir, platform):
+def strip_extras(extracted_dir: Path, output_dir: Path, platform: str) -> Path:
     """Keep only essential binaries, remove extras."""
     print_section("STEP 3: STRIP UNNECESSARY FILES")
 
@@ -488,8 +489,8 @@ def strip_extras(extracted_dir, output_dir, platform):
             print(f"Dest:   {lib_dst}")
 
             # Use factory function to properly bind lib_clang_dir in closure
-            def make_ignore_function(base_dir):
-                def ignore_optional_libs(directory, contents):
+            def make_ignore_function(base_dir: Path):  # type: ignore[return]
+                def ignore_optional_libs(directory: str, contents: list[str]) -> list[str]:
                     ignored = []
                     for item in contents:
                         item_path = Path(directory) / item
@@ -528,7 +529,7 @@ def strip_extras(extracted_dir, output_dir, platform):
 # ============================================================================
 
 
-def strip_linux_binaries(bin_dir, platform):
+def strip_linux_binaries(bin_dir: Path, platform: str) -> None:
     """
     Strip debug symbols from Linux binaries to reduce size.
 
@@ -624,7 +625,7 @@ def strip_linux_binaries(bin_dir, platform):
 # ============================================================================
 
 
-def deduplicate_binaries(bin_dir):
+def deduplicate_binaries(bin_dir: Path) -> dict[str, Any]:
     """Identify duplicate binaries and create deduplication manifest."""
     print_section("STEP 4: ANALYZE AND DEDUPLICATE BINARIES")
 
@@ -708,7 +709,7 @@ def deduplicate_binaries(bin_dir):
 # ============================================================================
 
 
-def create_hardlink_structure(manifest_data, source_bin_dir, output_dir):
+def create_hardlink_structure(manifest_data: dict[str, Any], source_bin_dir: Path, output_dir: Path) -> Path:
     """Create directory with hard links based on deduplication manifest."""
     print_section("STEP 5: CREATE HARD-LINKED STRUCTURE")
 
@@ -760,7 +761,7 @@ def create_hardlink_structure(manifest_data, source_bin_dir, output_dir):
 # ============================================================================
 
 
-def create_tar_archive(source_dir, output_tar):
+def create_tar_archive(source_dir: Path, output_tar: Path) -> Path:
     """Create tar archive (auto-detects hard links)."""
     print_section("STEP 6: CREATE TAR ARCHIVE")
 
@@ -771,7 +772,7 @@ def create_tar_archive(source_dir, output_tar):
     print(f"Output: {output_tar}")
     print()
 
-    def tar_filter(tarinfo):
+    def tar_filter(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo:
         """Filter to set correct permissions for binaries and shared libraries."""
         if tarinfo.isfile():
             # Set executable permissions for files in main bin/ directory
@@ -807,7 +808,7 @@ def create_tar_archive(source_dir, output_tar):
     return output_tar
 
 
-def verify_tar_permissions(tar_file):
+def verify_tar_permissions(tar_file: Path) -> int:
     """Verify that binaries and shared libraries in the tar archive have correct permissions."""
     print_section("STEP 6.5: VERIFY TAR PERMISSIONS")
 
@@ -889,7 +890,7 @@ def verify_tar_permissions(tar_file):
 # ============================================================================
 
 
-def compress_with_zstd(tar_file, output_zst, level=22):
+def compress_with_zstd(tar_file: Path, output_zst: Path, level: int = 22) -> Path:
     """Compress tar with zstd using streaming compression for better interrupt handling."""
     print_section(f"STEP 7: COMPRESS WITH ZSTD LEVEL {level}")
 
@@ -1006,7 +1007,7 @@ def compress_with_zstd(tar_file, output_zst, level=22):
 # ============================================================================
 
 
-def generate_checksums(archive_path):
+def generate_checksums(archive_path: Path) -> tuple[str, str]:
     """Generate SHA256 and MD5 checksums."""
     print_section("STEP 8: GENERATE CHECKSUMS")
 
@@ -1041,7 +1042,7 @@ def generate_checksums(archive_path):
 # ============================================================================
 
 
-def split_archive(archive_path, max_size_mb=99):
+def split_archive(archive_path: Path, max_size_mb: int = 99) -> list[Path] | None:
     """
     Split archive into parts if it exceeds max_size_mb.
 
@@ -1189,18 +1190,18 @@ except Exception as e:
 # ============================================================================
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Fetch and archive LLVM/Clang toolchain binaries",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python downloads/fetch_and_archive.py --platform win --arch x86_64
-  python downloads/fetch_and_archive.py --platform linux --arch x86_64
-  python downloads/fetch_and_archive.py --platform darwin --arch arm64
+  python -m clang_tool_chain.downloads.fetch_and_archive --platform win --arch x86_64
+  python -m clang_tool_chain.downloads.fetch_and_archive --platform linux --arch x86_64
+  python -m clang_tool_chain.downloads.fetch_and_archive --platform darwin --arch arm64
 
   # Use existing extracted binaries:
-  python downloads/fetch_and_archive.py --platform win --arch x86_64 --source-dir ./assets/win
+  python -m clang_tool_chain.downloads.fetch_and_archive --platform win --arch x86_64 --source-dir ./assets/win
 
 Note: Press Ctrl+C at any time to safely interrupt the operation.
         """,
@@ -1228,7 +1229,7 @@ Note: Press Ctrl+C at any time to safely interrupt the operation.
     work_dir = args.work_dir
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    output_dir = args.output_dir or Path("downloads") / args.platform / args.arch
+    output_dir = args.output_dir or Path("downloads/clang") / args.platform / args.arch
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Archive name
@@ -1291,7 +1292,8 @@ Note: Press Ctrl+C at any time to safely interrupt the operation.
         verify_tar_permissions(tar_file)
 
         # Step 7: Compress with ZSTD
-        final_archive = output_dir / f"{archive_name}.tar.zst"
+        # Initialize final_archive here, before compression, so it's defined for cleanup
+        final_archive: Path = output_dir / f"{archive_name}.tar.zst"
         compress_with_zstd(tar_file, final_archive, level=args.zstd_level)
 
         # Step 8: Generate checksums
@@ -1350,10 +1352,13 @@ Note: Press Ctrl+C at any time to safely interrupt the operation.
         print("❌ OPERATION CANCELLED BY USER")
         print("=" * 70)
         print("\nInterrupted! Cleaning up...")
-        # Cleanup on interrupt
-        if "final_archive" in locals() and final_archive.exists():
-            print(f"  Removing incomplete archive: {final_archive}")
-            final_archive.unlink()
+        # Cleanup on interrupt - check if final_archive was defined
+        # Use locals() check to avoid NameError if interrupted before final_archive is set
+        if "final_archive" in locals():
+            final_archive_local: Path = final_archive  # type: ignore[possibly-undefined]
+            if final_archive_local.exists():
+                print(f"  Removing incomplete archive: {final_archive_local}")
+                final_archive_local.unlink()
         sys.exit(130)  # Standard exit code for SIGINT
 
     except Exception as e:
