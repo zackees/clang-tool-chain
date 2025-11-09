@@ -89,4 +89,3 @@ jobs:
       run: |
         uv run pytest tests/test_integration.py -v
       shell: bash
-      continue-on-error: true

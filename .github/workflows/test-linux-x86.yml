@@ -80,4 +80,3 @@ jobs:
     - name: Run integration tests
       run: |
         uv run pytest tests/test_integration.py -v
-      continue-on-error: true

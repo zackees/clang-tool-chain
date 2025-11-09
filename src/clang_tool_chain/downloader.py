@@ -521,6 +521,23 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
 
     fix_file_permissions(install_dir)
 
+    # Force filesystem sync to ensure all extracted files are fully written to disk
+    # This prevents "Text file busy" errors when another thread/process tries to
+    # execute the binaries immediately after we release the lock and see done.txt
+    import platform as plat
+
+    if plat.system() != "Windows":
+        # On Unix systems, call sync() to flush all filesystem buffers
+        # This ensures that all extracted binaries are fully written to disk
+        # before we write done.txt and release the lock
+        if hasattr(os, "sync"):
+            try:
+                os.sync()
+            except Exception:
+                # If sync fails, continue anyway - better to have a rare race condition
+                # than to fail the installation entirely
+                pass
+
     # Write done.txt to mark successful installation
     done_file = install_dir / "done.txt"
     done_file.write_text(f"Installation completed successfully\nVersion: {version}\n")
