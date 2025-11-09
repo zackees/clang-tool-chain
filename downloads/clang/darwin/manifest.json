@@ -1,0 +1,22 @@
+{
+  "platform": "darwin",
+  "clang_version": "19.1.7",
+  "assets": [
+    {
+      "filename": "llvm-19.1.7-darwin-arm64.tar.zst",
+      "clang_version": "19.1.7",
+      "host_platform": "darwin",
+      "arch": "arm64",
+      "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/darwin/llvm-19.1.7-darwin-arm64.tar.zst",
+      "sha256": "88f7a28456ed0318dbd96b951a0a5fb93444d309d3eb3cda59143bf92826e60f"
+    },
+    {
+      "filename": "llvm-19.1.7-darwin-x86_64.tar.zst",
+      "clang_version": "19.1.7",
+      "host_platform": "darwin",
+      "arch": "x86_64",
+      "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/darwin/llvm-19.1.7-darwin-x86_64.tar.zst",
+      "sha256": "1e4c1636ca93bb7ec680c0d5c9f0ac9522b8f95248bc0a51cf54e2de882fa48b"
+    }
+  ]
+}

@@ -1,7 +1,0 @@
-{
-  "latest": "21.1.5",
-  "21.1.5": {
-    "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst",
-    "sha256": "3c21e45edeee591fe8ead5427d25b62ddb26c409575b41db03d6777c77bba44f"
-  }
-}

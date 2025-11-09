@@ -1,0 +1,74 @@
+# LLVM 21.1.5 Windows x86_64 Archive Manifest
+
+## Archive Information
+File: llvm-21.1.5-win-x86_64.tar.zst
+Size: 51.53 MB (54,030,336 bytes)
+Format: tar.zst (tar with zstd level 22 compression)
+Created: November 2024
+LLVM Version: 21.1.5
+Target: x86_64-pc-windows-msvc
+
+## Checksums
+SHA256: 3c21e45edeee591fe8ead5427d25b62ddb26c409575b41db03d6777c77bba44f
+MD5:    d2f7f276885cc93539b9bf6efc14ad2d
+
+## Archive Contents
+The archive contains 19 executables (10 unique binaries stored efficiently using tar hard links):
+
+### Compilers (4 files - 1 unique binary)
+- clang.exe         (95.8 MB) [hardlinked]
+- clang++.exe       (95.8 MB) [unique]
+- clang-cl.exe      (95.8 MB) [hardlinked]
+- clang-cpp.exe     (95.8 MB) [hardlinked]
+
+### Linkers (5 files - 1 unique binary)
+- lld-link.exe      (65.8 MB) [hardlinked]
+- ld.lld.exe        (65.8 MB) [unique]
+- ld64.lld.exe      (65.8 MB) [hardlinked]
+- lld.exe           (65.8 MB) [hardlinked]
+- wasm-ld.exe       (65.8 MB) [hardlinked]
+
+### Archive Tools (2 files - 1 unique binary)
+- llvm-ar.exe       (16.7 MB) [unique]
+- llvm-ranlib.exe   (16.7 MB) [hardlinked]
+
+### Binary Manipulation (2 files - 1 unique binary)
+- llvm-objcopy.exe  (4.5 MB)  [unique]
+- llvm-strip.exe    (4.5 MB)  [hardlinked]
+
+### Analysis Tools (6 unique files)
+- clang-format.exe  (3.7 MB)  [unique]
+- clang-tidy.exe    (53.4 MB) [unique]
+- llvm-nm.exe       (17.4 MB) [unique]
+- llvm-objdump.exe  (19.2 MB) [unique]
+- llvm-readobj.exe  (6.8 MB)  [unique]
+- llvm-symbolizer.exe (5.2 MB) [unique]
+
+## Size Summary
+Total unique binary data: 288 MB
+Total installed size: 860 MB (after hard link expansion)
+Archive size (compressed): 51.53 MB
+Compression ratio: 5.60:1
+Overall reduction: 94.3%
+
+## Installation
+Extract with:
+  python scripts/expand_archive.py llvm-21.1.5-win-x86_64.tar.zst <output_dir>
+
+Or manually:
+  zstd -d llvm-21.1.5-win-x86_64.tar.zst
+  tar -xf llvm-21.1.5-win-x86_64.tar
+
+## Verification
+All extracted binaries have been verified to match the original sources.
+See CHECKSUMS.txt for hash verification instructions.
+
+## Hard Link Strategy
+The archive uses tar's native hard link support to store duplicate binaries efficiently.
+Upon extraction, hard links are converted to independent files for maximum compatibility.
+
+This ensures:
+- Minimal download size (51.53 MB)
+- Full functionality (all 19 tools available)
+- Universal compatibility (works on all file systems)
+- User-friendly behavior (files are independent)
