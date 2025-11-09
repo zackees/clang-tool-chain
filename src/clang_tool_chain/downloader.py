@@ -452,20 +452,21 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
             decompressed.write(pyzstd.decompress(compressed_data))
             logger.info(f"Decompression complete: {temp_tar.stat().st_size / (1024*1024):.2f} MB")
 
-        # Extract tar file to temp directory first
-        temp_extract_dir = dest_dir.parent / f"{dest_dir.name}_temp"
-        logger.debug(f"Creating temp extract directory: {temp_extract_dir}")
-        temp_extract_dir.mkdir(parents=True, exist_ok=True)
+        # Remove dest_dir if it exists to ensure clean extraction
+        if dest_dir.exists():
+            logger.debug(f"Removing existing destination: {dest_dir}")
+            shutil.rmtree(dest_dir)
+
+        # Create parent directory for extraction
+        dest_dir.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Try system tar first (more reliable on Linux)
-            if _try_system_tar(temp_tar, temp_extract_dir):
+            # Try system tar first (more reliable on Linux/macOS)
+            if _try_system_tar(temp_tar, dest_dir.parent):
                 logger.info("Extraction successful using system tar")
-                # System tar extracts hardlinks as separate files automatically on most systems
-                # No need to post-process
             else:
                 # Fall back to Python tarfile
-                logger.info(f"Extracting tar archive to {temp_extract_dir} using Python tarfile")
+                logger.info(f"Extracting tar archive using Python tarfile")
                 with tarfile.open(temp_tar, "r") as tar:
                     # Use extractall which is more reliable than individual extract() calls
                     logger.debug("Extracting all files at once")
@@ -474,36 +475,21 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
 
                     if sys.version_info >= (3, 12):
                         # Use "tar" filter to allow hardlinks
-                        tar.extractall(temp_extract_dir, filter="tar")
+                        tar.extractall(dest_dir.parent, filter="tar")
                     else:
-                        tar.extractall(temp_extract_dir)
+                        tar.extractall(dest_dir.parent)
 
                     logger.info("Python tarfile extraction complete")
 
-            # Find the extracted directory (should be single directory with platform name)
-            extracted_items = list(temp_extract_dir.iterdir())
-            logger.debug(f"Found {len(extracted_items)} items in temp extract directory")
-
-            if len(extracted_items) == 1 and extracted_items[0].is_dir():
-                logger.debug(f"Single directory found: {extracted_items[0].name}")
-                # Remove dest_dir if it exists to prevent "Directory not empty" error
-                if dest_dir.exists():
-                    logger.debug(f"Removing existing destination: {dest_dir}")
-                    shutil.rmtree(dest_dir)
-                # Rename the single extracted subdirectory to dest_dir
-                logger.debug(f"Renaming {extracted_items[0]} to {dest_dir}")
-                extracted_items[0].rename(dest_dir)
-            else:
-                logger.debug("Multiple items found, moving all to destination")
-                # Remove dest_dir if it exists to prevent conflicts
-                if dest_dir.exists():
-                    logger.debug(f"Removing existing destination: {dest_dir}")
-                    shutil.rmtree(dest_dir)
-                # Create dest_dir and move all items into it
-                dest_dir.mkdir(parents=True, exist_ok=True)
-                for item in temp_extract_dir.iterdir():
-                    logger.debug(f"Moving {item.name} to {dest_dir}")
-                    item.rename(dest_dir / item.name)
+            # The archive should extract to a single directory with the expected name
+            # If it doesn't match dest_dir name, rename it
+            expected_items = list(dest_dir.parent.glob(f"{dest_dir.name}*"))
+            if not dest_dir.exists() and expected_items:
+                # Archive may have extracted with a different name, rename it
+                actual_dir = expected_items[0]
+                if actual_dir != dest_dir:
+                    logger.debug(f"Renaming {actual_dir} to {dest_dir}")
+                    shutil.move(str(actual_dir), str(dest_dir))
 
             logger.info(f"Successfully extracted to {dest_dir}")
 
@@ -512,10 +498,6 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
             if temp_tar.exists():
                 logger.debug(f"Cleaning up temporary tar file: {temp_tar}")
                 temp_tar.unlink()
-            # Clean up temp extraction directory if it still exists
-            if temp_extract_dir.exists():
-                logger.debug(f"Cleaning up temp extraction directory: {temp_extract_dir}")
-                shutil.rmtree(temp_extract_dir)
 
     except Exception as e:
         logger.error(f"Extraction failed: {e}")

@@ -294,9 +294,14 @@ class TestBinaryUtilities(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, "llvm-readelf should succeed")
 
-            # Should contain ELF header information
+            # Check for format-specific information
             output = result.stdout.lower()
-            self.assertIn("elf", output, "llvm-readelf output should contain ELF information")
+            if platform_name == "darwin":
+                # macOS uses Mach-O format, not ELF
+                self.assertIn("mach-o", output, "llvm-readelf output should contain Mach-O information on macOS")
+            else:
+                # Linux should contain ELF header information
+                self.assertIn("elf", output, "llvm-readelf output should contain ELF information")
         except RuntimeError as e:
             self.skipTest(f"Binaries not installed: {e}")
 
