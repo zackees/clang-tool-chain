@@ -1,7 +1,7 @@
 {
   "latest": "21.1.5",
   "21.1.5": {
-    "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/linux/arm64/llvm-21.1.5-linux-arm64.tar.zst",
+    "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/linux/arm64/llvm-21.1.5-linux-arm64.tar.zst",
     "sha256": "8c38e405696383a756d737c119c9faba2a4b2047d7b644a443e91af30b102277"
   }
 }
