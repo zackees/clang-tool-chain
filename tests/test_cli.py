@@ -194,7 +194,7 @@ class TestSccacheWrappers(unittest.TestCase):
     @patch("sys.argv", ["clang-tool-chain-sccache", "--show-stats"])
     @patch("clang_tool_chain.cli.subprocess.run")
     @patch("clang_tool_chain.cli.wrapper.get_platform_info")
-    @patch("clang_tool_chain.cli.shutil.which")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
     def test_sccache_main_passthrough_windows(self, mock_which: Mock, mock_platform: Mock, mock_run: Mock) -> None:
         """Test sccache_main passthrough on Windows."""
         mock_which.return_value = "C:\\path\\to\\sccache.exe"
@@ -209,67 +209,57 @@ class TestSccacheWrappers(unittest.TestCase):
         self.assertEqual(call_args, ["C:\\path\\to\\sccache.exe", "--show-stats"])
 
     @patch("sys.argv", ["clang-tool-chain-sccache", "--zero-stats"])
-    @patch("clang_tool_chain.cli.os.execv")
-    @patch("clang_tool_chain.cli.wrapper.get_platform_info")
-    @patch("clang_tool_chain.cli.shutil.which")
-    def test_sccache_main_passthrough_unix(self, mock_which: Mock, mock_platform: Mock, mock_execv: Mock) -> None:
+    @patch("clang_tool_chain.sccache_runner.subprocess.run")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
+    def test_sccache_main_passthrough_unix(self, mock_which: Mock, mock_run: Mock) -> None:
         """Test sccache_main passthrough on Unix."""
         mock_which.return_value = "/usr/bin/sccache"
-        mock_platform.return_value = ("linux", "x86_64")
-        mock_execv.return_value = None
+        mock_run.return_value = MagicMock(returncode=0)
 
         result = cli.sccache_main()
 
         self.assertEqual(result, 0)
-        mock_execv.assert_called_once()
-        call_args = mock_execv.call_args[0]
-        self.assertEqual(call_args[0], "/usr/bin/sccache")
-        self.assertEqual(call_args[1], ["/usr/bin/sccache", "--zero-stats"])
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args[0][0]
+        self.assertEqual(call_args, ["/usr/bin/sccache", "--zero-stats"])
 
     @patch("sys.argv", ["clang-tool-chain-sccache", "--version"])
-    @patch("clang_tool_chain.cli.shutil.which")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
+    @patch("clang_tool_chain.sccache_runner.run_sccache_via_isoenv")
     @patch("sys.stderr", new_callable=StringIO)
-    def test_sccache_main_not_found(self, mock_stderr: StringIO, mock_which: Mock) -> None:
+    def test_sccache_main_not_found(self, mock_stderr: StringIO, mock_isoenv: Mock, mock_which: Mock) -> None:
         """Test sccache_main when sccache is not in PATH."""
         mock_which.return_value = None
+        mock_isoenv.return_value = 0
 
         result = cli.sccache_main()
 
-        self.assertEqual(result, 1)
+        self.assertEqual(result, 0)
         error_output = mock_stderr.getvalue()
-        self.assertIn("sccache not found in PATH", error_output)
-        self.assertIn("Installation options:", error_output)
+        self.assertIn("isolated environment", error_output)
 
     @patch("sys.argv", ["clang-tool-chain-sccache", "--show-stats"])
-    @patch("clang_tool_chain.cli.subprocess.run")
-    @patch("clang_tool_chain.cli.wrapper.get_platform_info")
-    @patch("clang_tool_chain.cli.shutil.which")
+    @patch("clang_tool_chain.sccache_runner.subprocess.run")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
     @patch("sys.stderr", new_callable=StringIO)
-    def test_sccache_main_execution_error(
-        self, mock_stderr: StringIO, mock_which: Mock, mock_platform: Mock, mock_run: Mock
-    ) -> None:
+    def test_sccache_main_execution_error(self, mock_stderr: StringIO, mock_which: Mock, mock_run: Mock) -> None:
         """Test sccache_main with execution error."""
         mock_which.return_value = "/usr/bin/sccache"
-        mock_platform.return_value = ("win", "x86_64")
         mock_run.side_effect = Exception("Unexpected error")
 
         result = cli.sccache_main()
 
         self.assertEqual(result, 1)
         error_output = mock_stderr.getvalue()
-        self.assertIn("Unexpected error during execution", error_output)
+        self.assertIn("Failed to execute sccache", error_output)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-c", "main.c", "-o", "main"])
-    @patch("clang_tool_chain.cli.subprocess.run")
-    @patch("clang_tool_chain.cli.wrapper.find_tool_binary")
-    @patch("clang_tool_chain.cli.wrapper.get_platform_info")
-    @patch("clang_tool_chain.cli.shutil.which")
-    def test_sccache_c_main_success_windows(
-        self, mock_which: Mock, mock_platform: Mock, mock_find: Mock, mock_run: Mock
-    ) -> None:
+    @patch("clang_tool_chain.sccache_runner.subprocess.run")
+    @patch("clang_tool_chain.wrapper.find_tool_binary")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
+    def test_sccache_c_main_success_windows(self, mock_which: Mock, mock_find: Mock, mock_run: Mock) -> None:
         """Test sccache_c_main on Windows with successful execution."""
         mock_which.return_value = "C:\\path\\to\\sccache.exe"
-        mock_platform.return_value = ("win", "x86_64")
         mock_find.return_value = Path("C:\\path\\to\\clang.exe")
         mock_run.return_value = MagicMock(returncode=0)
 
@@ -283,48 +273,42 @@ class TestSccacheWrappers(unittest.TestCase):
         self.assertEqual(call_args[2:], ["main.c", "-o", "main"])
 
     @patch("sys.argv", ["clang-tool-chain-sccache-c", "main.c", "-o", "main"])
-    @patch("clang_tool_chain.cli.os.execv")
-    @patch("clang_tool_chain.cli.wrapper.find_tool_binary")
-    @patch("clang_tool_chain.cli.wrapper.get_platform_info")
-    @patch("clang_tool_chain.cli.shutil.which")
-    def test_sccache_c_main_success_unix(
-        self, mock_which: Mock, mock_platform: Mock, mock_find: Mock, mock_execv: Mock
-    ) -> None:
+    @patch("clang_tool_chain.sccache_runner.subprocess.run")
+    @patch("clang_tool_chain.wrapper.find_tool_binary")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
+    def test_sccache_c_main_success_unix(self, mock_which: Mock, mock_find: Mock, mock_run: Mock) -> None:
         """Test sccache_c_main on Unix with successful execution."""
         mock_which.return_value = "/usr/bin/sccache"
-        mock_platform.return_value = ("linux", "x86_64")
         mock_find.return_value = Path("/home/.clang-tool-chain/clang/linux/x86_64/bin/clang")
-        mock_execv.return_value = None
+        mock_run.return_value = MagicMock(returncode=0)
 
         result = cli.sccache_c_main()
 
         self.assertEqual(result, 0)
-        mock_execv.assert_called_once()
-        call_args = mock_execv.call_args[0]
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args[0][0]
         self.assertEqual(call_args[0], "/usr/bin/sccache")
-        self.assertEqual(call_args[1][0], "/usr/bin/sccache")
-        self.assertIn("clang", str(call_args[1][1]))
-        self.assertEqual(call_args[1][2:], ["main.c", "-o", "main"])
+        self.assertIn("clang", str(call_args[1]))
+        self.assertEqual(call_args[2:], ["main.c", "-o", "main"])
 
     @patch("sys.argv", ["clang-tool-chain-sccache-c", "main.c"])
-    @patch("clang_tool_chain.cli.shutil.which")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
+    @patch("clang_tool_chain.sccache_runner.run_sccache_via_isoenv")
     @patch("sys.stderr", new_callable=StringIO)
-    def test_sccache_c_main_sccache_not_found(self, mock_stderr: StringIO, mock_which: Mock) -> None:
+    def test_sccache_c_main_sccache_not_found(self, mock_stderr: StringIO, mock_isoenv: Mock, mock_which: Mock) -> None:
         """Test sccache_c_main when sccache is not in PATH."""
         mock_which.return_value = None
+        mock_isoenv.return_value = 0
 
         result = cli.sccache_c_main()
 
-        self.assertEqual(result, 1)
+        self.assertEqual(result, 0)
         error_output = mock_stderr.getvalue()
-        self.assertIn("sccache not found in PATH", error_output)
-        self.assertIn("pip install clang-tool-chain[sccache]", error_output)
-        self.assertIn("cargo install sccache", error_output)
-        self.assertIn("brew install sccache", error_output)
+        self.assertIn("isolated environment", error_output)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-c", "main.c"])
-    @patch("clang_tool_chain.cli.wrapper.find_tool_binary")
-    @patch("clang_tool_chain.cli.shutil.which")
+    @patch("clang_tool_chain.wrapper.find_tool_binary")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
     @patch("sys.stderr", new_callable=StringIO)
     def test_sccache_c_main_clang_not_found(self, mock_stderr: StringIO, mock_which: Mock, mock_find: Mock) -> None:
         """Test sccache_c_main when clang binary is not found."""
@@ -339,17 +323,15 @@ class TestSccacheWrappers(unittest.TestCase):
         self.assertIn("clang binary not found in installation", error_output)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-c", "main.c"])
-    @patch("clang_tool_chain.cli.subprocess.run")
-    @patch("clang_tool_chain.cli.wrapper.find_tool_binary")
-    @patch("clang_tool_chain.cli.wrapper.get_platform_info")
-    @patch("clang_tool_chain.cli.shutil.which")
+    @patch("clang_tool_chain.sccache_runner.subprocess.run")
+    @patch("clang_tool_chain.wrapper.find_tool_binary")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
     @patch("sys.stderr", new_callable=StringIO)
     def test_sccache_c_main_execution_error(
-        self, mock_stderr: StringIO, mock_which: Mock, mock_platform: Mock, mock_find: Mock, mock_run: Mock
+        self, mock_stderr: StringIO, mock_which: Mock, mock_find: Mock, mock_run: Mock
     ) -> None:
         """Test sccache_c_main when execution fails."""
         mock_which.return_value = "/usr/bin/sccache"
-        mock_platform.return_value = ("win", "x86_64")
         mock_find.return_value = Path("C:\\path\\to\\clang.exe")
         mock_run.side_effect = FileNotFoundError("sccache.exe not found")
 
@@ -358,19 +340,14 @@ class TestSccacheWrappers(unittest.TestCase):
         self.assertEqual(result, 1)
         error_output = mock_stderr.getvalue()
         self.assertIn("Failed to execute sccache", error_output)
-        self.assertIn("sccache was found at", error_output)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-cpp", "main.cpp", "-o", "main", "-std=c++17"])
-    @patch("clang_tool_chain.cli.subprocess.run")
-    @patch("clang_tool_chain.cli.wrapper.find_tool_binary")
-    @patch("clang_tool_chain.cli.wrapper.get_platform_info")
-    @patch("clang_tool_chain.cli.shutil.which")
-    def test_sccache_cpp_main_success_windows(
-        self, mock_which: Mock, mock_platform: Mock, mock_find: Mock, mock_run: Mock
-    ) -> None:
+    @patch("clang_tool_chain.sccache_runner.subprocess.run")
+    @patch("clang_tool_chain.wrapper.find_tool_binary")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
+    def test_sccache_cpp_main_success_windows(self, mock_which: Mock, mock_find: Mock, mock_run: Mock) -> None:
         """Test sccache_cpp_main on Windows with successful execution."""
         mock_which.return_value = "C:\\path\\to\\sccache.exe"
-        mock_platform.return_value = ("win", "x86_64")
         mock_find.return_value = Path("C:\\path\\to\\clang++.exe")
         mock_run.return_value = MagicMock(returncode=0)
 
@@ -384,45 +361,43 @@ class TestSccacheWrappers(unittest.TestCase):
         self.assertEqual(call_args[2:], ["main.cpp", "-o", "main", "-std=c++17"])
 
     @patch("sys.argv", ["clang-tool-chain-sccache-cpp", "main.cpp"])
-    @patch("clang_tool_chain.cli.os.execv")
-    @patch("clang_tool_chain.cli.wrapper.find_tool_binary")
-    @patch("clang_tool_chain.cli.wrapper.get_platform_info")
-    @patch("clang_tool_chain.cli.shutil.which")
-    def test_sccache_cpp_main_success_unix(
-        self, mock_which: Mock, mock_platform: Mock, mock_find: Mock, mock_execv: Mock
-    ) -> None:
+    @patch("clang_tool_chain.sccache_runner.subprocess.run")
+    @patch("clang_tool_chain.wrapper.find_tool_binary")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
+    def test_sccache_cpp_main_success_unix(self, mock_which: Mock, mock_find: Mock, mock_run: Mock) -> None:
         """Test sccache_cpp_main on Unix with successful execution."""
         mock_which.return_value = "/usr/bin/sccache"
-        mock_platform.return_value = ("linux", "x86_64")
         mock_find.return_value = Path("/home/.clang-tool-chain/clang/linux/x86_64/bin/clang++")
-        mock_execv.return_value = None
+        mock_run.return_value = MagicMock(returncode=0)
 
         result = cli.sccache_cpp_main()
 
         self.assertEqual(result, 0)
-        mock_execv.assert_called_once()
-        call_args = mock_execv.call_args[0]
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args[0][0]
         self.assertEqual(call_args[0], "/usr/bin/sccache")
-        self.assertEqual(call_args[1][0], "/usr/bin/sccache")
-        self.assertIn("clang++", str(call_args[1][1]))
+        self.assertIn("clang++", str(call_args[1]))
 
     @patch("sys.argv", ["clang-tool-chain-sccache-cpp", "main.cpp"])
-    @patch("clang_tool_chain.cli.shutil.which")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
+    @patch("clang_tool_chain.sccache_runner.run_sccache_via_isoenv")
     @patch("sys.stderr", new_callable=StringIO)
-    def test_sccache_cpp_main_sccache_not_found(self, mock_stderr: StringIO, mock_which: Mock) -> None:
+    def test_sccache_cpp_main_sccache_not_found(
+        self, mock_stderr: StringIO, mock_isoenv: Mock, mock_which: Mock
+    ) -> None:
         """Test sccache_cpp_main when sccache is not in PATH."""
         mock_which.return_value = None
+        mock_isoenv.return_value = 0
 
         result = cli.sccache_cpp_main()
 
-        self.assertEqual(result, 1)
+        self.assertEqual(result, 0)
         error_output = mock_stderr.getvalue()
-        self.assertIn("sccache not found in PATH", error_output)
-        self.assertIn("Installation options:", error_output)
+        self.assertIn("isolated environment", error_output)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-cpp", "main.cpp"])
-    @patch("clang_tool_chain.cli.wrapper.find_tool_binary")
-    @patch("clang_tool_chain.cli.shutil.which")
+    @patch("clang_tool_chain.wrapper.find_tool_binary")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
     @patch("sys.stderr", new_callable=StringIO)
     def test_sccache_cpp_main_clang_cpp_not_found(
         self, mock_stderr: StringIO, mock_which: Mock, mock_find: Mock
@@ -439,17 +414,15 @@ class TestSccacheWrappers(unittest.TestCase):
         self.assertIn("clang++ binary not found", error_output)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-cpp", "main.cpp"])
-    @patch("clang_tool_chain.cli.subprocess.run")
-    @patch("clang_tool_chain.cli.wrapper.find_tool_binary")
-    @patch("clang_tool_chain.cli.wrapper.get_platform_info")
-    @patch("clang_tool_chain.cli.shutil.which")
+    @patch("clang_tool_chain.sccache_runner.subprocess.run")
+    @patch("clang_tool_chain.wrapper.find_tool_binary")
+    @patch("clang_tool_chain.sccache_runner.get_sccache_path")
     @patch("sys.stderr", new_callable=StringIO)
     def test_sccache_cpp_main_unexpected_error(
-        self, mock_stderr: StringIO, mock_which: Mock, mock_platform: Mock, mock_find: Mock, mock_run: Mock
+        self, mock_stderr: StringIO, mock_which: Mock, mock_find: Mock, mock_run: Mock
     ) -> None:
         """Test sccache_cpp_main with unexpected error."""
         mock_which.return_value = "/usr/bin/sccache"
-        mock_platform.return_value = ("win", "x86_64")
         mock_find.return_value = Path("C:\\path\\to\\clang++.exe")
         mock_run.side_effect = Exception("Unexpected error occurred")
 
@@ -457,9 +430,8 @@ class TestSccacheWrappers(unittest.TestCase):
 
         self.assertEqual(result, 1)
         error_output = mock_stderr.getvalue()
-        self.assertIn("Unexpected error during execution", error_output)
+        self.assertIn("Failed to execute sccache", error_output)
         self.assertIn("Unexpected error occurred", error_output)
-        self.assertIn("github.com/zackees/clang-tool-chain/issues", error_output)
 
 
 class MainTester(unittest.TestCase):
