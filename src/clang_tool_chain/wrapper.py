@@ -204,6 +204,7 @@ def find_tool_binary(tool_name: str) -> Path:
         # Try alternative names for some tools
         alternatives = {
             "lld": ["lld-link", "ld.lld"],
+            "clang": ["clang++", "clang-cpp"],
             "lld-link": ["lld", "ld.lld"],
             "ld.lld": ["lld", "lld-link"],
         }
