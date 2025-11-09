@@ -25,8 +25,8 @@ import pyzstd
 # Configure logging for GitHub Actions and general debugging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stderr)]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stderr)],
 )
 logger = logging.getLogger(__name__)
 
@@ -293,7 +293,7 @@ def download_file(url: str, dest_path: Path, expected_sha256: str | None = None)
     try:
         req = Request(url, headers={"User-Agent": "clang-tool-chain"})
         with urlopen(req, timeout=300) as response:
-            content_length = response.getheader('Content-Length')
+            content_length = response.getheader("Content-Length")
             if content_length:
                 logger.info(f"Download size: {int(content_length) / (1024*1024):.2f} MB")
 
@@ -581,7 +581,7 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
     # Download archive to a temporary file
     # Use tempfile to avoid conflicts with test cleanup that removes temp directories
     # Create temporary file for download
-    with tempfile.NamedTemporaryFile(mode='wb', suffix='.tar.zst', delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".tar.zst", delete=False) as tmp:
         archive_path = Path(tmp.name)
 
     try:

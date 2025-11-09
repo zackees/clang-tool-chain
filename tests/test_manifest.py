@@ -175,7 +175,9 @@ class TestManifestFiles(unittest.TestCase):
             if platform_dir.exists():
                 arch_subdirs = [d for d in platform_dir.iterdir() if d.is_dir()]
                 # At least one architecture should exist for each platform
-                self.assertTrue(len(arch_subdirs) > 0, f"No architecture subdirectories found in downloads/clang/{platform}/")
+                self.assertTrue(
+                    len(arch_subdirs) > 0, f"No architecture subdirectories found in downloads/clang/{platform}/"
+                )
 
     def test_all_manifests_exist(self):
         """Test that each platform/arch subdirectory contains a manifest.json file."""

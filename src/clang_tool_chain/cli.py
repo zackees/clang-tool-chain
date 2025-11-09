@@ -271,14 +271,9 @@ def cmd_test(args: argparse.Namespace) -> int:
     # Test 5: Version check for clang
     print("[5/7] Testing clang version...")
     try:
-        result = subprocess.run(
-            [str(clang_path), "--version"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        result = subprocess.run([str(clang_path), "--version"], capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
-            version_line = result.stdout.split('\n')[0]
+            version_line = result.stdout.split("\n")[0]
             print(f"      {version_line}")
             print("      ✓ PASSED")
         else:
@@ -300,21 +295,20 @@ def cmd_test(args: argparse.Namespace) -> int:
             test_out = test_out.with_suffix(".exe")
 
         # Write simple C program
-        test_c.write_text('''
+        test_c.write_text(
+            """
 #include <stdio.h>
 int main() {
     printf("Hello from clang-tool-chain!\\n");
     return 0;
 }
-''')
+"""
+        )
 
         try:
             # Compile
             result = subprocess.run(
-                [str(clang_path), str(test_c), "-o", str(test_out)],
-                capture_output=True,
-                text=True,
-                timeout=30
+                [str(clang_path), str(test_c), "-o", str(test_out)], capture_output=True, text=True, timeout=30
             )
             if result.returncode != 0:
                 print("      ✗ FAILED: Compilation failed")
@@ -344,21 +338,20 @@ int main() {
             test_out = test_out.with_suffix(".exe")
 
         # Write simple C++ program
-        test_cpp.write_text('''
+        test_cpp.write_text(
+            """
 #include <iostream>
 int main() {
     std::cout << "Hello from clang-tool-chain C++!" << std::endl;
     return 0;
 }
-''')
+"""
+        )
 
         try:
             # Compile
             result = subprocess.run(
-                [str(clang_cpp_path), str(test_cpp), "-o", str(test_out)],
-                capture_output=True,
-                text=True,
-                timeout=30
+                [str(clang_cpp_path), str(test_cpp), "-o", str(test_out)], capture_output=True, text=True, timeout=30
             )
             if result.returncode != 0:
                 print("      ✗ FAILED: Compilation failed")
@@ -473,6 +466,7 @@ def test_main() -> int:
     This allows running: clang-tool-chain-test
     """
     import argparse
+
     args = argparse.Namespace()  # Empty namespace
     return cmd_test(args)
 
