@@ -155,7 +155,7 @@ def get_install_dir(platform: str, arch: str) -> Path:
         Path to the installation directory
     """
     toolchain_dir = get_home_toolchain_dir()
-    install_dir = toolchain_dir / platform / arch
+    install_dir = toolchain_dir / "clang" / platform / arch
     return install_dir
 
 
@@ -299,6 +299,7 @@ def fix_file_permissions(install_dir: Path) -> None:
     Args:
         install_dir: Installation directory to fix permissions in
     """
+    import os
     import platform
 
     # Only fix permissions on Unix-like systems (Linux, macOS)
@@ -332,6 +333,17 @@ def fix_file_permissions(install_dir: Path) -> None:
                 and file_path.suffix not in {".h", ".inc", ".txt", ".a", ".so", ".dylib"}
             ):
                 file_path.chmod(0o755)
+
+    # Force filesystem sync to ensure all permission changes are committed
+    # This prevents "Text file busy" errors when another thread tries to execute
+    # binaries immediately after this function returns
+    if bin_dir and bin_dir.exists():
+        # Sync the bin directory to ensure all changes are written
+        fd = os.open(str(bin_dir), os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
 
 
 def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
@@ -448,7 +460,7 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
     2. Fetches the platform-specific manifest
     3. Downloads the latest toolchain archive
     4. Verifies the checksum
-    5. Extracts to ~/.clang-tool-chain/<platform>/<arch>
+    5. Extracts to ~/.clang-tool-chain/clang/<platform>/<arch>
 
     Args:
         platform: Platform name (e.g., "win", "linux", "darwin")
