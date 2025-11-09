@@ -28,7 +28,7 @@ clang-tool-chain-c hello.c -o hello
 ./hello  # Windows: .\hello.exe
 ```
 
-**That's it!** The LLVM toolchain (~50-88 MB) downloads automatically on first use. No manual setup required.
+**That's it!** The LLVM toolchain (~52-91 MB) downloads automatically on first use. No manual setup required.
 
 ---
 
@@ -49,7 +49,7 @@ Installing LLVM/Clang traditionally requires:
 
 | Feature | clang-tool-chain | Full LLVM Install | System Compiler | Docker Image |
 |---------|------------------|-------------------|-----------------|--------------|
-| **Size** | 50-88 MB | 1-3 GB | Varies | 500+ MB |
+| **Size** | 52-91 MB | 1-3 GB | Varies | 500+ MB |
 | **Setup Time** | < 30 seconds | 5-15 minutes | Varies | 1-5 minutes |
 | **Admin Required** | ❌ No | ✅ Yes (usually) | ✅ Yes | ✅ Yes |
 | **Auto Download** | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
@@ -77,7 +77,7 @@ Installing LLVM/Clang traditionally requires:
 - **⚡ Ultra-Compressed Archives** - 94.3% size reduction using zstd level 22 compression
 - **🌍 Cross-Platform Support** - Windows x64, macOS x64/ARM64, Linux x64/ARM64
 - **🛡️ Concurrent-Safe Installation** - File locking prevents race conditions in parallel builds
-- **🐍 Python Wrapper Commands** - 17 entry points for all essential LLVM tools
+- **🐍 Python Wrapper Commands** - 22 entry points for all essential LLVM tools
 - **📦 Pre-Built Binaries** - Clang 21.1.5 (Linux/Windows), 19.1.7 (macOS)
 - **🔧 Essential Toolchain Utilities** - Compilers, linkers, binary utilities, and code formatters
 
@@ -370,6 +370,9 @@ clang-tool-chain-sccache --version
 | Command | Tool | Description |
 |---------|------|-------------|
 | `clang-tool-chain` | CLI | Main management interface |
+| `clang-tool-chain-fetch` | Fetch utility | Manual download utility for pre-fetching binaries |
+| `clang-tool-chain-paths` | Path utility | Get installation paths in JSON format |
+| `clang-tool-chain-fetch-archive` | Archive utility | Maintainer tool for creating optimized archives |
 | `clang-tool-chain-c` | `clang` | C compiler |
 | `clang-tool-chain-cpp` | `clang++` | C++ compiler |
 | `clang-tool-chain-build` | Build utility | Simple build tool for C/C++ |
@@ -632,7 +635,7 @@ steps:
 |----------|--------------|--------------|--------------|----------------|--------|
 | Windows  | x86_64       | 21.1.5       | ~52 MB       | ~200 MB        | ✅ Stable |
 | Linux    | x86_64       | 21.1.5       | ~88 MB       | ~350 MB        | ✅ Stable |
-| Linux    | ARM64        | 21.1.5       | ~85 MB       | ~340 MB        | ✅ Stable |
+| Linux    | ARM64        | 21.1.5       | ~91 MB       | ~340 MB        | ✅ Stable |
 | macOS    | x86_64       | 19.1.7       | ~75 MB       | ~300 MB        | ✅ Stable |
 | macOS    | ARM64        | 19.1.7       | ~71 MB       | ~285 MB        | ✅ Stable |
 
@@ -1076,7 +1079,7 @@ clang-tool-chain-c world.c -o world  # Process 2
 On first use, `clang-tool-chain` automatically:
 1. Detects your platform and architecture
 2. Fetches the manifest for your platform
-3. Downloads the appropriate archive (~50-88 MB)
+3. Downloads the appropriate archive (~52-91 MB)
 4. Verifies the SHA256 checksum
 5. Extracts to `~/.clang-tool-chain/{platform}/{arch}/`
 6. Executes your command
@@ -1137,9 +1140,9 @@ Absolutely! See the [CI/CD Integration](#-cicd-integration) section for Docker e
 
 ### How much disk space do I need?
 
-- **Download:** ~50-88 MB (archive)
+- **Download:** ~52-91 MB (archive)
 - **Installed:** ~200-350 MB (extracted binaries)
-- **Total:** ~250-438 MB per platform
+- **Total:** ~252-441 MB per platform
 
 The archive is deleted after extraction, so you only need space for the installed binaries.
 
@@ -1328,7 +1331,7 @@ The bundled LLVM/Clang binaries are licensed under the **Apache License 2.0 with
 ## 📊 Version History
 
 ### 0.0.1 (2025-11-07) - Initial Alpha Release
-- ✅ Core wrapper infrastructure for 17 LLVM tools
+- ✅ Core wrapper infrastructure for 22 wrapper commands
 - ✅ Automatic download and installation system
 - ✅ Manifest-based distribution with SHA256 verification
 - ✅ Binary optimization pipeline (stripping, deduplication, compression)
