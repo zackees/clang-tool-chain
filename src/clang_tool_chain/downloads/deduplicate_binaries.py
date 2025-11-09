@@ -14,9 +14,10 @@ import hashlib
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 
-def get_file_hash(filepath):
+def get_file_hash(filepath: Path | str) -> str:
     """Calculate MD5 hash of a file."""
     md5 = hashlib.md5()
     with open(filepath, "rb") as f:
@@ -25,7 +26,7 @@ def get_file_hash(filepath):
     return md5.hexdigest()
 
 
-def analyze_directory(directory):
+def analyze_directory(directory: Path | str) -> tuple[dict[str, list[str]], dict[str, int]]:
     """Analyze directory for duplicate files."""
     directory = Path(directory)
 
@@ -47,7 +48,7 @@ def analyze_directory(directory):
     return hash_to_files, hash_to_size
 
 
-def calculate_savings(hash_to_files, hash_to_size):
+def calculate_savings(hash_to_files: dict[str, list[str]], hash_to_size: dict[str, int]) -> dict[str, Any]:
     """Calculate potential space savings from deduplication."""
     total_size = 0
     deduped_size = 0
@@ -72,7 +73,7 @@ def calculate_savings(hash_to_files, hash_to_size):
     }
 
 
-def create_deduped_structure(source_dir, dest_dir):
+def create_deduped_structure(source_dir: Path | str, dest_dir: Path | str) -> dict[str, Any]:
     """Create deduplicated directory structure with manifest."""
     source_dir = Path(source_dir)
     dest_dir = Path(dest_dir)
@@ -116,7 +117,7 @@ def create_deduped_structure(source_dir, dest_dir):
     return manifest_data
 
 
-def expand_deduped_structure(deduped_dir, output_dir):
+def expand_deduped_structure(deduped_dir: Path | str, output_dir: Path | str) -> None:
     """Expand deduplicated structure back to full structure."""
     deduped_dir = Path(deduped_dir)
     output_dir = Path(output_dir)
@@ -142,7 +143,7 @@ def expand_deduped_structure(deduped_dir, output_dir):
     print(f"\nExpanded {len(manifest)} files from {len(set(manifest.values()))} canonical files")
 
 
-def print_analysis(source_dir):
+def print_analysis(source_dir: Path | str) -> None:
     """Print detailed analysis of duplicates."""
     hash_to_files, hash_to_size = analyze_directory(source_dir)
     stats = calculate_savings(hash_to_files, hash_to_size)

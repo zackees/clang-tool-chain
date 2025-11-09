@@ -128,7 +128,7 @@ uv run python -m build
 ### Core Components
 
 **Manifest-Based Distribution System:**
-- Root manifest (`downloads/manifest.json`) indexes all platforms/architectures
+- Root manifest (`downloads/clang/manifest.json`) indexes all platforms/architectures
 - Platform-specific manifests specify versions, download URLs, and SHA256 checksums
 - Toolchains are distributed as `.tar.zst` archives (~52 MB for Windows x64)
 - First tool execution triggers automatic download and installation to `~/.clang-tool-chain/`
@@ -176,12 +176,15 @@ clang-tool-chain/
 │   │   └── test_compression.py     # Test compression methods
 │   └── __version__.py       # Version information
 ├── downloads/               # Pre-built archives and manifests
-│   ├── manifest.json        # Root manifest (all platforms)
-│   ├── win/                 # Windows archives and manifest
-│   │   ├── manifest.json
-│   │   └── llvm-21.1.5-win-x86_64.tar.zst
-│   ├── linux/               # Linux archives
-│   └── darwin/              # macOS archives
+│   ├── clang/               # Clang toolchain downloads
+│   │   ├── manifest.json    # Root manifest (all platforms)
+│   │   ├── win/             # Windows archives and manifest
+│   │   │   ├── x86_64/
+│   │   │   │   ├── manifest.json
+│   │   │   │   └── llvm-21.1.5-win-x86_64.tar.zst
+│   │   ├── linux/           # Linux archives
+│   │   └── darwin/          # macOS archives
+│   └── iwyu/                # Include What You Use downloads
 ├── tests/                   # Unit and integration tests
 │   ├── test_cli.py          # CLI command tests
 │   ├── test_downloader.py   # Download/install tests
@@ -334,7 +337,7 @@ clang-tool-chain-fetch-archive --platform win --arch x86_64 --source-dir ./asset
 6. Compresses with zstd level 22 (94.3% reduction)
 7. Generates checksums (SHA256, MD5)
 8. Names archive: `llvm-{version}-{platform}-{arch}.tar.zst`
-9. Places in `downloads/{platform}/`
+9. Places in `downloads/clang/{platform}/{arch}/`
 
 **Result:** 51.53 MB archive (from 902 MB original) for Windows x86_64
 

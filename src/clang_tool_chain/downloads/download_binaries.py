@@ -19,7 +19,7 @@ from pathlib import Path
 # Import checksum database
 # Note: This import may fail when running the script standalone (before package installation)
 try:
-    from clang_tool_chain.checksums import format_platform_key, get_checksum, has_checksum
+    from clang_tool_chain.checksums import get_checksum, has_checksum
 except ImportError:
     # Fallback when running standalone
     def get_checksum(version: str, platform: str) -> str | None:
@@ -174,7 +174,7 @@ class BinaryDownloader:
                         return True
 
             # Download with progress reporting
-            def reporthook(blocknum, blocksize, totalsize):
+            def reporthook(blocknum: int, blocksize: int, totalsize: int) -> None:
                 if show_progress and totalsize > 0:
                     downloaded = blocknum * blocksize
                     percent = min(100, downloaded * 100 / totalsize)
@@ -334,7 +334,7 @@ class BinaryDownloader:
 
         return extract_dir
 
-    def download_all(self, platforms: list | None = None) -> dict[str, Path | None]:
+    def download_all(self, platforms: list[str] | None = None) -> dict[str, Path | None]:
         """
         Download binaries for all or specified platforms.
 
@@ -390,7 +390,7 @@ def get_current_platform() -> str | None:
     return None
 
 
-def main():
+def main() -> None:
     """Main entry point for the download script."""
     parser = argparse.ArgumentParser(description="Download pre-built LLVM/Clang binaries for multiple platforms")
     parser.add_argument(

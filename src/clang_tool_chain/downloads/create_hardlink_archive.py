@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 
-def create_hardlink_structure(manifest_path, canonical_dir, output_dir):
+def create_hardlink_structure(manifest_path: Path | str, canonical_dir: Path | str, output_dir: Path | str) -> Path:
     """
     Create directory structure with hard links based on manifest.
 
@@ -88,7 +88,7 @@ def create_hardlink_structure(manifest_path, canonical_dir, output_dir):
     return bin_dir
 
 
-def verify_hardlinks(bin_dir):
+def verify_hardlinks(bin_dir: Path | str) -> tuple[int, int]:
     """Verify that hard links were created successfully."""
     bin_dir = Path(bin_dir)
 
@@ -120,7 +120,7 @@ def verify_hardlinks(bin_dir):
             hardlinked_groups += 1
             size_mb = files[0]["size"] / (1024 * 1024)
             print(f"\nHard link group {hardlinked_groups} ({len(files)} files, {size_mb:.1f} MB each):")
-            for f in sorted(files, key=lambda x: x["name"]):
+            for f in sorted(files, key=lambda x: x["name"]):  # type: ignore[arg-type]
                 print(f"  - {f['name']} (nlink={f['nlink']})")
 
     print()
@@ -132,7 +132,7 @@ def verify_hardlinks(bin_dir):
     return total_files, unique_inodes
 
 
-def create_tar_archive(source_dir, output_tar, compression="none"):
+def create_tar_archive(source_dir: Path | str, output_tar: Path | str, compression: str = "none") -> Path:
     """Create tar archive (tar auto-detects hard links)."""
     import tarfile
 
@@ -147,7 +147,7 @@ def create_tar_archive(source_dir, output_tar, compression="none"):
     print(f"Compression: {compression}")
     print()
 
-    def tar_filter(tarinfo):
+    def tar_filter(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo:
         """Filter to set correct permissions for binaries and shared libraries."""
         if tarinfo.isfile():
             # Set executable permissions for files in main bin/ directory
@@ -193,7 +193,7 @@ def create_tar_archive(source_dir, output_tar, compression="none"):
     return output_tar
 
 
-def verify_tar_permissions(tar_file):
+def verify_tar_permissions(tar_file: Path | str) -> int:
     """Verify that binaries and shared libraries in the tar archive have correct permissions."""
     import tarfile
 
@@ -273,7 +273,7 @@ def verify_tar_permissions(tar_file):
     return binaries_checked + libs_checked
 
 
-def compress_with_zstd(tar_file, output_zst, level=22):
+def compress_with_zstd(tar_file: Path | str, output_zst: Path | str, level: int = 22) -> Path:
     """Compress tar with zstd."""
     import zstandard as zstd
 
@@ -318,7 +318,7 @@ def compress_with_zstd(tar_file, output_zst, level=22):
     return output_zst
 
 
-def main():
+def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Create hardlink-based tar.zst archive")
@@ -357,7 +357,7 @@ def main():
     bin_dir = create_hardlink_structure(manifest_path, canonical_dir, hardlink_dir)
 
     # Step 2: Verify hardlinks
-    total_files, unique_inodes = verify_hardlinks(bin_dir)
+    _ = verify_hardlinks(bin_dir)  # Returns tuple but we don't need the values
 
     # Step 3: Create tar archive
     tar_file = output_dir / f"{args.name}.tar"

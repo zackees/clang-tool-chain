@@ -15,6 +15,7 @@ import sys
 import tarfile
 import time
 from pathlib import Path
+from typing import Any
 
 try:
     import zstandard as zstd
@@ -23,13 +24,13 @@ except ImportError:
     zstd = None
 
 
-def format_size(bytes_size):
+def format_size(bytes_size: int) -> str:
     """Format bytes as human-readable string."""
     mb = bytes_size / (1024 * 1024)
     return f"{mb:.2f} MB"
 
 
-def format_time(seconds):
+def format_time(seconds: float) -> str:
     """Format seconds as human-readable string."""
     if seconds < 60:
         return f"{seconds:.1f}s"
@@ -38,7 +39,7 @@ def format_time(seconds):
     return f"{minutes}m {secs:.1f}s"
 
 
-def test_gzip(source_dir, output_base, levels=None):
+def test_gzip(source_dir: str, output_base: str, levels: list[int] | None = None) -> list[dict[str, Any]]:
     """Test gzip compression at various levels."""
     if levels is None:
         levels = [1, 6, 9]  # Fast, default, max
@@ -64,7 +65,7 @@ def test_gzip(source_dir, output_base, levels=None):
     return results
 
 
-def test_bzip2(source_dir, output_base, levels=None):
+def test_bzip2(source_dir: str, output_base: str, levels: list[int] | None = None) -> list[dict[str, Any]]:
     """Test bzip2 compression at various levels."""
     if levels is None:
         levels = [1, 6, 9]  # Fast, default, max
@@ -90,7 +91,9 @@ def test_bzip2(source_dir, output_base, levels=None):
     return results
 
 
-def test_xz(source_dir, output_base, levels=None, test_extreme=True):
+def test_xz(
+    source_dir: str, output_base: str, levels: list[int] | None = None, test_extreme: bool = True
+) -> list[dict[str, Any]]:
     """Test xz compression at various levels."""
     if levels is None:
         levels = [0, 6, 9]  # Fast, default, max
@@ -133,7 +136,7 @@ def test_xz(source_dir, output_base, levels=None, test_extreme=True):
     return results
 
 
-def test_zstd_python(source_dir, output_base, levels=None):
+def test_zstd_python(source_dir: str, output_base: str, levels: list[int] | None = None) -> list[dict[str, Any]]:
     """Test zstd compression using Python library."""
     if zstd is None:
         print("Skipping zstd tests (module not available)")
@@ -177,7 +180,7 @@ def test_zstd_python(source_dir, output_base, levels=None):
     return results
 
 
-def print_results_table(all_results):
+def print_results_table(all_results: list[dict[str, Any]]) -> None:
     """Print formatted results table."""
     print("\n" + "=" * 80)
     print("COMPRESSION COMPARISON RESULTS")
@@ -205,7 +208,7 @@ def print_results_table(all_results):
     print(f"Difference: {format_size(sorted_results[-1]['size'] - sorted_results[0]['size'])}")
 
 
-def main():
+def main() -> None:
     if len(sys.argv) < 2:
         print("Usage: python test_compression.py <directory_to_compress> [output_prefix]")
         sys.exit(1)

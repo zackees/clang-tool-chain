@@ -13,14 +13,14 @@ import tarfile
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 from urllib.request import Request, urlopen
 
 import fasteners
 import pyzstd
 
 # Base URL for manifest and downloads
-MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads"
+MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang"
 
 # Generic type variable for JSON deserialization
 T = TypeVar("T")
@@ -66,7 +66,7 @@ class Manifest:
     versions: dict[str, VersionInfo]
 
 
-def _parse_root_manifest(data: dict) -> RootManifest:
+def _parse_root_manifest(data: dict[str, Any]) -> RootManifest:
     """
     Parse raw JSON data into a RootManifest dataclass.
 
@@ -85,7 +85,7 @@ def _parse_root_manifest(data: dict) -> RootManifest:
     return RootManifest(platforms=platforms)
 
 
-def _parse_manifest(data: dict) -> Manifest:
+def _parse_manifest(data: dict[str, Any]) -> Manifest:
     """
     Parse raw JSON data into a Manifest dataclass.
 
@@ -159,7 +159,7 @@ def get_install_dir(platform: str, arch: str) -> Path:
     return install_dir
 
 
-def _fetch_json_raw(url: str) -> dict:
+def _fetch_json_raw(url: str) -> dict[str, Any]:
     """
     Fetch and parse JSON from a URL.
 
@@ -176,7 +176,7 @@ def _fetch_json_raw(url: str) -> dict:
         req = Request(url, headers={"User-Agent": "clang-tool-chain"})
         with urlopen(req, timeout=30) as response:
             data = response.read()
-            result: dict = json.loads(data.decode("utf-8"))
+            result: dict[str, Any] = json.loads(data.decode("utf-8"))
             return result
     except Exception as e:
         raise RuntimeError(f"Failed to fetch JSON from {url}: {e}") from e

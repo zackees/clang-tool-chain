@@ -7,6 +7,7 @@ properly set executable permissions on all binaries in the bin/ directory.
 """
 
 import tarfile
+from pathlib import Path
 
 import pytest
 
@@ -19,7 +20,7 @@ from clang_tool_chain.downloads.fetch_and_archive import (
 class TestArchivePermissions:
     """Test that tar archives have correct executable permissions."""
 
-    def test_create_tar_with_executable_permissions(self, tmp_path):
+    def test_create_tar_with_executable_permissions(self, tmp_path: Path) -> None:
         """Test that create_tar_archive sets executable permissions on binaries."""
         # Create a test directory structure
         test_dir = tmp_path / "test_binaries"
@@ -60,7 +61,7 @@ class TestArchivePermissions:
                     # (they keep their original permissions)
                     pass  # We don't check lib files
 
-    def test_verify_tar_permissions_passes_for_good_archive(self, tmp_path):
+    def test_verify_tar_permissions_passes_for_good_archive(self, tmp_path: Path) -> None:
         """Test that verify_tar_permissions passes for an archive with correct permissions."""
         # Create a test directory structure
         test_dir = tmp_path / "test_binaries"
@@ -79,7 +80,7 @@ class TestArchivePermissions:
         binaries_checked = verify_tar_permissions(tar_path)
         assert binaries_checked == 2
 
-    def test_verify_tar_permissions_fails_for_bad_archive(self, tmp_path):
+    def test_verify_tar_permissions_fails_for_bad_archive(self, tmp_path: Path) -> None:
         """Test that verify_tar_permissions fails for an archive with incorrect permissions."""
         # Create a test directory structure
         test_dir = tmp_path / "test_binaries"
@@ -111,7 +112,7 @@ class TestArchivePermissions:
         with pytest.raises(RuntimeError, match="with incorrect permissions"):
             verify_tar_permissions(tar_path_bad)
 
-    def test_tar_filter_sets_correct_permissions(self, tmp_path):
+    def test_tar_filter_sets_correct_permissions(self, tmp_path: Path) -> None:
         """Test that the tar_filter function correctly sets permissions."""
         # Create a test directory
         test_dir = tmp_path / "test_binaries"
@@ -134,7 +135,7 @@ class TestArchivePermissions:
             assert member.mode == 0o755, f"Expected 0o755, got {oct(member.mode)}"
             assert member.mode & 0o100, "Execute bit not set"
 
-    def test_empty_bin_directory(self, tmp_path):
+    def test_empty_bin_directory(self, tmp_path: Path) -> None:
         """Test verification with an empty bin directory."""
         # Create empty structure
         test_dir = tmp_path / "test_binaries"
@@ -149,7 +150,7 @@ class TestArchivePermissions:
         binaries_checked = verify_tar_permissions(tar_path)
         assert binaries_checked == 0
 
-    def test_multiple_binaries_with_mixed_extensions(self, tmp_path):
+    def test_multiple_binaries_with_mixed_extensions(self, tmp_path: Path) -> None:
         """Test with multiple binaries, some with .exe extension."""
         # Create test directory
         test_dir = tmp_path / "test_binaries"
@@ -182,7 +183,7 @@ class TestArchivePermissions:
                 if "/bin/" in member.name and member.isfile():
                     assert member.mode == 0o755, f"{member.name} has mode {oct(member.mode)}, expected 0o755"
 
-    def test_shared_libraries_get_executable_permissions(self, tmp_path):
+    def test_shared_libraries_get_executable_permissions(self, tmp_path: Path) -> None:
         """Test that shared libraries in lib/ get executable permissions."""
         # Create test directory
         test_dir = tmp_path / "test_binaries"
@@ -209,7 +210,7 @@ class TestArchivePermissions:
                 if member.name.endswith((".so", ".dylib")) or ".so." in member.name:
                     assert member.mode == 0o755, f"Shared lib {member.name} has mode {oct(member.mode)}, expected 0o755"
 
-    def test_headers_do_not_get_executable_permissions(self, tmp_path):
+    def test_headers_do_not_get_executable_permissions(self, tmp_path: Path) -> None:
         """Test that headers and static libraries in lib/ do NOT get executable permissions."""
         # Create test directory
         test_dir = tmp_path / "test_binaries"
@@ -241,7 +242,7 @@ class TestArchivePermissions:
                         member.mode == 0o644
                     ), f"Header/text file {member.name} has mode {oct(member.mode)}, expected 0o644"
 
-    def test_lib_binaries_get_executable_permissions(self, tmp_path):
+    def test_lib_binaries_get_executable_permissions(self, tmp_path: Path) -> None:
         """Test that executable binaries in lib/ (like symbolizers) get executable permissions."""
         # Create test directory
         test_dir = tmp_path / "test_binaries"
@@ -267,7 +268,7 @@ class TestArchivePermissions:
                 if "symbolize" in member.name and member.isfile():
                     assert member.mode == 0o755, f"Lib binary {member.name} has mode {oct(member.mode)}, expected 0o755"
 
-    def test_mixed_bin_and_lib_structure(self, tmp_path):
+    def test_mixed_bin_and_lib_structure(self, tmp_path: Path) -> None:
         """Test a realistic structure with both bin/ and lib/ directories."""
         # Create test directory structure
         test_dir = tmp_path / "test_binaries"

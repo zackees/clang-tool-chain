@@ -7,7 +7,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from clang_tool_chain import downloader
 
@@ -15,25 +15,25 @@ from clang_tool_chain import downloader
 class TestDownloader(unittest.TestCase):
     """Test cases for downloader module."""
 
-    def test_get_home_toolchain_dir(self):
+    def test_get_home_toolchain_dir(self) -> None:
         """Test that get_home_toolchain_dir returns correct path."""
         result = downloader.get_home_toolchain_dir()
         self.assertIsInstance(result, Path)
         self.assertTrue(str(result).endswith(".clang-tool-chain"))
 
-    def test_get_lock_path(self):
+    def test_get_lock_path(self) -> None:
         """Test that get_lock_path returns correct lock file path."""
         result = downloader.get_lock_path("linux", "x86_64")
         self.assertIsInstance(result, Path)
         self.assertTrue(str(result).endswith("linux-x86_64.lock"))
 
-    def test_get_install_dir(self):
+    def test_get_install_dir(self) -> None:
         """Test that get_install_dir returns correct installation path."""
         result = downloader.get_install_dir("darwin", "arm64")
         self.assertIsInstance(result, Path)
         self.assertTrue(str(result).endswith("darwin/arm64") or str(result).endswith("darwin\\arm64"))
 
-    def test_verify_checksum_success(self):
+    def test_verify_checksum_success(self) -> None:
         """Test checksum verification with correct hash."""
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.write(b"test content")
@@ -47,7 +47,7 @@ class TestDownloader(unittest.TestCase):
         finally:
             tmp_path.unlink()
 
-    def test_verify_checksum_failure(self):
+    def test_verify_checksum_failure(self) -> None:
         """Test checksum verification with incorrect hash."""
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.write(b"test content")
@@ -61,7 +61,7 @@ class TestDownloader(unittest.TestCase):
             tmp_path.unlink()
 
     @patch("clang_tool_chain.downloader.urlopen")
-    def test_fetch_json_raw(self, mock_urlopen):
+    def test_fetch_json_raw(self, mock_urlopen: Mock) -> None:
         """Test fetching JSON from URL."""
         test_data = {"key": "value", "number": 42}
         mock_response = MagicMock()
@@ -72,7 +72,7 @@ class TestDownloader(unittest.TestCase):
         result = downloader._fetch_json_raw("http://test.com/data.json")
         self.assertEqual(result, test_data)
 
-    def test_parse_root_manifest(self):
+    def test_parse_root_manifest(self) -> None:
         """Test parsing root manifest with comprehensive data."""
         test_data = {
             "platforms": [
@@ -123,7 +123,7 @@ class TestDownloader(unittest.TestCase):
         self.assertEqual(len(darwin_platform.architectures), 2)
 
     @patch("clang_tool_chain.downloader._fetch_json_raw")
-    def test_fetch_root_manifest(self, mock_fetch_json_raw):
+    def test_fetch_root_manifest(self, mock_fetch_json_raw: Mock) -> None:
         """Test fetching root manifest via network."""
         test_data = {
             "platforms": [
@@ -143,7 +143,7 @@ class TestDownloader(unittest.TestCase):
         self.assertEqual(result.platforms[0].architectures[0].arch, "x86_64")
         self.assertEqual(result.platforms[0].architectures[0].manifest_path, "linux/x86_64/manifest.json")
 
-    def test_parse_manifest(self):
+    def test_parse_manifest(self) -> None:
         """Test parsing platform manifest with multiple versions."""
         test_data = {
             "latest": "21.1.5",
@@ -189,7 +189,7 @@ class TestDownloader(unittest.TestCase):
         self.assertEqual(oldest_info.version, "20.0.0")
 
     @patch("clang_tool_chain.downloader._fetch_json_raw")
-    def test_fetch_platform_manifest(self, mock_fetch_json_raw):
+    def test_fetch_platform_manifest(self, mock_fetch_json_raw: Mock) -> None:
         """Test fetching platform-specific manifest."""
         root_manifest_data = {
             "platforms": [
@@ -215,7 +215,7 @@ class TestDownloader(unittest.TestCase):
         self.assertEqual(result.versions["21.1.5"].sha256, "abc123")
 
     @patch("clang_tool_chain.downloader._fetch_json_raw")
-    def test_fetch_platform_manifest_not_found(self, mock_fetch_json_raw):
+    def test_fetch_platform_manifest_not_found(self, mock_fetch_json_raw: Mock) -> None:
         """Test fetching platform manifest for unsupported platform."""
         root_manifest_data = {
             "platforms": [
@@ -233,7 +233,7 @@ class TestDownloader(unittest.TestCase):
         self.assertIn("not found in manifest", str(context.exception))
 
     @patch("clang_tool_chain.downloader._fetch_json_raw")
-    def test_manifest_integration_flow(self, mock_fetch_json_raw):
+    def test_manifest_integration_flow(self, mock_fetch_json_raw: Mock) -> None:
         """Test full integration flow: root manifest -> platform manifest -> version info."""
         # Simulate complete root manifest
         root_manifest_data = {
@@ -263,7 +263,7 @@ class TestDownloader(unittest.TestCase):
         win_manifest_data = {
             "latest": "21.1.5",
             "21.1.5": {
-                "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst",
+                "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst",
                 "sha256": "3c21e45edeee591fe8ead5427d25b62ddb26c409575b41db03d6777c77bba44f",
             },
         }
@@ -272,7 +272,7 @@ class TestDownloader(unittest.TestCase):
         linux_arm64_manifest_data = {
             "latest": "21.1.5",
             "21.1.5": {
-                "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/linux/arm64/llvm-21.1.5-linux-arm64.tar.zst",
+                "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/linux/arm64/llvm-21.1.5-linux-arm64.tar.zst",
                 "sha256": "deadbeefcafebabe0123456789abcdef0123456789abcdef0123456789abcdef",
             },
         }
@@ -304,7 +304,7 @@ class TestDownloader(unittest.TestCase):
         self.assertIn("llvm-21.1.5-linux-arm64.tar.zst", url)
         self.assertEqual(sha256, "deadbeefcafebabe0123456789abcdef0123456789abcdef0123456789abcdef")
 
-    def test_get_latest_version_info(self):
+    def test_get_latest_version_info(self) -> None:
         """Test extracting latest version information from manifest."""
         platform_manifest = downloader.Manifest(
             latest="21.1.5",
@@ -320,7 +320,7 @@ class TestDownloader(unittest.TestCase):
         self.assertEqual(url, "http://example.com/llvm-21.1.5.tar.zst")
         self.assertEqual(sha256, "abc123")
 
-    def test_get_latest_version_info_missing_latest(self):
+    def test_get_latest_version_info_missing_latest(self) -> None:
         """Test get_latest_version_info with missing 'latest' field."""
         platform_manifest = downloader.Manifest(
             latest="",
@@ -336,7 +336,7 @@ class TestDownloader(unittest.TestCase):
 
         self.assertIn("does not specify a 'latest' version", str(context.exception))
 
-    def test_get_latest_version_info_missing_version(self):
+    def test_get_latest_version_info_missing_version(self) -> None:
         """Test get_latest_version_info with missing version data."""
         platform_manifest = downloader.Manifest(latest="21.1.5", versions={})
 
@@ -345,7 +345,7 @@ class TestDownloader(unittest.TestCase):
 
         self.assertIn("not found in manifest", str(context.exception))
 
-    def test_parse_root_manifest_empty_platforms(self):
+    def test_parse_root_manifest_empty_platforms(self) -> None:
         """Test parsing root manifest with no platforms."""
         test_data = {"platforms": []}
         result = downloader._parse_root_manifest(test_data)
@@ -353,7 +353,7 @@ class TestDownloader(unittest.TestCase):
         self.assertIsInstance(result, downloader.RootManifest)
         self.assertEqual(len(result.platforms), 0)
 
-    def test_parse_root_manifest_empty_architectures(self):
+    def test_parse_root_manifest_empty_architectures(self) -> None:
         """Test parsing root manifest with platform but no architectures."""
         test_data = {"platforms": [{"platform": "win", "architectures": []}]}
         result = downloader._parse_root_manifest(test_data)
@@ -363,16 +363,16 @@ class TestDownloader(unittest.TestCase):
         self.assertEqual(result.platforms[0].platform, "win")
         self.assertEqual(len(result.platforms[0].architectures), 0)
 
-    def test_parse_manifest_only_latest_field(self):
+    def test_parse_manifest_only_latest_field(self) -> None:
         """Test parsing manifest with only 'latest' field and no versions."""
         test_data = {"latest": "21.1.5"}
-        result = downloader._parse_manifest(test_data)
+        result = downloader._parse_manifest(test_data)  # type: ignore[arg-type]
 
         self.assertIsInstance(result, downloader.Manifest)
         self.assertEqual(result.latest, "21.1.5")
         self.assertEqual(len(result.versions), 0)
 
-    def test_parse_manifest_ignores_non_dict_values(self):
+    def test_parse_manifest_ignores_non_dict_values(self) -> None:
         """Test that manifest parser ignores non-dict values."""
         test_data = {
             "latest": "21.1.5",
@@ -381,7 +381,7 @@ class TestDownloader(unittest.TestCase):
             "some_number": 42,
             "some_array": ["should", "be", "ignored"],
         }
-        result = downloader._parse_manifest(test_data)
+        result = downloader._parse_manifest(test_data)  # type: ignore[arg-type]
 
         self.assertIsInstance(result, downloader.Manifest)
         self.assertEqual(len(result.versions), 1)
@@ -391,7 +391,7 @@ class TestDownloader(unittest.TestCase):
         self.assertNotIn("some_array", result.versions)
 
     @patch("clang_tool_chain.downloader._fetch_json_raw")
-    def test_fetch_platform_manifest_architecture_not_found(self, mock_fetch_json_raw):
+    def test_fetch_platform_manifest_architecture_not_found(self, mock_fetch_json_raw: Mock) -> None:
         """Test fetching platform manifest when platform exists but architecture doesn't."""
         root_manifest_data = {
             "platforms": [
@@ -408,7 +408,7 @@ class TestDownloader(unittest.TestCase):
 
         self.assertIn("not found in manifest", str(context.exception))
 
-    def test_is_toolchain_installed_false(self):
+    def test_is_toolchain_installed_false(self) -> None:
         """Test is_toolchain_installed returns False when not installed."""
         with (
             tempfile.TemporaryDirectory() as tmpdir,
@@ -417,7 +417,7 @@ class TestDownloader(unittest.TestCase):
             result = downloader.is_toolchain_installed("linux", "x86_64")
             self.assertFalse(result)
 
-    def test_is_toolchain_installed_true(self):
+    def test_is_toolchain_installed_true(self) -> None:
         """Test is_toolchain_installed returns True when done.txt exists."""
         with tempfile.TemporaryDirectory() as tmpdir:
             install_dir = Path(tmpdir)
@@ -431,7 +431,7 @@ class TestDownloader(unittest.TestCase):
                 result = downloader.is_toolchain_installed("linux", "x86_64")
                 self.assertTrue(result)
 
-    def test_is_toolchain_installed_false_no_done_file(self):
+    def test_is_toolchain_installed_false_no_done_file(self) -> None:
         """Test is_toolchain_installed returns False when done.txt is missing."""
         with tempfile.TemporaryDirectory() as tmpdir:
             install_dir = Path(tmpdir)
@@ -448,7 +448,7 @@ class TestDownloader(unittest.TestCase):
                 self.assertFalse(result)
 
     @patch("clang_tool_chain.downloader.is_toolchain_installed")
-    def test_ensure_toolchain_already_installed(self, mock_is_installed):
+    def test_ensure_toolchain_already_installed(self, mock_is_installed: Mock) -> None:
         """Test ensure_toolchain when already installed (no lock needed)."""
         mock_is_installed.return_value = True
 
@@ -460,7 +460,7 @@ class TestDownloader(unittest.TestCase):
 
     @patch("clang_tool_chain.downloader.download_and_install_toolchain")
     @patch("clang_tool_chain.downloader.is_toolchain_installed")
-    def test_ensure_toolchain_needs_install(self, mock_is_installed, mock_download):
+    def test_ensure_toolchain_needs_install(self, mock_is_installed: Mock, mock_download: Mock) -> None:
         """Test ensure_toolchain when installation is needed."""
         # First check returns False, second (inside lock) also returns False
         mock_is_installed.side_effect = [False, False]
@@ -472,7 +472,7 @@ class TestDownloader(unittest.TestCase):
 
     @patch("clang_tool_chain.downloader.download_and_install_toolchain")
     @patch("clang_tool_chain.downloader.is_toolchain_installed")
-    def test_ensure_toolchain_race_condition(self, mock_is_installed, mock_download):
+    def test_ensure_toolchain_race_condition(self, mock_is_installed: Mock, mock_download: Mock) -> None:
         """Test ensure_toolchain handles race condition (another process installed)."""
         # First check returns False, second (inside lock) returns True
         mock_is_installed.side_effect = [False, True]
@@ -482,7 +482,7 @@ class TestDownloader(unittest.TestCase):
         # Should NOT have called download_and_install
         mock_download.assert_not_called()
 
-    def test_fix_file_permissions(self):
+    def test_fix_file_permissions(self) -> None:
         """Test that fix_file_permissions sets correct permissions on Unix systems."""
         import platform
         import stat

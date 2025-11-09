@@ -19,7 +19,7 @@ except ImportError:
     __llvm_version__ = "unknown"
 
 
-def cmd_info(args):
+def cmd_info(args: argparse.Namespace) -> int:
     """Display information about the toolchain installation."""
     print("Clang Tool Chain - LLVM/Clang Distribution")
     print("=" * 60)
@@ -67,7 +67,7 @@ def cmd_info(args):
     return 0
 
 
-def cmd_version(args):
+def cmd_version(args: argparse.Namespace) -> int:
     """Display version of a specific tool."""
     tool_name: str = args.tool
 
@@ -90,7 +90,7 @@ def cmd_version(args):
         return 1
 
 
-def cmd_list_tools(args):
+def cmd_list_tools(args: argparse.Namespace) -> int:
     """List all available wrapper tools."""
     print("Available clang-tool-chain commands:")
     print("=" * 60)
@@ -137,7 +137,7 @@ def cmd_list_tools(args):
     return 0
 
 
-def cmd_path(args):
+def cmd_path(args: argparse.Namespace) -> int:
     """Display the path to the binary directory or a specific tool."""
     try:
         if args.tool:
@@ -162,7 +162,7 @@ def cmd_path(args):
         return 1
 
 
-def cmd_package_version(args):
+def cmd_package_version(args: argparse.Namespace) -> int:
     """Display the package version and target LLVM version."""
     print(f"clang-tool-chain version: {__version__}")
     print(f"Target LLVM version: {__llvm_version__}")

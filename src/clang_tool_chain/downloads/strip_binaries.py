@@ -108,7 +108,7 @@ class BinaryStripper:
         self.files_removed = 0
         self.files_kept = 0
 
-    def log(self, message: str):
+    def log(self, message: str) -> None:
         """Print a message if verbose mode is enabled."""
         if self.verbose:
             print(message)
@@ -161,7 +161,7 @@ class BinaryStripper:
 
         return name in ESSENTIAL_BINARIES
 
-    def copy_essential_files(self, src_root: Path, dst_root: Path):
+    def copy_essential_files(self, src_root: Path, dst_root: Path) -> None:
         """
         Copy only essential files from source to destination.
 
@@ -295,7 +295,7 @@ class BinaryStripper:
             self.log(f"Error stripping {binary_path.name}: {e}")
             return False
 
-    def strip_all_binaries(self):
+    def strip_all_binaries(self) -> None:
         """Strip debug symbols from all binaries in output directory."""
         if not self.strip_binaries:
             print("Skipping binary stripping (disabled)")
@@ -383,7 +383,7 @@ class BinaryStripper:
         return True
 
 
-def main():
+def main() -> None:
     """Main entry point for the strip script."""
     parser = argparse.ArgumentParser(description="Strip and optimize LLVM binaries for minimal package size")
     parser.add_argument("source_dir", help="Directory containing extracted LLVM binaries")
