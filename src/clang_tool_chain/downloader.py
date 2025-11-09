@@ -489,67 +489,69 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         print(f"Latest version: {version}")
         print(f"Download URL: {download_url}")
 
-    # Create temporary download directory
-    toolchain_dir = get_home_toolchain_dir()
-    temp_dir = toolchain_dir / "temp"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
-    # Download archive
+    # Download archive to a temporary file
+    # Use tempfile to avoid conflicts with test cleanup that removes temp directories
     archive_name = download_url.split("/")[-1]
-    archive_path = temp_dir / archive_name
 
-    if verbose:
-        print(f"Downloading to {archive_path}...")
+    # Create temporary file for download
+    with tempfile.NamedTemporaryFile(mode='wb', suffix='.tar.zst', delete=False) as tmp:
+        archive_path = Path(tmp.name)
 
-    download_file(download_url, archive_path, sha256)
+    try:
+        if verbose:
+            print(f"Downloading to {archive_path}...")
 
-    if verbose:
-        print("Download complete. Verifying checksum...")
+        download_file(download_url, archive_path, sha256)
 
-    # Extract to installation directory
-    install_dir = get_install_dir(platform, arch)
+        if verbose:
+            print("Download complete. Verifying checksum...")
 
-    if verbose:
-        print(f"Extracting to {install_dir}...")
+        # Extract to installation directory
+        install_dir = get_install_dir(platform, arch)
 
-    # Remove old installation if it exists (BEFORE extraction)
-    if install_dir.exists():
-        shutil.rmtree(install_dir)
+        if verbose:
+            print(f"Extracting to {install_dir}...")
 
-    # Ensure parent directory exists
-    install_dir.parent.mkdir(parents=True, exist_ok=True)
+        # Remove old installation if it exists (BEFORE extraction)
+        if install_dir.exists():
+            shutil.rmtree(install_dir)
 
-    extract_tarball(archive_path, install_dir)
+        # Ensure parent directory exists
+        install_dir.parent.mkdir(parents=True, exist_ok=True)
 
-    # Fix file permissions (set executable bits on binaries and shared libraries)
-    if verbose:
-        print("Fixing file permissions...")
+        extract_tarball(archive_path, install_dir)
 
-    fix_file_permissions(install_dir)
+        # Fix file permissions (set executable bits on binaries and shared libraries)
+        if verbose:
+            print("Fixing file permissions...")
 
-    # Force filesystem sync to ensure all extracted files are fully written to disk
-    # This prevents "Text file busy" errors when another thread/process tries to
-    # execute the binaries immediately after we release the lock and see done.txt
-    import platform as plat
+        fix_file_permissions(install_dir)
 
-    if plat.system() != "Windows":
-        # On Unix systems, call sync() to flush all filesystem buffers
-        # This ensures that all extracted binaries are fully written to disk
-        # before we write done.txt and release the lock
-        if hasattr(os, "sync"):
-            try:
-                os.sync()
-            except Exception:
-                # If sync fails, continue anyway - better to have a rare race condition
-                # than to fail the installation entirely
-                pass
+        # Force filesystem sync to ensure all extracted files are fully written to disk
+        # This prevents "Text file busy" errors when another thread/process tries to
+        # execute the binaries immediately after we release the lock and see done.txt
+        import platform as plat
 
-    # Write done.txt to mark successful installation
-    done_file = install_dir / "done.txt"
-    done_file.write_text(f"Installation completed successfully\nVersion: {version}\n")
+        if plat.system() != "Windows":
+            # On Unix systems, call sync() to flush all filesystem buffers
+            # This ensures that all extracted binaries are fully written to disk
+            # before we write done.txt and release the lock
+            if hasattr(os, "sync"):
+                try:
+                    os.sync()
+                except Exception:
+                    # If sync fails, continue anyway - better to have a rare race condition
+                    # than to fail the installation entirely
+                    pass
 
-    # Clean up downloaded archive
-    archive_path.unlink()
+        # Write done.txt to mark successful installation
+        done_file = install_dir / "done.txt"
+        done_file.write_text(f"Installation completed successfully\nVersion: {version}\n")
+
+    finally:
+        # Clean up downloaded archive
+        if archive_path.exists():
+            archive_path.unlink()
 
     if verbose:
         print("Installation complete!")

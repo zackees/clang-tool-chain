@@ -149,11 +149,11 @@ Automatic platform and architecture detection:
 
 | System | Platform | Architecture | Install Path |
 |--------|----------|--------------|--------------|
-| Windows 10+ | `win` | `x86_64` | `~/.clang-tool-chain/win/x86_64/` |
-| Linux | `linux` | `x86_64` | `~/.clang-tool-chain/linux/x86_64/` |
-| Linux | `linux` | `arm64` | `~/.clang-tool-chain/linux/arm64/` |
-| macOS | `darwin` | `x86_64` | `~/.clang-tool-chain/darwin/x86_64/` |
-| macOS | `darwin` | `arm64` | `~/.clang-tool-chain/darwin/arm64/` |
+| Windows 10+ | `win` | `x86_64` | `~/.clang-tool-chain/clang/win/x86_64/` |
+| Linux | `linux` | `x86_64` | `~/.clang-tool-chain/clang/linux/x86_64/` |
+| Linux | `linux` | `arm64` | `~/.clang-tool-chain/clang/linux/arm64/` |
+| macOS | `darwin` | `x86_64` | `~/.clang-tool-chain/clang/darwin/x86_64/` |
+| macOS | `darwin` | `arm64` | `~/.clang-tool-chain/clang/darwin/arm64/` |
 
 ### Binary Resolution
 
@@ -701,9 +701,9 @@ clang-tool-chain-paths
 
 # Example output:
 # {
-#   "install_dir": "/home/user/.clang-tool-chain/linux/x86_64",
-#   "bin_dir": "/home/user/.clang-tool-chain/linux/x86_64/bin",
-#   "clang": "/home/user/.clang-tool-chain/linux/x86_64/bin/clang"
+#   "install_dir": "/home/user/.clang-tool-chain/clang/linux/x86_64",
+#   "bin_dir": "/home/user/.clang-tool-chain/clang/linux/x86_64/bin",
+#   "clang": "/home/user/.clang-tool-chain/clang/linux/x86_64/bin/clang"
 # }
 ```
 
@@ -1002,15 +1002,15 @@ If you need to manually install binaries (e.g., for offline environments):
 2. **Extract to installation directory:**
    ```bash
    # Create installation directory
-   mkdir -p ~/.clang-tool-chain/win/x86_64
+   mkdir -p ~/.clang-tool-chain/clang/win/x86_64
 
    # Extract archive
    python -m clang_tool_chain.downloads.expand_archive \
        llvm-21.1.5-win-x86_64.tar.zst \
-       ~/.clang-tool-chain/win/x86_64
+       ~/.clang-tool-chain/clang/win/x86_64
 
    # Mark as complete
-   touch ~/.clang-tool-chain/win/x86_64/done.txt
+   touch ~/.clang-tool-chain/clang/win/x86_64/done.txt
    ```
 
 3. **Verify installation:**
@@ -1081,7 +1081,7 @@ On first use, `clang-tool-chain` automatically:
 2. Fetches the manifest for your platform
 3. Downloads the appropriate archive (~52-91 MB)
 4. Verifies the SHA256 checksum
-5. Extracts to `~/.clang-tool-chain/{platform}/{arch}/`
+5. Extracts to `~/.clang-tool-chain/clang/{platform}/{arch}/`
 6. Executes your command
 
 **Total time:** ~10-60 seconds depending on internet speed.
@@ -1220,7 +1220,7 @@ ls ~/.clang-tool-chain/
 **Solution:**
 ```bash
 # Ensure execute permissions
-chmod +x ~/.clang-tool-chain/*/bin/*
+chmod +x ~/.clang-tool-chain/clang/*/bin/*
 
 # Or reinstall
 rm -rf ~/.clang-tool-chain/
