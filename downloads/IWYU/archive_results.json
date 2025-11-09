@@ -1,0 +1,38 @@
+{
+  "win": {
+    "x86_64": {
+      "filename": "iwyu-0.25-win-x86_64.tar.zst",
+      "path": "win\\x86_64\\iwyu-0.25-win-x86_64.tar.zst",
+      "sha256": "1f0e01260658e5d2ea3fe015b35d607bf04687a2b9dcb524cf4b585d20944e33",
+      "size": 1620277
+    }
+  },
+  "linux": {
+    "x86_64": {
+      "filename": "iwyu-0.25-linux-x86_64.tar.zst",
+      "path": "linux\\x86_64\\iwyu-0.25-linux-x86_64.tar.zst",
+      "sha256": "53b4f199b5462d30bebb48e71edf85cd014a906d603bd80f73ad5d13066692f0",
+      "size": 1553468
+    },
+    "arm64": {
+      "filename": "iwyu-0.25-linux-arm64.tar.zst",
+      "path": "linux\\arm64\\iwyu-0.25-linux-arm64.tar.zst",
+      "sha256": "e16b6441b5284d8f4488468312bf57b5b7d6d10ae5cbaeb863c2e0bc0c60901f",
+      "size": 1531976
+    }
+  },
+  "darwin": {
+    "x86_64": {
+      "filename": "iwyu-0.25-darwin-x86_64.tar.zst",
+      "path": "darwin\\x86_64\\iwyu-0.25-darwin-x86_64.tar.zst",
+      "sha256": "b35799d462dc9d46b5f4bb35956198c127f0cca5798e46881f589be3cb617fda",
+      "size": 1080480
+    },
+    "arm64": {
+      "filename": "iwyu-0.25-darwin-arm64.tar.zst",
+      "path": "darwin\\arm64\\iwyu-0.25-darwin-arm64.tar.zst",
+      "sha256": "fee9a7ffd94795a593fbc9bb510be45d67aced809f0ca13bb50dd54ebcd21fe8",
+      "size": 1045196
+    }
+  }
+}

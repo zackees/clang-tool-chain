@@ -1,0 +1,44 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.3",
+  "name": "SBOM-SPDX-include-what-you-use-0.25",
+  "creationInfo": {
+    "created": "2025-08-30T13:13:08Z",
+    "creators": [
+      "Tool: https://github.com/Homebrew/brew"
+    ]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://formulae.brew.sh/spdx/include-what-you-use-0.25.json",
+  "documentDescribes": [
+    "SPDXRef-Archive-include-what-you-use-src"
+  ],
+  "files": [],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Archive-include-what-you-use-src",
+      "name": "include-what-you-use",
+      "versionInfo": "0.25",
+      "filesAnalyzed": false,
+      "licenseDeclared": "NOASSERTION",
+      "builtDate": "2025-08-30 13:13:08 UTC",
+      "licenseConcluded": "NCSA",
+      "downloadLocation": "https://include-what-you-use.org/downloads/include-what-you-use-0.25.src.tar.gz",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "be81f9d5498881462465060ddc28b587c01254255c706d397d1a494d69eb5efd"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-File-include-what-you-use",
+      "relationshipType": "PACKAGE_OF",
+      "relatedSpdxElement": "SPDXRef-Archive-include-what-you-use-src"
+    }
+  ]
+}

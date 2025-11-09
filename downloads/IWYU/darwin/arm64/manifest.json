@@ -1,0 +1,7 @@
+{
+  "latest": "0.25",
+  "0.25": {
+    "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/iwyu/darwin/arm64/iwyu-0.25-darwin-arm64.tar.zst",
+    "sha256": "fee9a7ffd94795a593fbc9bb510be45d67aced809f0ca13bb50dd54ebcd21fe8"
+  }
+}
