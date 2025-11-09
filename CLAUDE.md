@@ -78,6 +78,11 @@ clang-tool-chain-sccache --version        # Show sccache version
 
 ### Testing
 ```bash
+# Quick diagnostic test of the toolchain installation
+clang-tool-chain-test           # Runs 7 diagnostic tests
+# Or via main CLI:
+clang-tool-chain test          # Same as above
+
 # Run all tests with coverage (parallel execution)
 ./test
 
@@ -90,6 +95,18 @@ uv run pytest -m "not slow"      # Skip slow tests
 # Run single test
 uv run pytest tests/test_cli.py::MainTester::test_imports -v
 ```
+
+**Diagnostic Test Suite (`clang-tool-chain-test`):**
+The test command runs 7 diagnostic tests to verify your toolchain installation:
+1. Platform detection
+2. Toolchain installation verification
+3. clang binary resolution
+4. clang++ binary resolution
+5. clang version check
+6. C compilation test
+7. C++ compilation test
+
+This command is especially useful for debugging installation issues in GitHub Actions or other CI/CD environments.
 
 ### Code Quality
 ```bash
@@ -153,7 +170,7 @@ uv run python -m build
    - Downloads archives with checksum verification (SHA256)
    - Extracts `.tar.zst` archives using pyzstd decompression
    - Uses file locking (`fasteners.InterProcessLock`) to prevent concurrent downloads
-   - Installation path: `~/.clang-tool-chain/<platform>/<arch>/`
+   - Installation path: `~/.clang-tool-chain/clang/<platform>/<arch>/`
    - Marks successful installation with `done.txt` file
 
 ### Directory Structure
@@ -208,7 +225,7 @@ The wrapper system (`wrapper.py`) performs automatic platform detection:
    - x86_64, amd64 → "x86_64"
    - aarch64, arm64 → "arm64"
 
-3. **Binary location:** `~/.clang-tool-chain/<platform>/<arch>/bin/`
+3. **Binary location:** `~/.clang-tool-chain/clang/<platform>/<arch>/bin/`
 
 4. **Tool resolution:**
    - Adds `.exe` extension on Windows
@@ -280,6 +297,7 @@ The package provides these entry points (defined in `pyproject.toml`):
 
 **Management Commands:**
 - `clang-tool-chain` → `cli:main` - Main CLI
+- `clang-tool-chain-test` → `cli:test_main` - Diagnostic test suite (verifies installation)
 - `clang-tool-chain-fetch` → `fetch:main` - Fetch utility
 - `clang-tool-chain-paths` → `paths:main` - Path utility
 - `clang-tool-chain-fetch-archive` → `downloads.fetch_and_archive:main` - Archive creation

@@ -5,10 +5,13 @@ Handles downloading and installing the LLVM/Clang toolchain binaries
 from the manifest-based distribution system.
 """
 
+import contextlib
 import hashlib
 import json
+import logging
 import os
 import shutil
+import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass
@@ -18,6 +21,14 @@ from urllib.request import Request, urlopen
 
 import fasteners
 import pyzstd
+
+# Configure logging for GitHub Actions and general debugging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stderr)]
+)
+logger = logging.getLogger(__name__)
 
 # Base URL for manifest and downloads
 MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang"
@@ -172,13 +183,17 @@ def _fetch_json_raw(url: str) -> dict[str, Any]:
     Raises:
         RuntimeError: If fetching or parsing fails
     """
+    logger.info(f"Fetching JSON from: {url}")
     try:
         req = Request(url, headers={"User-Agent": "clang-tool-chain"})
         with urlopen(req, timeout=30) as response:
             data = response.read()
+            logger.debug(f"Received {len(data)} bytes from {url}")
             result: dict[str, Any] = json.loads(data.decode("utf-8"))
+            logger.info(f"Successfully fetched and parsed JSON from {url}")
             return result
     except Exception as e:
+        logger.error(f"Failed to fetch JSON from {url}: {e}")
         raise RuntimeError(f"Failed to fetch JSON from {url}: {e}") from e
 
 
@@ -189,9 +204,12 @@ def fetch_root_manifest() -> RootManifest:
     Returns:
         Root manifest as a RootManifest object
     """
+    logger.info("Fetching root manifest")
     url = f"{MANIFEST_BASE_URL}/manifest.json"
     data = _fetch_json_raw(url)
-    return _parse_root_manifest(data)
+    manifest = _parse_root_manifest(data)
+    logger.info(f"Root manifest loaded with {len(manifest.platforms)} platforms")
+    return manifest
 
 
 def fetch_platform_manifest(platform: str, arch: str) -> Manifest:
@@ -208,6 +226,7 @@ def fetch_platform_manifest(platform: str, arch: str) -> Manifest:
     Raises:
         RuntimeError: If platform/arch combination is not found
     """
+    logger.info(f"Fetching platform manifest for {platform}/{arch}")
     root_manifest = fetch_root_manifest()
 
     # Find the platform in the manifest
@@ -217,10 +236,14 @@ def fetch_platform_manifest(platform: str, arch: str) -> Manifest:
             for arch_entry in plat_entry.architectures:
                 if arch_entry.arch == arch:
                     manifest_path = arch_entry.manifest_path
+                    logger.info(f"Found manifest path: {manifest_path}")
                     url = f"{MANIFEST_BASE_URL}/{manifest_path}"
                     data = _fetch_json_raw(url)
-                    return _parse_manifest(data)
+                    manifest = _parse_manifest(data)
+                    logger.info(f"Platform manifest loaded successfully for {platform}/{arch}")
+                    return manifest
 
+    logger.error(f"Platform {platform}/{arch} not found in manifest")
     raise RuntimeError(f"Platform {platform}/{arch} not found in manifest")
 
 
@@ -235,6 +258,8 @@ def verify_checksum(file_path: Path, expected_sha256: str) -> bool:
     Returns:
         True if checksum matches, False otherwise
     """
+    logger.info(f"Verifying checksum for {file_path}")
+    logger.debug(f"Expected SHA256: {expected_sha256}")
     sha256_hash = hashlib.sha256()
     with open(file_path, "rb") as f:
         # Read in chunks to handle large files
@@ -242,7 +267,13 @@ def verify_checksum(file_path: Path, expected_sha256: str) -> bool:
             sha256_hash.update(chunk)
 
     actual_hash = sha256_hash.hexdigest()
-    return actual_hash.lower() == expected_sha256.lower()
+    logger.debug(f"Actual SHA256: {actual_hash}")
+    matches = actual_hash.lower() == expected_sha256.lower()
+    if matches:
+        logger.info("Checksum verification passed")
+    else:
+        logger.error(f"Checksum verification failed! Expected: {expected_sha256}, Got: {actual_hash}")
+    return matches
 
 
 def download_file(url: str, dest_path: Path, expected_sha256: str | None = None) -> None:
@@ -257,16 +288,24 @@ def download_file(url: str, dest_path: Path, expected_sha256: str | None = None)
     Raises:
         RuntimeError: If download fails or checksum doesn't match
     """
+    logger.info(f"Downloading file from {url}")
+    logger.info(f"Destination: {dest_path}")
     try:
         req = Request(url, headers={"User-Agent": "clang-tool-chain"})
         with urlopen(req, timeout=300) as response:
+            content_length = response.getheader('Content-Length')
+            if content_length:
+                logger.info(f"Download size: {int(content_length) / (1024*1024):.2f} MB")
+
             # Create parent directory if it doesn't exist
             dest_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Download to temporary file first
             with tempfile.NamedTemporaryFile(delete=False, dir=dest_path.parent) as tmp_file:
                 tmp_path = Path(tmp_file.name)
+                logger.debug(f"Downloading to temporary file: {tmp_path}")
                 shutil.copyfileobj(response, tmp_file)
+                logger.info(f"Download complete: {tmp_path.stat().st_size / (1024*1024):.2f} MB")
 
             # Verify checksum if provided
             if expected_sha256 and not verify_checksum(tmp_path, expected_sha256):
@@ -274,9 +313,12 @@ def download_file(url: str, dest_path: Path, expected_sha256: str | None = None)
                 raise RuntimeError(f"Checksum verification failed for {url}")
 
             # Move to final destination
+            logger.debug(f"Moving {tmp_path} to {dest_path}")
             tmp_path.replace(dest_path)
+            logger.info(f"File downloaded successfully to {dest_path}")
 
     except Exception as e:
+        logger.error(f"Download failed: {e}")
         # Clean up temporary file if it exists
         if "tmp_path" in locals():
             tmp_path = locals()["tmp_path"]
@@ -302,8 +344,11 @@ def fix_file_permissions(install_dir: Path) -> None:
     import os
     import platform
 
+    logger.info(f"Fixing file permissions in {install_dir}")
+
     # Only fix permissions on Unix-like systems (Linux, macOS)
     if platform.system() == "Windows":
+        logger.debug("Skipping permission fix on Windows")
         return
 
     # Fix permissions for files in bin/ directory
@@ -357,54 +402,78 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
     Raises:
         RuntimeError: If extraction fails
     """
+    logger.info(f"Extracting archive {archive_path} to {dest_dir}")
     try:
         # Decompress zstd to temporary tar file
         temp_tar = archive_path.with_suffix("")  # Remove .zst extension
+        logger.debug(f"Decompressing zstd archive to {temp_tar}")
 
         # Decompress with pyzstd
         with open(archive_path, "rb") as compressed, open(temp_tar, "wb") as decompressed:
-            decompressed.write(pyzstd.decompress(compressed.read()))
+            compressed_data = compressed.read()
+            logger.info(f"Decompressing {len(compressed_data) / (1024*1024):.2f} MB")
+            decompressed.write(pyzstd.decompress(compressed_data))
+            logger.info(f"Decompression complete: {temp_tar.stat().st_size / (1024*1024):.2f} MB")
 
         # Extract tar file to temp directory first
         temp_extract_dir = dest_dir.parent / f"{dest_dir.name}_temp"
+        logger.debug(f"Creating temp extract directory: {temp_extract_dir}")
         temp_extract_dir.mkdir(parents=True, exist_ok=True)
 
         try:
+            logger.info(f"Extracting tar archive to {temp_extract_dir}")
             with tarfile.open(temp_tar, "r") as tar:
                 # Use filter parameter for Python 3.12+, otherwise use extractall without filter
                 import sys
 
                 if sys.version_info >= (3, 12):
+                    logger.debug("Using Python 3.12+ tar extraction with data filter")
                     tar.extractall(temp_extract_dir, filter="data")
                 else:
+                    logger.debug("Using legacy tar extraction")
                     tar.extractall(temp_extract_dir)
+
+            logger.info("Tar extraction complete")
 
             # Find the extracted directory (should be single directory with platform name)
             extracted_items = list(temp_extract_dir.iterdir())
+            logger.debug(f"Found {len(extracted_items)} items in temp extract directory")
+
             if len(extracted_items) == 1 and extracted_items[0].is_dir():
+                logger.debug(f"Single directory found: {extracted_items[0].name}")
                 # Remove dest_dir if it exists to prevent "Directory not empty" error
                 if dest_dir.exists():
+                    logger.debug(f"Removing existing destination: {dest_dir}")
                     shutil.rmtree(dest_dir)
                 # Rename the single extracted subdirectory to dest_dir
+                logger.debug(f"Renaming {extracted_items[0]} to {dest_dir}")
                 extracted_items[0].rename(dest_dir)
             else:
+                logger.debug("Multiple items found, moving all to destination")
                 # Remove dest_dir if it exists to prevent conflicts
                 if dest_dir.exists():
+                    logger.debug(f"Removing existing destination: {dest_dir}")
                     shutil.rmtree(dest_dir)
                 # Create dest_dir and move all items into it
                 dest_dir.mkdir(parents=True, exist_ok=True)
                 for item in temp_extract_dir.iterdir():
+                    logger.debug(f"Moving {item.name} to {dest_dir}")
                     item.rename(dest_dir / item.name)
+
+            logger.info(f"Successfully extracted to {dest_dir}")
 
         finally:
             # Clean up temporary tar file
             if temp_tar.exists():
+                logger.debug(f"Cleaning up temporary tar file: {temp_tar}")
                 temp_tar.unlink()
             # Clean up temp extraction directory if it still exists
             if temp_extract_dir.exists():
+                logger.debug(f"Cleaning up temp extraction directory: {temp_extract_dir}")
                 shutil.rmtree(temp_extract_dir)
 
     except Exception as e:
+        logger.error(f"Extraction failed: {e}")
         raise RuntimeError(f"Failed to extract {archive_path}: {e}") from e
 
 
@@ -491,8 +560,6 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
 
     # Download archive to a temporary file
     # Use tempfile to avoid conflicts with test cleanup that removes temp directories
-    archive_name = download_url.split("/")[-1]
-
     # Create temporary file for download
     with tempfile.NamedTemporaryFile(mode='wb', suffix='.tar.zst', delete=False) as tmp:
         archive_path = Path(tmp.name)
@@ -532,17 +599,14 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         # execute the binaries immediately after we release the lock and see done.txt
         import platform as plat
 
-        if plat.system() != "Windows":
+        if plat.system() != "Windows" and hasattr(os, "sync"):
             # On Unix systems, call sync() to flush all filesystem buffers
             # This ensures that all extracted binaries are fully written to disk
             # before we write done.txt and release the lock
-            if hasattr(os, "sync"):
-                try:
-                    os.sync()
-                except Exception:
-                    # If sync fails, continue anyway - better to have a rare race condition
-                    # than to fail the installation entirely
-                    pass
+            # If sync fails, continue anyway - better to have a rare race condition
+            # than to fail the installation entirely
+            with contextlib.suppress(Exception):
+                os.sync()
 
         # Write done.txt to mark successful installation
         done_file = install_dir / "done.txt"
@@ -568,18 +632,29 @@ def ensure_toolchain(platform: str, arch: str) -> None:
         platform: Platform name (e.g., "win", "linux", "darwin")
         arch: Architecture name (e.g., "x86_64", "arm64")
     """
+    logger.info(f"Ensuring toolchain is installed for {platform}/{arch}")
+
     # Quick check without lock - if already installed, return immediately
     if is_toolchain_installed(platform, arch):
+        logger.info(f"Toolchain already installed for {platform}/{arch}")
         return
 
     # Need to download - acquire lock
+    logger.info(f"Toolchain not installed, acquiring lock for {platform}/{arch}")
     lock_path = get_lock_path(platform, arch)
+    logger.debug(f"Lock path: {lock_path}")
     lock = fasteners.InterProcessLock(str(lock_path))
 
+    logger.info("Waiting to acquire installation lock...")
     with lock:
+        logger.info("Lock acquired")
+
         # Check again inside lock in case another process just finished installing
         if is_toolchain_installed(platform, arch):
+            logger.info("Another process installed the toolchain while we waited")
             return
 
         # Download and install
+        logger.info("Starting toolchain download and installation")
         download_and_install_toolchain(platform, arch)
+        logger.info(f"Toolchain installation complete for {platform}/{arch}")
