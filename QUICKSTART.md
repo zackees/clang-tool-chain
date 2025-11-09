@@ -13,7 +13,7 @@ pip install clang-tool-chain
 Or install from source:
 
 ```bash
-git clone https://github.com/yourusername/clang-tool-chain.git
+git clone https://github.com/zackees/clang-tool-chain.git
 cd clang-tool-chain
 pip install -e ".[dev]"
 ```
@@ -332,7 +332,7 @@ Now that you've completed the quick start:
 
 - **Documentation**: See `README.md` for complete documentation
 - **Examples**: Check `examples/README.md` for tutorials
-- **Issues**: Report bugs at https://github.com/yourusername/clang-tool-chain/issues
+- **Issues**: Report bugs at https://github.com/zackees/clang-tool-chain/issues
 - **Contributing**: See `CONTRIBUTING.md` for guidelines
 - **Clang Documentation**: https://clang.llvm.org/docs/
 

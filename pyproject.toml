@@ -57,6 +57,7 @@ Issues = "https://github.com/zackees/clang-tool-chain/issues"
 
 [project.scripts]
 clang-tool-chain = "clang_tool_chain.cli:main"
+clang-tool-chain-test = "clang_tool_chain.cli:test_main"
 # Download utilities
 clang-tool-chain-fetch = "clang_tool_chain.fetch:main"
 clang-tool-chain-paths = "clang_tool_chain.paths:main"
