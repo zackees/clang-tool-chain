@@ -293,7 +293,7 @@ class TestSccacheWrappers(unittest.TestCase):
         """Test sccache_c_main on Unix with successful execution."""
         mock_which.return_value = "/usr/bin/sccache"
         mock_platform.return_value = ("linux", "x86_64")
-        mock_find.return_value = Path("/home/.clang-tool-chain/linux/x86_64/bin/clang")
+        mock_find.return_value = Path("/home/.clang-tool-chain/clang/linux/x86_64/bin/clang")
         mock_execv.return_value = None
 
         result = cli.sccache_c_main()
@@ -394,7 +394,7 @@ class TestSccacheWrappers(unittest.TestCase):
         """Test sccache_cpp_main on Unix with successful execution."""
         mock_which.return_value = "/usr/bin/sccache"
         mock_platform.return_value = ("linux", "x86_64")
-        mock_find.return_value = Path("/home/.clang-tool-chain/linux/x86_64/bin/clang++")
+        mock_find.return_value = Path("/home/.clang-tool-chain/clang/linux/x86_64/bin/clang++")
         mock_execv.return_value = None
 
         result = cli.sccache_cpp_main()
