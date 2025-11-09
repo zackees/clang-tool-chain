@@ -205,6 +205,185 @@ def cmd_package_version(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_test(args: argparse.Namespace) -> int:
+    """Run diagnostic tests to verify the toolchain installation."""
+    import tempfile
+    from pathlib import Path
+
+    print("Clang Tool Chain - Diagnostic Tests")
+    print("=" * 70)
+    print()
+
+    # Test 1: Platform Detection
+    print("[1/7] Testing platform detection...")
+    try:
+        platform_name, arch = wrapper.get_platform_info()
+        print(f"      Platform: {platform_name}/{arch}")
+        print("      ✓ PASSED")
+    except Exception as e:
+        print(f"      ✗ FAILED: {e}")
+        return 1
+    print()
+
+    # Test 2: Toolchain Download/Installation
+    print("[2/7] Testing toolchain installation...")
+    try:
+        bin_dir = wrapper.get_platform_binary_dir()
+        if bin_dir.exists():
+            print(f"      Binary directory: {bin_dir}")
+            print("      ✓ PASSED")
+        else:
+            print(f"      ✗ FAILED: Binary directory does not exist: {bin_dir}")
+            return 1
+    except Exception as e:
+        print(f"      ✗ FAILED: {e}")
+        return 1
+    print()
+
+    # Test 3: Finding clang binary
+    print("[3/7] Testing binary resolution (clang)...")
+    try:
+        clang_path = wrapper.find_tool_binary("clang")
+        print(f"      Found: {clang_path}")
+        if not clang_path.exists():
+            print(f"      ✗ FAILED: Binary does not exist: {clang_path}")
+            return 1
+        print("      ✓ PASSED")
+    except Exception as e:
+        print(f"      ✗ FAILED: {e}")
+        return 1
+    print()
+
+    # Test 4: Finding clang++ binary
+    print("[4/7] Testing binary resolution (clang++)...")
+    try:
+        clang_cpp_path = wrapper.find_tool_binary("clang++")
+        print(f"      Found: {clang_cpp_path}")
+        if not clang_cpp_path.exists():
+            print(f"      ✗ FAILED: Binary does not exist: {clang_cpp_path}")
+            return 1
+        print("      ✓ PASSED")
+    except Exception as e:
+        print(f"      ✗ FAILED: {e}")
+        return 1
+    print()
+
+    # Test 5: Version check for clang
+    print("[5/7] Testing clang version...")
+    try:
+        result = subprocess.run(
+            [str(clang_path), "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            version_line = result.stdout.split('\n')[0]
+            print(f"      {version_line}")
+            print("      ✓ PASSED")
+        else:
+            print(f"      ✗ FAILED: clang --version returned {result.returncode}")
+            print(f"      stderr: {result.stderr}")
+            return 1
+    except Exception as e:
+        print(f"      ✗ FAILED: {e}")
+        return 1
+    print()
+
+    # Test 6: Simple compilation test
+    print("[6/7] Testing C compilation...")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        test_c = tmpdir_path / "test.c"
+        test_out = tmpdir_path / "test"
+        if platform_name == "win":
+            test_out = test_out.with_suffix(".exe")
+
+        # Write simple C program
+        test_c.write_text('''
+#include <stdio.h>
+int main() {
+    printf("Hello from clang-tool-chain!\\n");
+    return 0;
+}
+''')
+
+        try:
+            # Compile
+            result = subprocess.run(
+                [str(clang_path), str(test_c), "-o", str(test_out)],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode != 0:
+                print("      ✗ FAILED: Compilation failed")
+                print(f"      stdout: {result.stdout}")
+                print(f"      stderr: {result.stderr}")
+                return 1
+
+            # Verify output file was created
+            if not test_out.exists():
+                print(f"      ✗ FAILED: Output binary not created: {test_out}")
+                return 1
+
+            print(f"      Compiled: {test_out}")
+            print("      ✓ PASSED")
+        except Exception as e:
+            print(f"      ✗ FAILED: {e}")
+            return 1
+    print()
+
+    # Test 7: Simple C++ compilation test
+    print("[7/7] Testing C++ compilation...")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        test_cpp = tmpdir_path / "test.cpp"
+        test_out = tmpdir_path / "test"
+        if platform_name == "win":
+            test_out = test_out.with_suffix(".exe")
+
+        # Write simple C++ program
+        test_cpp.write_text('''
+#include <iostream>
+int main() {
+    std::cout << "Hello from clang-tool-chain C++!" << std::endl;
+    return 0;
+}
+''')
+
+        try:
+            # Compile
+            result = subprocess.run(
+                [str(clang_cpp_path), str(test_cpp), "-o", str(test_out)],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode != 0:
+                print("      ✗ FAILED: Compilation failed")
+                print(f"      stdout: {result.stdout}")
+                print(f"      stderr: {result.stderr}")
+                return 1
+
+            # Verify output file was created
+            if not test_out.exists():
+                print(f"      ✗ FAILED: Output binary not created: {test_out}")
+                return 1
+
+            print(f"      Compiled: {test_out}")
+            print("      ✓ PASSED")
+        except Exception as e:
+            print(f"      ✗ FAILED: {e}")
+            return 1
+    print()
+
+    print("=" * 70)
+    print("All tests passed! ✓")
+    print()
+    return 0
+
+
 def main() -> int:
     """Main entry point for the clang-tool-chain CLI."""
     parser = argparse.ArgumentParser(
@@ -268,6 +447,13 @@ def main() -> int:
     )
     parser_pkg_version.set_defaults(func=cmd_package_version)
 
+    # test command
+    parser_test = subparsers.add_parser(
+        "test",
+        help="Run diagnostic tests to verify the toolchain installation",
+    )
+    parser_test.set_defaults(func=cmd_test)
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -278,6 +464,17 @@ def main() -> int:
 
     # Execute command
     return args.func(args)
+
+
+def test_main() -> int:
+    """
+    Standalone entry point for the test command.
+
+    This allows running: clang-tool-chain-test
+    """
+    import argparse
+    args = argparse.Namespace()  # Empty namespace
+    return cmd_test(args)
 
 
 def sccache_main() -> int:

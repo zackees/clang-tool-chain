@@ -5,6 +5,7 @@ This module provides the core functionality for wrapping LLVM toolchain
 binaries and forwarding commands to them with proper platform detection.
 """
 
+import logging
 import os
 import platform
 import shutil
@@ -14,6 +15,14 @@ from pathlib import Path
 from typing import NoReturn
 
 from . import downloader
+
+# Configure logging for GitHub Actions and general debugging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stderr)]
+)
+logger = logging.getLogger(__name__)
 
 
 def _get_toolchain_directory_listing(platform_name: str) -> str:
@@ -67,6 +76,8 @@ def get_platform_info() -> tuple[str, str]:
     system = platform.system().lower()
     machine = platform.machine().lower()
 
+    logger.debug(f"Detecting platform: system={system}, machine={machine}")
+
     # Normalize platform name
     if system == "windows":
         platform_name = "win"
@@ -75,12 +86,13 @@ def get_platform_info() -> tuple[str, str]:
     elif system == "darwin":
         platform_name = "darwin"
     else:
+        logger.error(f"Unsupported platform detected: {system}")
         raise RuntimeError(
             f"Unsupported platform: {system}\n"
             f"clang-tool-chain currently supports: Windows, Linux, and macOS (Darwin)\n"
             f"Your system: {system}\n"
             f"If you believe this platform should be supported, please report this at:\n"
-            f"https://github.com/yourusername/clang-tool-chain/issues"
+            f"https://github.com/zackees/clang-tool-chain/issues"
         )
 
     # Normalize architecture
@@ -89,6 +101,7 @@ def get_platform_info() -> tuple[str, str]:
     elif machine in ("aarch64", "arm64"):
         arch = "arm64"
     else:
+        logger.error(f"Unsupported architecture detected: {machine}")
         raise RuntimeError(
             f"Unsupported architecture: {machine}\n"
             f"clang-tool-chain currently supports: x86_64 (AMD64) and ARM64\n"
@@ -97,9 +110,10 @@ def get_platform_info() -> tuple[str, str]:
             f"  - x86_64, amd64 (Intel/AMD 64-bit)\n"
             f"  - aarch64, arm64 (ARM 64-bit)\n"
             f"If you believe this architecture should be supported, please report this at:\n"
-            f"https://github.com/yourusername/clang-tool-chain/issues"
+            f"https://github.com/zackees/clang-tool-chain/issues"
         )
 
+    logger.info(f"Platform detected: {platform_name}/{arch}")
     return platform_name, arch
 
 
@@ -132,16 +146,20 @@ def get_platform_binary_dir() -> Path:
     Raises:
         RuntimeError: If the platform is not supported or binaries cannot be installed
     """
+    logger.info("Getting platform binary directory")
     platform_name, arch = get_platform_info()
 
     # Ensure toolchain is downloaded and installed
+    logger.info(f"Ensuring toolchain is available for {platform_name}/{arch}")
     downloader.ensure_toolchain(platform_name, arch)
 
     # Get the installation directory
     install_dir = downloader.get_install_dir(platform_name, arch)
     bin_dir = install_dir / "bin"
+    logger.debug(f"Binary directory: {bin_dir}")
 
     if not bin_dir.exists():
+        logger.error(f"Binary directory does not exist: {bin_dir}")
         # Get directory listing for debugging
         dir_listing = _get_toolchain_directory_listing(platform_name)
 
@@ -156,6 +174,7 @@ def get_platform_binary_dir() -> Path:
             f"https://github.com/zackees/clang-tool-chain/issues"
         )
 
+    logger.info(f"Binary directory found: {bin_dir}")
     return bin_dir
 
 
@@ -172,13 +191,16 @@ def find_tool_binary(tool_name: str) -> Path:
     Raises:
         RuntimeError: If the tool binary is not found
     """
+    logger.info(f"Finding binary for tool: {tool_name}")
     bin_dir = get_platform_binary_dir()
     platform_name, _ = get_platform_info()
 
     # Add .exe extension on Windows
     tool_path = bin_dir / f"{tool_name}.exe" if platform_name == "win" else bin_dir / tool_name
+    logger.debug(f"Looking for tool at: {tool_path}")
 
     if not tool_path.exists():
+        logger.warning(f"Tool not found at primary location: {tool_path}")
         # Try alternative names for some tools
         alternatives = {
             "lld": ["lld-link", "ld.lld"],
@@ -187,14 +209,18 @@ def find_tool_binary(tool_name: str) -> Path:
         }
 
         if tool_name in alternatives:
+            logger.debug(f"Trying alternative names for {tool_name}: {alternatives[tool_name]}")
             for alt_name in alternatives[tool_name]:
                 alt_path = bin_dir / f"{alt_name}.exe" if platform_name == "win" else bin_dir / alt_name
+                logger.debug(f"Checking alternative: {alt_path}")
 
                 if alt_path.exists():
+                    logger.info(f"Found alternative tool at: {alt_path}")
                     return alt_path
 
         # List available tools
         available_tools = [f.stem for f in bin_dir.iterdir() if f.is_file()]
+        logger.error(f"Tool '{tool_name}' not found. Available tools: {', '.join(sorted(available_tools)[:20])}")
 
         # Get directory listing for debugging
         dir_listing = _get_toolchain_directory_listing(platform_name)
@@ -216,9 +242,10 @@ def find_tool_binary(tool_name: str) -> Path:
             f"  - Verify the tool name is correct\n"
             f"  - Check if the tool is part of LLVM {tool_name}\n"
             f"  - Re-download binaries: python scripts/download_binaries.py\n"
-            f"  - Report issue: https://github.com/yourusername/clang-tool-chain/issues"
+            f"  - Report issue: https://github.com/zackees/clang-tool-chain/issues"
         )
 
+    logger.info(f"Tool binary found: {tool_path}")
     return tool_path
 
 
@@ -334,9 +361,13 @@ def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
     if args is None:
         args = sys.argv[1:]
 
+    logger.info(f"Executing tool: {tool_name} with {len(args)} arguments")
+    logger.debug(f"Arguments: {args}")
+
     try:
         tool_path = find_tool_binary(tool_name)
     except RuntimeError as e:
+        logger.error(f"Failed to find tool binary: {e}")
         print(f"\n{'='*60}", file=sys.stderr)
         print("clang-tool-chain Error", file=sys.stderr)
         print(f"{'='*60}", file=sys.stderr)
@@ -347,16 +378,19 @@ def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
     # Add macOS SDK path automatically for clang/clang++ if not already specified
     platform_name, _ = get_platform_info()
     if platform_name == "darwin" and tool_name in ("clang", "clang++"):
+        logger.debug("Checking if macOS sysroot needs to be added")
         args = _add_macos_sysroot_if_needed(args)
 
     # Build command
     cmd = [str(tool_path)] + args
+    logger.info(f"Executing command: {tool_path} (with {len(args)} args)")
 
     # On Unix systems, we can use exec to replace the current process
     # On Windows, we need to use subprocess and exit with the return code
     platform_name, _ = get_platform_info()
 
     if platform_name == "win":
+        logger.debug("Using Windows subprocess execution")
         # Windows: use subprocess
         try:
             result = subprocess.run(cmd)
@@ -371,7 +405,7 @@ def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
             print("\nTroubleshooting:", file=sys.stderr)
             print("  - Verify the binary is compatible with your Windows version", file=sys.stderr)
             print("  - Check Windows Defender or antivirus isn't blocking it", file=sys.stderr)
-            print("  - Report issue: https://github.com/yourusername/clang-tool-chain/issues", file=sys.stderr)
+            print("  - Report issue: https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
             print(f"{'='*60}\n", file=sys.stderr)
             sys.exit(1)
         except Exception as e:
@@ -382,12 +416,14 @@ def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
             print(f"\nUnexpected error while running: {tool_path}", file=sys.stderr)
             print(f"Arguments: {args}", file=sys.stderr)
             print("\nPlease report this issue at:", file=sys.stderr)
-            print("https://github.com/yourusername/clang-tool-chain/issues", file=sys.stderr)
+            print("https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
             print(f"{'='*60}\n", file=sys.stderr)
             sys.exit(1)
     else:
+        logger.debug("Using Unix exec replacement")
         # Unix: use exec to replace current process
         try:
+            logger.info(f"Replacing process with: {tool_path}")
             os.execv(str(tool_path), cmd)
         except FileNotFoundError:
             print(f"\n{'='*60}", file=sys.stderr)
@@ -400,7 +436,7 @@ def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
             print(f"  - Check file permissions: chmod +x {tool_path}", file=sys.stderr)
             print("  - Verify the binary is compatible with your system", file=sys.stderr)
             print("  - On macOS: Right-click > Open, then allow in Security settings", file=sys.stderr)
-            print("  - Report issue: https://github.com/yourusername/clang-tool-chain/issues", file=sys.stderr)
+            print("  - Report issue: https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
             print(f"{'='*60}\n", file=sys.stderr)
             sys.exit(1)
         except Exception as e:
@@ -411,7 +447,7 @@ def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
             print(f"\nUnexpected error while running: {tool_path}", file=sys.stderr)
             print(f"Arguments: {args}", file=sys.stderr)
             print("\nPlease report this issue at:", file=sys.stderr)
-            print("https://github.com/yourusername/clang-tool-chain/issues", file=sys.stderr)
+            print("https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
             print(f"{'='*60}\n", file=sys.stderr)
             sys.exit(1)
 
