@@ -382,9 +382,15 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
             # Find the extracted directory (should be single directory with platform name)
             extracted_items = list(temp_extract_dir.iterdir())
             if len(extracted_items) == 1 and extracted_items[0].is_dir():
+                # Remove dest_dir if it exists to prevent "Directory not empty" error
+                if dest_dir.exists():
+                    shutil.rmtree(dest_dir)
                 # Rename the single extracted subdirectory to dest_dir
                 extracted_items[0].rename(dest_dir)
             else:
+                # Remove dest_dir if it exists to prevent conflicts
+                if dest_dir.exists():
+                    shutil.rmtree(dest_dir)
                 # Create dest_dir and move all items into it
                 dest_dir.mkdir(parents=True, exist_ok=True)
                 for item in temp_extract_dir.iterdir():
