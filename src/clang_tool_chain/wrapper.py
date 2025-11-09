@@ -714,3 +714,151 @@ def sccache_clang_cpp_main() -> NoReturn:
             print(f"Error executing sccache: {e}", file=sys.stderr)
             print(f"{'='*60}\n", file=sys.stderr)
             sys.exit(1)
+
+
+# ============================================================================
+# IWYU (Include What You Use) Support
+# ============================================================================
+
+
+def get_iwyu_binary_dir() -> Path:
+    """
+    Get the binary directory for IWYU.
+
+    Returns:
+        Path to the IWYU binary directory
+
+    Raises:
+        RuntimeError: If binary directory is not found
+    """
+    platform_name, arch = get_platform_info()
+    logger.info(f"Getting IWYU binary directory for {platform_name}/{arch}")
+
+    # Ensure IWYU is downloaded and installed
+    logger.info(f"Ensuring IWYU is available for {platform_name}/{arch}")
+    downloader.ensure_iwyu(platform_name, arch)
+
+    # Get the installation directory
+    install_dir = downloader.get_iwyu_install_dir(platform_name, arch)
+    bin_dir = install_dir / "bin"
+    logger.debug(f"IWYU binary directory: {bin_dir}")
+
+    if not bin_dir.exists():
+        logger.error(f"IWYU binary directory does not exist: {bin_dir}")
+        raise RuntimeError(
+            f"IWYU binaries not found for {platform_name}-{arch}\n"
+            f"Expected location: {bin_dir}\n"
+            f"\n"
+            f"The IWYU download may have failed. Please try again or report this issue at:\n"
+            f"https://github.com/zackees/clang-tool-chain/issues"
+        )
+
+    logger.info(f"IWYU binary directory found: {bin_dir}")
+    return bin_dir
+
+
+def find_iwyu_tool(tool_name: str) -> Path:
+    """
+    Find the path to an IWYU tool.
+
+    Args:
+        tool_name: Name of the tool (e.g., "include-what-you-use", "iwyu_tool.py")
+
+    Returns:
+        Path to the tool
+
+    Raises:
+        RuntimeError: If the tool is not found
+    """
+    logger.info(f"Finding IWYU tool: {tool_name}")
+    bin_dir = get_iwyu_binary_dir()
+    platform_name, _ = get_platform_info()
+
+    # Add .exe extension on Windows for the binary
+    if tool_name == "include-what-you-use" and platform_name == "win":
+        tool_path = bin_dir / f"{tool_name}.exe"
+    else:
+        tool_path = bin_dir / tool_name
+
+    logger.debug(f"Looking for IWYU tool at: {tool_path}")
+
+    if not tool_path.exists():
+        logger.error(f"IWYU tool not found: {tool_path}")
+        # List available tools
+        available_tools = [f.name for f in bin_dir.iterdir() if f.is_file()]
+        raise RuntimeError(
+            f"IWYU tool '{tool_name}' not found at: {tool_path}\n"
+            f"Available tools in {bin_dir}:\n"
+            f"  {', '.join(available_tools)}"
+        )
+
+    logger.info(f"Found IWYU tool: {tool_path}")
+    return tool_path
+
+
+def execute_iwyu_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
+    """
+    Execute an IWYU tool with the given arguments.
+
+    Args:
+        tool_name: Name of the IWYU tool
+        args: Command-line arguments (default: sys.argv[1:])
+
+    Raises:
+        SystemExit: Always exits with the tool's return code
+    """
+    if args is None:
+        args = sys.argv[1:]
+
+    tool_path = find_iwyu_tool(tool_name)
+    platform_name, _ = get_platform_info()
+
+    # For Python scripts, we need to run them with Python
+    if tool_name.endswith(".py"):
+        # Find Python executable
+        python_exe = sys.executable
+        cmd = [python_exe, str(tool_path)] + args
+    else:
+        cmd = [str(tool_path)] + args
+
+    logger.info(f"Executing IWYU tool: {' '.join(cmd)}")
+
+    # Execute tool
+    if platform_name == "win":
+        # Windows: use subprocess
+        try:
+            result = subprocess.run(cmd)
+            sys.exit(result.returncode)
+        except FileNotFoundError as err:
+            raise RuntimeError(f"IWYU tool not found: {tool_path}") from err
+        except Exception as e:
+            raise RuntimeError(f"Error executing IWYU tool: {e}") from e
+    else:
+        # Unix: use exec to replace current process
+        try:
+            if tool_name.endswith(".py"):
+                # For Python scripts, we can't use execv directly
+                result = subprocess.run(cmd)
+                sys.exit(result.returncode)
+            else:
+                os.execv(cmd[0], cmd)
+        except FileNotFoundError as err:
+            raise RuntimeError(f"IWYU tool not found: {tool_path}") from err
+        except Exception as e:
+            raise RuntimeError(f"Error executing IWYU tool: {e}") from e
+
+
+# IWYU wrapper entry points
+def iwyu_main() -> NoReturn:
+    """Entry point for include-what-you-use wrapper."""
+    execute_iwyu_tool("include-what-you-use")
+
+
+def iwyu_tool_main() -> NoReturn:
+    """Entry point for iwyu_tool.py wrapper."""
+    execute_iwyu_tool("iwyu_tool.py")
+
+
+def fix_includes_main() -> NoReturn:
+    """Entry point for fix_includes.py wrapper."""
+    execute_iwyu_tool("fix_includes.py")

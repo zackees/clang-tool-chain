@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Base URL for manifest and downloads
 MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang"
+IWYU_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/iwyu"
 
 # Generic type variable for JSON deserialization
 T = TypeVar("T")
@@ -391,6 +392,42 @@ def fix_file_permissions(install_dir: Path) -> None:
             os.close(fd)
 
 
+def _try_system_tar(tar_file: Path, extract_dir: Path) -> bool:
+    """
+    Try to use system tar command for extraction.
+
+    Returns:
+        True if extraction succeeded, False if tar is not available or extraction failed
+    """
+    import subprocess
+
+    # Check if tar is available
+    try:
+        result = subprocess.run(["tar", "--version"], capture_output=True, timeout=5)
+        if result.returncode != 0:
+            logger.debug("System tar not available")
+            return False
+        logger.info(f"System tar available: {result.stdout.decode()[:100]}")
+    except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
+        logger.debug(f"System tar not available: {e}")
+        return False
+
+    # Try to extract using system tar
+    try:
+        logger.info(f"Using system tar to extract {tar_file}")
+        result = subprocess.run(
+            ["tar", "-xf", str(tar_file), "-C", str(extract_dir)], capture_output=True, timeout=300, check=True
+        )
+        logger.info("System tar extraction completed successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"System tar extraction failed: {e.stderr.decode()[:500]}")
+        return False
+    except Exception as e:
+        logger.warning(f"System tar extraction failed: {e}")
+        return False
+
+
 def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
     """
     Extract a tar.zst archive to a destination directory.
@@ -421,59 +458,27 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
         temp_extract_dir.mkdir(parents=True, exist_ok=True)
 
         try:
-            logger.info(f"Extracting tar archive to {temp_extract_dir}")
-            with tarfile.open(temp_tar, "r") as tar:
-                # Manually extract files to handle hardlinks correctly across all platforms
-                # We extract regular files first, then copy hardlinks from their targets
-                logger.debug("Extracting archive manually to handle hardlinks")
+            # Try system tar first (more reliable on Linux)
+            if _try_system_tar(temp_tar, temp_extract_dir):
+                logger.info("Extraction successful using system tar")
+                # System tar extracts hardlinks as separate files automatically on most systems
+                # No need to post-process
+            else:
+                # Fall back to Python tarfile
+                logger.info(f"Extracting tar archive to {temp_extract_dir} using Python tarfile")
+                with tarfile.open(temp_tar, "r") as tar:
+                    # Use extractall which is more reliable than individual extract() calls
+                    logger.debug("Extracting all files at once")
 
-                # Track which files we've extracted
-                extracted_files = {}
+                    import sys
 
-                # Extract all members in order, handling hardlinks specially
-                for member in tar.getmembers():
-                    target_path = temp_extract_dir / member.name
-
-                    if member.islnk():
-                        # This is a hardlink - copy from the target
-                        link_target_path = temp_extract_dir / member.linkname
-
-                        if link_target_path.exists():
-                            # Target was already extracted, copy it
-                            logger.debug(f"Copying hardlink: {member.name} <- {member.linkname}")
-                            target_path.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy2(link_target_path, target_path)
-                            extracted_files[member.name] = str(target_path)
-                        else:
-                            logger.error(f"Hardlink target missing: {member.linkname} (needed for {member.name})")
-                            logger.error(f"  Expected at: {link_target_path}")
-                            logger.error(f"  Target exists: {link_target_path.exists()}")
-                            if link_target_path.parent.exists():
-                                logger.error(f"  Parent dir contents: {list(link_target_path.parent.iterdir())[:10]}")
-                            raise RuntimeError(
-                                f"Cannot create hardlink {member.name}: target {member.linkname} not found"
-                            )
+                    if sys.version_info >= (3, 12):
+                        # Use "tar" filter to allow hardlinks
+                        tar.extractall(temp_extract_dir, filter="tar")
                     else:
-                        # Regular file, directory, or symlink - extract normally
-                        import sys
+                        tar.extractall(temp_extract_dir)
 
-                        if sys.version_info >= (3, 12):
-                            # Use "data" filter for safety on Python 3.12+
-                            tar.extract(member, temp_extract_dir, filter="data")
-                        else:
-                            tar.extract(member, temp_extract_dir)
-
-                        if member.isfile():
-                            extracted_files[member.name] = str(target_path)
-                            # Verify the file was actually extracted
-                            if not target_path.exists():
-                                logger.error(f"File not extracted: {member.name}")
-                                logger.error(f"  Expected at: {target_path}")
-                                raise RuntimeError(f"Failed to extract {member.name}")
-
-                # Count how many hardlinks we copied
-                hardlink_count = sum(1 for m in tar.getmembers() if m.islnk())
-                logger.info(f"Tar extraction complete ({hardlink_count} hardlinks converted to files)")
+                    logger.info("Python tarfile extraction complete")
 
             # Find the extracted directory (should be single directory with platform name)
             extracted_items = list(temp_extract_dir.iterdir())
@@ -698,3 +703,197 @@ def ensure_toolchain(platform: str, arch: str) -> None:
         logger.info("Starting toolchain download and installation")
         download_and_install_toolchain(platform, arch)
         logger.info(f"Toolchain installation complete for {platform}/{arch}")
+
+
+# ============================================================================
+# IWYU (Include What You Use) Support
+# ============================================================================
+
+
+def fetch_iwyu_root_manifest() -> RootManifest:
+    """
+    Fetch the IWYU root manifest file.
+
+    Returns:
+        Root manifest as a RootManifest object
+    """
+    logger.info("Fetching IWYU root manifest")
+    url = f"{IWYU_MANIFEST_BASE_URL}/manifest.json"
+    data = _fetch_json_raw(url)
+    manifest = _parse_root_manifest(data)
+    logger.info(f"IWYU root manifest loaded with {len(manifest.platforms)} platforms")
+    return manifest
+
+
+def fetch_iwyu_platform_manifest(platform: str, arch: str) -> Manifest:
+    """
+    Fetch the IWYU platform-specific manifest file.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Platform manifest as a Manifest object
+
+    Raises:
+        RuntimeError: If platform/arch combination is not found
+    """
+    logger.info(f"Fetching IWYU platform manifest for {platform}/{arch}")
+    root_manifest = fetch_iwyu_root_manifest()
+
+    # Find the platform in the manifest
+    for plat_entry in root_manifest.platforms:
+        if plat_entry.platform == platform:
+            # Find the architecture
+            for arch_entry in plat_entry.architectures:
+                if arch_entry.arch == arch:
+                    manifest_path = arch_entry.manifest_path
+                    logger.info(f"Found IWYU manifest path: {manifest_path}")
+                    url = f"{IWYU_MANIFEST_BASE_URL}/{manifest_path}"
+                    data = _fetch_json_raw(url)
+                    manifest = _parse_manifest(data)
+                    logger.info(f"IWYU platform manifest loaded successfully for {platform}/{arch}")
+                    return manifest
+
+    logger.error(f"IWYU platform {platform}/{arch} not found in manifest")
+    raise RuntimeError(f"IWYU platform {platform}/{arch} not found in manifest")
+
+
+def get_iwyu_install_dir(platform: str, arch: str) -> Path:
+    """
+    Get the installation directory for IWYU.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the IWYU installation directory
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    install_dir = toolchain_dir / "iwyu" / platform / arch
+    return install_dir
+
+
+def get_iwyu_lock_path(platform: str, arch: str) -> Path:
+    """
+    Get the lock file path for IWYU installation.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the lock file
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    toolchain_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = toolchain_dir / f"iwyu-{platform}-{arch}.lock"
+    return lock_path
+
+
+def is_iwyu_installed(platform: str, arch: str) -> bool:
+    """
+    Check if IWYU is already installed.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        True if installed, False otherwise
+    """
+    install_dir = get_iwyu_install_dir(platform, arch)
+    done_file = install_dir / "done.txt"
+    return done_file.exists()
+
+
+def download_and_install_iwyu(platform: str, arch: str) -> None:
+    """
+    Download and install IWYU for the given platform/arch.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+    """
+    logger.info(f"Downloading and installing IWYU for {platform}/{arch}")
+
+    # Fetch the manifest to get download URL and checksum
+    manifest = fetch_iwyu_platform_manifest(platform, arch)
+    version_info = manifest.versions[manifest.latest]
+
+    logger.info(f"IWYU version: {manifest.latest}")
+    logger.info(f"Download URL: {version_info.href}")
+
+    # Create temporary download directory
+    install_dir = get_iwyu_install_dir(platform, arch)
+    logger.info(f"Installation directory: {install_dir}")
+
+    # Remove old installation if exists
+    if install_dir.exists():
+        logger.info("Removing old IWYU installation")
+        shutil.rmtree(install_dir)
+
+    # Create temp directory for download
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        archive_file = temp_path / "iwyu.tar.zst"
+
+        # Download the archive
+        download_file(version_info.href, archive_file, version_info.sha256)
+
+        # Extract to installation directory
+        logger.info("Extracting IWYU archive")
+        extract_tarball(archive_file, install_dir)
+
+        # Fix permissions on Unix systems
+        if os.name != "nt":
+            logger.info("Setting executable permissions on IWYU binaries")
+            fix_file_permissions(install_dir)
+
+        # Mark installation as complete
+        done_file = install_dir / "done.txt"
+        with open(done_file, "w") as f:
+            f.write(f"IWYU {manifest.latest} installed successfully\n")
+
+        logger.info(f"IWYU installation complete for {platform}/{arch}")
+
+
+def ensure_iwyu(platform: str, arch: str) -> None:
+    """
+    Ensure IWYU is installed for the given platform/arch.
+
+    This function uses file locking to prevent concurrent downloads.
+    If IWYU is not installed, it will be downloaded and installed.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+    """
+    logger.info(f"Ensuring IWYU is installed for {platform}/{arch}")
+
+    # Quick check without lock - if already installed, return immediately
+    if is_iwyu_installed(platform, arch):
+        logger.info(f"IWYU already installed for {platform}/{arch}")
+        return
+
+    # Need to download - acquire lock
+    logger.info(f"IWYU not installed, acquiring lock for {platform}/{arch}")
+    lock_path = get_iwyu_lock_path(platform, arch)
+    logger.debug(f"Lock path: {lock_path}")
+    lock = fasteners.InterProcessLock(str(lock_path))
+
+    logger.info("Waiting to acquire IWYU installation lock...")
+    with lock:
+        logger.info("Lock acquired")
+
+        # Check again inside lock in case another process just finished installing
+        if is_iwyu_installed(platform, arch):
+            logger.info("Another process installed IWYU while we waited")
+            return
+
+        # Download and install
+        logger.info("Starting IWYU download and installation")
+        download_and_install_iwyu(platform, arch)
+        logger.info(f"IWYU installation complete for {platform}/{arch}")
