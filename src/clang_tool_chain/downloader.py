@@ -651,7 +651,8 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
             # If sync fails, continue anyway - better to have a rare race condition
             # than to fail the installation entirely
             with contextlib.suppress(Exception):
-                os.sync()
+                if hasattr(os, "sync"):
+                    os.sync()  # type: ignore[attr-defined]
 
         # Write done.txt to mark successful installation
         done_file = install_dir / "done.txt"

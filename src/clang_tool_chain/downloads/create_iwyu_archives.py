@@ -147,7 +147,7 @@ def compress_with_zstd(tar_file: Path, output_zst: Path, level: int = 22) -> Pat
     print()
 
     # Use streaming compression to handle large files and allow interruption
-    print(f"Compressing (this may take a while)...")
+    print("Compressing (this may take a while)...")
 
     import time
 
@@ -195,7 +195,7 @@ def generate_checksum(file_path: Path) -> str:
     return sha256_hash.hexdigest()
 
 
-def process_platform_arch(iwyu_root: Path, platform: str, arch: str, version: str) -> dict | None:
+def process_platform_arch(iwyu_root: Path, platform: str, arch: str, version: str) -> dict[str, str | int] | None:
     """
     Process a single platform/arch combination.
 
@@ -287,15 +287,8 @@ def main() -> None:
         sys.exit(1)
 
     # Define platforms and architectures to process
-    if args.platform:
-        platforms = [args.platform]
-    else:
-        platforms = ["win", "linux", "darwin"]
-
-    if args.arch:
-        architectures = [args.arch]
-    else:
-        architectures = ["x86_64", "arm64"]
+    platforms = [args.platform] if args.platform else ["win", "linux", "darwin"]
+    architectures = [args.arch] if args.arch else ["x86_64", "arm64"]
 
     # Process each platform/arch combination
     results = {}
