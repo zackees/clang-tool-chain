@@ -47,6 +47,45 @@ jobs:
       run: |
         uv run clang-tool-chain-c --version
       timeout-minutes: 20
+      continue-on-error: true
+
+    - name: Debug - Show complete toolchain directory structure
+      if: always()
+      run: |
+        echo "=========================================="
+        echo "COMPLETE ~/.clang-tool-chain DIRECTORY TREE"
+        echo "=========================================="
+        if [ -d ~/.clang-tool-chain ]; then
+          echo ""
+          echo "Directory exists at: ~/.clang-tool-chain"
+          echo ""
+          echo "Complete file tree:"
+          find ~/.clang-tool-chain -type f -o -type d | head -500 || true
+          echo ""
+          echo "=========================================="
+          echo "DETAILED FILE LISTING (first 300 files)"
+          echo "=========================================="
+          find ~/.clang-tool-chain -type f -ls | head -300 || true
+          echo ""
+          echo "=========================================="
+          echo "BIN DIRECTORY CONTENTS"
+          echo "=========================================="
+          if [ -d ~/.clang-tool-chain/clang/linux/x86_64/bin ]; then
+            ls -laR ~/.clang-tool-chain/clang/linux/x86_64/bin
+          else
+            echo "Bin directory not found!"
+            echo "Looking for any bin directories:"
+            find ~/.clang-tool-chain -type d -name bin -ls || true
+          fi
+          echo ""
+          echo "=========================================="
+          echo "DIRECTORY SIZES"
+          echo "=========================================="
+          du -h -d 3 ~/.clang-tool-chain | sort -h || true
+        else
+          echo "~/.clang-tool-chain does not exist!"
+        fi
+      continue-on-error: true
 
     - name: Verify installation
       run: |
