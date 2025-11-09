@@ -466,7 +466,7 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                 logger.info("Extraction successful using system tar")
             else:
                 # Fall back to Python tarfile
-                logger.info(f"Extracting tar archive using Python tarfile")
+                logger.info("Extracting tar archive using Python tarfile")
                 with tarfile.open(temp_tar, "r") as tar:
                     # Use extractall which is more reliable than individual extract() calls
                     logger.debug("Extracting all files at once")
@@ -483,13 +483,23 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
 
             # The archive should extract to a single directory with the expected name
             # If it doesn't match dest_dir name, rename it
-            expected_items = list(dest_dir.parent.glob(f"{dest_dir.name}*"))
-            if not dest_dir.exists() and expected_items:
-                # Archive may have extracted with a different name, rename it
-                actual_dir = expected_items[0]
-                if actual_dir != dest_dir:
-                    logger.debug(f"Renaming {actual_dir} to {dest_dir}")
-                    shutil.move(str(actual_dir), str(dest_dir))
+            if not dest_dir.exists():
+                # Look for any directory in the parent (excluding done.txt and other files)
+                extracted_dirs = [d for d in dest_dir.parent.iterdir() if d.is_dir()]
+                logger.debug(
+                    f"Found {len(extracted_dirs)} directories in {dest_dir.parent}: {[d.name for d in extracted_dirs]}"
+                )
+
+                if extracted_dirs:
+                    # Find the most likely candidate (should be the only directory, or the newest)
+                    # Filter out dest_dir itself in case it was already created
+                    candidates = [d for d in extracted_dirs if d != dest_dir]
+                    if candidates:
+                        actual_dir = candidates[0]  # Take the first (and should be only) directory
+                        logger.info(f"Renaming extracted directory {actual_dir} to {dest_dir}")
+                        shutil.move(str(actual_dir), str(dest_dir))
+                    else:
+                        logger.warning(f"No extracted directory found to rename to {dest_dir}")
 
             logger.info(f"Successfully extracted to {dest_dir}")
 
@@ -647,6 +657,8 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
                     os.sync()  # type: ignore[attr-defined]
 
         # Write done.txt to mark successful installation
+        # Ensure install_dir exists before writing done.txt
+        install_dir.mkdir(parents=True, exist_ok=True)
         done_file = install_dir / "done.txt"
         done_file.write_text(f"Installation completed successfully\nVersion: {version}\n")
 
@@ -846,6 +858,8 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
             fix_file_permissions(install_dir)
 
         # Mark installation as complete
+        # Ensure install_dir exists before writing done.txt
+        install_dir.mkdir(parents=True, exist_ok=True)
         done_file = install_dir / "done.txt"
         with open(done_file, "w") as f:
             f.write(f"IWYU {manifest.latest} installed successfully\n")
