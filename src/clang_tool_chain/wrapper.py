@@ -16,6 +16,45 @@ from typing import NoReturn
 from . import downloader
 
 
+def _get_toolchain_directory_listing(platform_name: str) -> str:
+    """
+    Get a directory listing of ~/.clang-tool-chain for debugging purposes.
+
+    Args:
+        platform_name: Platform name ("win", "linux", "darwin")
+
+    Returns:
+        Formatted directory listing string (2 levels deep)
+    """
+    import subprocess as _subprocess
+
+    toolchain_dir = Path.home() / ".clang-tool-chain"
+
+    try:
+        if platform_name == "win":
+            # On Windows, manually walk the directory tree (2 levels)
+            lines = []
+            if toolchain_dir.exists():
+                lines.append(str(toolchain_dir))
+                for item in toolchain_dir.iterdir():
+                    lines.append(f"  {item.name}")
+                    if item.is_dir():
+                        try:
+                            for subitem in item.iterdir():
+                                lines.append(f"    {item.name}/{subitem.name}")
+                        except (PermissionError, OSError):
+                            pass
+            return "\n".join(lines)
+        else:
+            # On Unix, use find
+            result = _subprocess.run(
+                ["find", str(toolchain_dir), "-maxdepth", "2"], capture_output=True, text=True, timeout=5
+            )
+            return result.stdout
+    except Exception as e:
+        return f"Could not list directory: {e}"
+
+
 def get_platform_info() -> tuple[str, str]:
     """
     Detect the current platform and architecture.
@@ -103,9 +142,15 @@ def get_platform_binary_dir() -> Path:
     bin_dir = install_dir / "bin"
 
     if not bin_dir.exists():
+        # Get directory listing for debugging
+        dir_listing = _get_toolchain_directory_listing(platform_name)
+
         raise RuntimeError(
             f"Binaries not found for {platform_name}-{arch}\n"
             f"Expected location: {bin_dir}\n"
+            f"\n"
+            f"Directory structure of ~/.clang-tool-chain (2 levels deep):\n"
+            f"{dir_listing}\n"
             f"\n"
             f"The toolchain download may have failed. Please try again or report this issue at:\n"
             f"https://github.com/zackees/clang-tool-chain/issues"
@@ -151,6 +196,9 @@ def find_tool_binary(tool_name: str) -> Path:
         # List available tools
         available_tools = [f.stem for f in bin_dir.iterdir() if f.is_file()]
 
+        # Get directory listing for debugging
+        dir_listing = _get_toolchain_directory_listing(platform_name)
+
         raise RuntimeError(
             f"Tool '{tool_name}' not found\n"
             f"Expected location: {tool_path}\n"
@@ -160,6 +208,9 @@ def find_tool_binary(tool_name: str) -> Path:
             f"Available tools in {bin_dir.name}/:\n"
             f"  {', '.join(sorted(available_tools)[:20])}\n"
             f"  {'... and more' if len(available_tools) > 20 else ''}\n"
+            f"\n"
+            f"Directory structure of ~/.clang-tool-chain (2 levels deep):\n"
+            f"{dir_listing}\n"
             f"\n"
             f"Troubleshooting:\n"
             f"  - Verify the tool name is correct\n"
