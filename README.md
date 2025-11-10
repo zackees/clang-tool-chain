@@ -3,12 +3,12 @@
 **A zero-configuration Python package that distributes pre-built Clang/LLVM binaries with automatic downloading and installation.**
 
 [![PyPI version](https://img.shields.io/pypi/v/clang-tool-chain.svg)](https://pypi.org/project/clang-tool-chain/)
-[![Linting](../../actions/workflows/lint.yml/badge.svg)](../../actions/workflows/lint.yml)
-[![win](../../actions/workflows/test-win.yml/badge.svg)](../../actions/workflows/test-win.yml)
-[![linux-x86](../../actions/workflows/test-linux-x86.yml/badge.svg)](../../actions/workflows/test-linux-x86.yml)
-[![linux-arm](../../actions/workflows/test-linux-arm.yml/badge.svg)](../../actions/workflows/test-linux-arm.yml)
-[![macos-x86](../../actions/workflows/test-macos-x86.yml/badge.svg)](../../actions/workflows/test-macos-x86.yml)
-[![macos-arm](../../actions/workflows/test-macos-arm.yml/badge.svg)](../../actions/workflows/test-macos-arm.yml)
+[![Linting](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml)
+[![win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win.yml)
+[![linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-x86.yml)
+[![linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-arm.yml)
+[![macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-x86.yml)
+[![macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-arm.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
