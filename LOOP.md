@@ -1777,6 +1777,43 @@ Update `extract_mingw_sysroot.py` to include `lib/clang/*/lib/` directory with c
 
 ---
 
+### ✅ Iteration 6 (Add Compiler-RT Libraries and Fix Linking) - COMPLETED ✅
+**Date:** 2025-11-10
+**Task:** Add compiler-rt runtime libraries to MinGW sysroot and fix GNU ABI linking
+**Status:** ✅ **COMPLETE SUCCESS** - 14/14 tests passing (100%)
+
+**Deliverables:**
+- Updated `extract_mingw_sysroot.py` to include `lib/clang/21/lib/` with 80 runtime libraries
+- Regenerated MinGW sysroot archive v3: 19.41 MB (was 12.89 MB)
+- Updated wrapper.py with correct linker flags:
+  - Added `-rtlib=compiler-rt` (use LLVM runtime instead of libgcc)
+  - Changed `--unwindlib=none` → `--unwindlib=libunwind`
+  - Added `-static-libgcc` and `-static-libstdc++` (static linking)
+- Deployed archive v3 to bins repository
+- **Test Results:** 14/14 tests passing (100% success rate) 🎉
+
+**Key Changes:**
+- Archive v3 SHA256: `b7fa99f6fa07364a73b8b745e0c694598948a6ef8082c4479bbad5edcf1cf6c4`
+- Compression: 92.8% (270.97 MB → 19.41 MB)
+- Libraries: libclang_rt.builtins-x86_64.a, libunwind.a, sanitizers, profiling
+
+**Commits:**
+- bins repo: `e5e0f9e` (archive v3)
+- main repo: `1cd5961` (submodule update)
+- main repo: `1e02edc` (wrapper changes)
+- main repo: `710c35d` (iteration summary)
+
+**GNU ABI Implementation Status:**
+- ✅ Compilation works
+- ✅ Linking works
+- ✅ Executables run successfully
+- ✅ Static linking (no DLL dependencies)
+- ✅ All TASK.md scenarios pass
+
+**Details:** See `.agent_task/ITERATION_6.md`
+
+---
+
 ### (Archive for reference - Iteration 4 details below)
 
 **Commits (Iteration 4):**
