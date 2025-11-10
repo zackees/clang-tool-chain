@@ -167,7 +167,9 @@ int main() {
             self.assertTrue(exe_file.exists(), "Executable should be created")
 
             # Try to run the program
-            run_result = subprocess.run([str(exe_file)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5)
+            run_result = subprocess.run(
+                [str(exe_file)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5
+            )
 
             self.assertEqual(run_result.returncode, 0, f"Program should run successfully.\nstderr: {run_result.stderr}")
             self.assertIn(
@@ -319,7 +321,9 @@ int main() {
     def test_msvc_variant_command_exists(self) -> None:
         """Test that MSVC variant commands are available."""
         # Test that clang-tool-chain-c-msvc exists
-        result_c = subprocess.run(["clang-tool-chain-c-msvc", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        result_c = subprocess.run(
+            ["clang-tool-chain-c-msvc", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace"
+        )
 
         self.assertEqual(
             result_c.returncode,
@@ -328,7 +332,13 @@ int main() {
         )
 
         # Test that clang-tool-chain-cpp-msvc exists
-        result_cpp = subprocess.run(["clang-tool-chain-cpp-msvc", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        result_cpp = subprocess.run(
+            ["clang-tool-chain-cpp-msvc", "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
 
         self.assertEqual(
             result_cpp.returncode,

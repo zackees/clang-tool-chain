@@ -208,7 +208,7 @@ wheels = [
 
 [[package]]
 name = "clang-tool-chain"
-version = "1.0.1"
+version = "2.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "fasteners" },

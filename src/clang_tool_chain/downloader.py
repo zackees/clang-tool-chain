@@ -166,6 +166,49 @@ def get_home_toolchain_dir() -> Path:
     return toolchain_dir
 
 
+def _robust_rmtree(path: Path, max_retries: int = 3) -> None:
+    """
+    Remove a directory tree robustly, handling Windows file permission issues.
+
+    On Windows, files can sometimes be locked or have permission issues that prevent
+    immediate deletion. This function handles those cases by:
+    1. Making files writable before deletion (Windows readonly flag)
+    2. Retrying with a delay if deletion fails
+    3. Using ignore_errors as a last resort
+
+    Args:
+        path: Path to the directory to remove
+        max_retries: Maximum number of retry attempts (default: 3)
+    """
+    if not path.exists():
+        return
+
+    def handle_remove_readonly(func: Any, path_str: str, exc: Any) -> None:
+        """Error handler to remove readonly flag and retry."""
+        import stat
+
+        # Make the file writable and try again
+        os.chmod(path_str, stat.S_IWRITE)
+        func(path_str)
+
+    # Try removing with readonly handler
+    try:
+        shutil.rmtree(path, onerror=handle_remove_readonly)
+    except Exception as e:
+        logger.warning(f"Failed to remove {path} on first attempt: {e}")
+        # If that fails, try with ignore_errors as last resort
+        if max_retries > 0:
+            import time
+
+            time.sleep(0.5)  # Wait briefly for file handles to close
+            try:
+                shutil.rmtree(path, ignore_errors=False, onerror=handle_remove_readonly)
+            except Exception as e2:
+                logger.warning(f"Failed to remove {path} on retry: {e2}")
+                # Last resort: ignore all errors
+                shutil.rmtree(path, ignore_errors=True)
+
+
 def get_lock_path(platform: str, arch: str) -> Path:
     """
     Get the lock file path for a specific platform/arch combination.
@@ -491,7 +534,7 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                 logger.info(f"Decompressed tar has {len(verify_members)} members")
                 verify_top = set()
                 for m in verify_members[:100]:  # Check first 100 members
-                    parts = m.name.split('/')
+                    parts = m.name.split("/")
                     if parts:
                         verify_top.add(parts[0])
                 logger.info(f"Sample top-level dirs from tar: {sorted(verify_top)}")
@@ -501,7 +544,7 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
         # Remove dest_dir if it exists to ensure clean extraction
         if dest_dir.exists():
             logger.debug(f"Removing existing destination: {dest_dir}")
-            shutil.rmtree(dest_dir)
+            _robust_rmtree(dest_dir)
 
         # Create parent directory for extraction
         dest_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -526,14 +569,15 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                     # (workaround for mysterious tar.extractall() bug where lib/ directory is lost)
                     if is_mingw_archive:
                         import tempfile
-                        logger.info(f"Extracting MinGW archive to temp location first (workaround for extraction bug)")
+
+                        logger.info("Extracting MinGW archive to temp location first (workaround for extraction bug)")
 
                         # Sanity check: verify tar file has all expected top-level directories
                         members = tar.getmembers()
                         logger.info(f"Tar file has {len(members)} members total")
                         top_level_dirs = set()
                         for m in members:
-                            parts = m.name.split('/')
+                            parts = m.name.split("/")
                             if parts:
                                 top_level_dirs.add(parts[0])
                         logger.info(f"Top-level directories in tar: {sorted(top_level_dirs)}")
@@ -543,6 +587,7 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                             logger.debug(f"Temp extraction dir: {temp_extract_path}")
 
                             import sys
+
                             if sys.version_info >= (3, 12):
                                 tar.extractall(temp_extract_path, filter="tar")
                             else:
@@ -561,6 +606,7 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                     else:
                         # Regular extraction for non-MinGW archives
                         import sys
+
                         if sys.version_info >= (3, 12):
                             tar.extractall(dest_dir.parent, filter="tar")
                         else:
@@ -735,7 +781,7 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
 
         # Remove old installation if it exists (BEFORE extraction)
         if install_dir.exists():
-            shutil.rmtree(install_dir)
+            _robust_rmtree(install_dir)
 
         # Ensure parent directory exists
         install_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -955,7 +1001,7 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
     # Remove old installation if exists
     if install_dir.exists():
         logger.info("Removing old IWYU installation")
-        shutil.rmtree(install_dir)
+        _robust_rmtree(install_dir)
 
     # Create temp directory for download
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -1155,7 +1201,7 @@ def download_and_install_mingw(platform: str, arch: str) -> None:
     # Remove old installation if exists
     if install_dir.exists():
         logger.info("Removing old MinGW sysroot installation")
-        shutil.rmtree(install_dir)
+        _robust_rmtree(install_dir)
 
     # Create temp directory for download
     with tempfile.TemporaryDirectory() as temp_dir:
