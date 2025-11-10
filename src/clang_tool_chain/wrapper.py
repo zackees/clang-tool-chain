@@ -282,6 +282,46 @@ def find_sccache_binary() -> str:
     return sccache_path
 
 
+def _print_macos_sdk_error(reason: str) -> None:
+    """
+    Print a helpful error message to stderr when macOS SDK detection fails.
+
+    This is called when compilation is about to proceed without SDK detection,
+    which will likely cause 'stdio.h' or 'iostream' not found errors.
+
+    Args:
+        reason: Brief description of why SDK detection failed
+    """
+    print("\n" + "=" * 70, file=sys.stderr)
+    print("⚠️  macOS SDK Detection Failed", file=sys.stderr)
+    print("=" * 70, file=sys.stderr)
+    print(f"\nReason: {reason}", file=sys.stderr)
+    print("\nYour compilation may fail with errors like:", file=sys.stderr)
+    print("  fatal error: 'stdio.h' file not found", file=sys.stderr)
+    print("  fatal error: 'iostream' file not found", file=sys.stderr)
+    print("\n" + "-" * 70, file=sys.stderr)
+    print("Solution: Install Xcode Command Line Tools", file=sys.stderr)
+    print("-" * 70, file=sys.stderr)
+    print("\nRun this command in your terminal:", file=sys.stderr)
+    print("\n  \033[1;36mxcode-select --install\033[0m", file=sys.stderr)
+    print("\nThen try compiling again.", file=sys.stderr)
+    print("\n" + "-" * 70, file=sys.stderr)
+    print("Alternative Solutions:", file=sys.stderr)
+    print("-" * 70, file=sys.stderr)
+    print("\n1. Specify SDK path manually:", file=sys.stderr)
+    print("   clang-tool-chain-c -isysroot /Library/Developer/.../MacOSX.sdk file.c", file=sys.stderr)
+    print("\n2. Set SDKROOT environment variable:", file=sys.stderr)
+    print("   export SDKROOT=$(xcrun --show-sdk-path)  # if xcrun works", file=sys.stderr)
+    print("\n3. Use freestanding compilation (no standard library):", file=sys.stderr)
+    print("   clang-tool-chain-c -ffreestanding -nostdlib file.c", file=sys.stderr)
+    print("\n4. Disable automatic SDK detection:", file=sys.stderr)
+    print("   export CLANG_TOOL_CHAIN_NO_SYSROOT=1", file=sys.stderr)
+    print("   # Then specify SDK manually with -isysroot", file=sys.stderr)
+    print("\n" + "=" * 70, file=sys.stderr)
+    print("More info: https://github.com/zackees/clang-tool-chain#macos-sdk-detection-automatic", file=sys.stderr)
+    print("=" * 70 + "\n", file=sys.stderr)
+
+
 def _add_macos_sysroot_if_needed(args: list[str]) -> list[str]:
     """
     Add -isysroot flag for macOS if needed to find system headers.
@@ -345,14 +385,36 @@ def _add_macos_sysroot_if_needed(args: list[str]) -> list[str]:
 
         if sdk_path and Path(sdk_path).exists():
             # Prepend -isysroot to arguments
+            logger.info(f"macOS SDK detected: {sdk_path}")
             return ["-isysroot", sdk_path] + args
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-        # If xcrun fails, just continue without adding -isysroot
-        # This allows the tool to work even if Command Line Tools aren't installed,
-        # though compilation may fail if system headers are needed
-        pass
+        else:
+            # xcrun succeeded but returned invalid path
+            logger.warning(f"xcrun returned invalid SDK path: {sdk_path}")
+            _print_macos_sdk_error("xcrun returned invalid SDK path")
+            return args
 
-    return args
+    except FileNotFoundError:
+        # xcrun command not found - Command Line Tools likely not installed
+        logger.error("xcrun command not found - Xcode Command Line Tools may not be installed")
+        _print_macos_sdk_error("xcrun command not found")
+        return args
+
+    except subprocess.CalledProcessError as e:
+        # xcrun failed with non-zero exit code
+        stderr_output = e.stderr.strip() if e.stderr else "No error output"
+        logger.error(f"xcrun failed: {stderr_output}")
+        _print_macos_sdk_error(f"xcrun failed: {stderr_output}")
+        return args
+
+    except subprocess.TimeoutExpired:
+        # xcrun took too long to respond
+        logger.warning("xcrun command timed out")
+        return args
+
+    except Exception as e:
+        # Unexpected error
+        logger.warning(f"Unexpected error detecting SDK: {e}")
+        return args
 
 
 def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
