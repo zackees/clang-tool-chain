@@ -286,6 +286,10 @@ uv run pytest -m "not slow"      # Skip slow tests
 
 # Run single test
 uv run pytest tests/test_cli.py::MainTester::test_imports -v
+
+# Windows-specific tests
+uv run pytest tests/test_gnu_abi.py -v          # Windows GNU ABI tests
+uv run pytest tests/test_msvc_compile.py -v     # Windows MSVC comprehensive tests
 ```
 
 **Diagnostic Test Suite (`clang-tool-chain-test`):**
@@ -299,6 +303,52 @@ The test command runs 7 diagnostic tests to verify your toolchain installation:
 7. C++ compilation test
 
 This command is especially useful for debugging installation issues in GitHub Actions or other CI/CD environments.
+
+**Windows MSVC ABI Testing:**
+
+The `test_msvc_compile.py` test suite provides comprehensive testing of the Windows MSVC ABI support:
+
+**Test Coverage (15 tests):**
+1. MSVC variant command availability
+2. MSVC target triple injection verification
+3. Basic C compilation
+4. Basic C++ compilation
+5. Complete C build (compile + link + execute)
+6. Complete C++ build (compile + link + execute)
+7. C++ STL features (vector, map, algorithms, smart pointers)
+8. Multi-file compilation
+9. Windows-specific headers (<windows.h>)
+10. Optimization levels (-O0, -O1, -O2, -O3)
+11. C++ standard versions (-std=c++11, -std=c++14, etc.)
+12. User target override behavior
+13. Error message reporting
+14. Debug symbols (-g)
+15. Warning flags (-W*)
+
+**Requirements:**
+- Windows platform (tests are skipped on other platforms)
+- Visual Studio or Windows SDK installed (most tests require this)
+- Tests gracefully skip if SDK not detected
+
+**Running MSVC tests locally:**
+```bash
+# Requires Visual Studio Developer Command Prompt or vcvarsall.bat
+# Option 1: Use Developer Command Prompt
+uv run pytest tests/test_msvc_compile.py -v
+
+# Option 2: Set up MSVC environment first
+call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
+uv run pytest tests/test_msvc_compile.py -v
+```
+
+**GitHub Actions:**
+The `.github/workflows/test-win-msvc.yml` workflow runs comprehensive MSVC tests on every push/PR:
+- Uses `ilammy/msvc-dev-cmd@v1` to set up MSVC environment
+- Tests all MSVC variant commands
+- Verifies target triple injection
+- Tests Windows API compilation
+- Runs full test suite with Visual Studio SDK
+- Tests multi-file projects and optimization levels
 
 ### Code Quality
 ```bash

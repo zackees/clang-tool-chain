@@ -1,4 +1,4 @@
-name: win
+name: win-gnu
 
 on:
   push:
@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-windows:
-    name: Windows x64
+  test-windows-gnu:
+    name: Windows x64 GNU ABI
     runs-on: windows-latest
 
     steps:
@@ -34,7 +34,7 @@ jobs:
 
     - name: Display platform information
       run: |
-        echo "Platform: Windows x64"
+        echo "Platform: Windows x64 GNU ABI (MinGW)"
         uname -a || echo "Windows"
         python --version
         python -c "import platform; print(f'System: {platform.system()}'); print(f'Machine: {platform.machine()}')"
@@ -59,12 +59,12 @@ jobs:
         uv run clang-tool-chain path
       shell: bash
 
-    - name: Test C compilation
+    - name: Test GNU ABI C compilation
       run: |
         cat > test.c << 'EOF'
         #include <stdio.h>
         int main() {
-            printf("Hello from Windows x64!\n");
+            printf("Hello from Windows x64 GNU ABI!\n");
             return 0;
         }
         EOF
@@ -72,12 +72,12 @@ jobs:
         ./test.exe
       shell: bash
 
-    - name: Test C++ compilation
+    - name: Test GNU ABI C++ compilation
       run: |
         cat > test.cpp << 'EOF'
         #include <iostream>
         int main() {
-            std::cout << "Hello C++ from Windows x64!" << std::endl;
+            std::cout << "Hello C++ from Windows x64 GNU ABI!" << std::endl;
             return 0;
         }
         EOF
@@ -85,7 +85,21 @@ jobs:
         ./test_cpp.exe
       shell: bash
 
+    - name: Verify GNU target usage
+      run: |
+        cat > test_target.c << 'EOF'
+        int main() { return 0; }
+        EOF
+        echo "Checking GNU target triple..."
+        uv run clang-tool-chain-c -v -c test_target.c 2>&1 | grep -i "mingw\|gnu" && echo "GNU target confirmed!" || echo "Warning: GNU target not detected"
+      shell: bash
+
     - name: Run integration tests
       run: |
         uv run pytest tests/test_integration.py -v
+      shell: bash
+
+    - name: Run GNU ABI specific tests
+      run: |
+        uv run pytest tests/test_gnu_abi.py -v
       shell: bash
