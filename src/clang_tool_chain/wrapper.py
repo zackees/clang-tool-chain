@@ -302,19 +302,19 @@ def _detect_windows_sdk() -> dict[str, str] | None:
 
     # Check for Windows SDK environment variables
     # These are set by vcvarsall.bat and similar VS setup scripts
-    sdk_dir = os.environ.get("WindowsSdkDir") or os.environ.get("WindowsSDKDir")
+    sdk_dir = os.environ.get("WindowsSdkDir") or os.environ.get("WindowsSDKDir")  # noqa: SIM112
     if sdk_dir:
         sdk_info["sdk_dir"] = sdk_dir
         logger.debug(f"Windows SDK found via environment: {sdk_dir}")
 
     # Check for Universal CRT SDK (required for C runtime)
-    ucrt_sdk_dir = os.environ.get("UniversalCRTSdkDir")
+    ucrt_sdk_dir = os.environ.get("UniversalCRTSdkDir")  # noqa: SIM112
     if ucrt_sdk_dir:
         sdk_info["ucrt_dir"] = ucrt_sdk_dir
         logger.debug(f"Universal CRT SDK found: {ucrt_sdk_dir}")
 
     # Check for VC Tools (MSVC compiler toolchain)
-    vc_tools_dir = os.environ.get("VCToolsInstallDir")
+    vc_tools_dir = os.environ.get("VCToolsInstallDir")  # noqa: SIM112
     if vc_tools_dir:
         sdk_info["vc_tools_dir"] = vc_tools_dir
         logger.debug(f"VC Tools found: {vc_tools_dir}")
@@ -326,7 +326,7 @@ def _detect_windows_sdk() -> dict[str, str] | None:
         logger.debug(f"Visual Studio installation found: {vs_install_dir}")
 
     # Check for Windows SDK version
-    sdk_version = os.environ.get("WindowsSDKVersion")
+    sdk_version = os.environ.get("WindowsSDKVersion")  # noqa: SIM112
     if sdk_version:
         sdk_info["sdk_version"] = sdk_version.rstrip("\\")  # Remove trailing backslash if present
         logger.debug(f"Windows SDK version: {sdk_version}")
@@ -365,7 +365,10 @@ def _print_msvc_sdk_warning() -> None:
     print("  • Run your build commands from that prompt", file=sys.stderr)
     print("\nOption 2: Run vcvarsall.bat in your current shell", file=sys.stderr)
     print("  • Typical location:", file=sys.stderr)
-    print("    C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat", file=sys.stderr)
+    print(
+        "    C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat",
+        file=sys.stderr,
+    )
     print("  • Run: vcvarsall.bat x64", file=sys.stderr)
     print("\nOption 3: Install Visual Studio or Windows SDK", file=sys.stderr)
     print("  • Visual Studio: https://visualstudio.microsoft.com/downloads/", file=sys.stderr)

@@ -344,7 +344,7 @@ class TestMSVCABI(unittest.TestCase):
             )
 
             # Check that the target triple appears in verbose output
-            output = result.stdout + result.stderr
+            output = (result.stdout or "") + (result.stderr or "")
             self.assertIn(
                 "x86_64-pc-windows-msvc",
                 output,
@@ -381,7 +381,7 @@ class TestMSVCABI(unittest.TestCase):
             )
 
             # Should see user's GNU target, not MSVC target
-            output = result.stdout + result.stderr
+            output = (result.stdout or "") + (result.stderr or "")
             self.assertIn(
                 "x86_64-w64-mingw32",
                 output,
@@ -410,12 +410,11 @@ int main() {
                 text=True,
             )
 
-            output = result.stdout + result.stderr
+            output = (result.stdout or "") + (result.stderr or "")
 
             # If Visual Studio SDK is not available, skip this test gracefully
             if result.returncode != 0 and any(
-                keyword in output.lower()
-                for keyword in ["windows sdk", "visual studio", "vcruntime.h", "corecrt.h"]
+                keyword in output.lower() for keyword in ["windows sdk", "visual studio", "vcruntime.h", "corecrt.h"]
             ):
                 self.skipTest("Visual Studio SDK not available for MSVC target testing")
 
@@ -454,7 +453,7 @@ int main() {
                 text=True,
             )
 
-            output = result.stdout + result.stderr
+            output = (result.stdout or "") + (result.stderr or "")
 
             # If Visual Studio SDK is not available, skip this test gracefully
             if result.returncode != 0 and any(
@@ -465,7 +464,9 @@ int main() {
 
             # Otherwise, linking should succeed
             self.assertEqual(
-                result.returncode, 0, f"Linking with MSVC variant should succeed.\nstdout: {result.stdout}\nstderr: {result.stderr}"
+                result.returncode,
+                0,
+                f"Linking with MSVC variant should succeed.\nstdout: {result.stdout}\nstderr: {result.stderr}",
             )
 
             # Verify executable was created
@@ -568,11 +569,11 @@ extern "C" int exported_function() {
         # We can't easily test it in actual compilation without mocking env vars,
         # but we can at least verify the function exists and can be called
 
-        from clang_tool_chain.wrapper import _print_msvc_sdk_warning
-
         # This should not raise an exception
         import io
         import sys as sys_module
+
+        from clang_tool_chain.wrapper import _print_msvc_sdk_warning
 
         # Capture stderr
         old_stderr = sys_module.stderr

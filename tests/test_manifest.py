@@ -22,7 +22,7 @@ class TestManifestFiles(unittest.TestCase):
         cls.downloads_dir = Path(__file__).parent.parent / "downloads-bins" / "assets" / "clang"
         cls.required_version_fields = ["href", "sha256"]
         cls.valid_platforms = ["win", "linux", "darwin"]
-        cls.valid_architectures = ["x86_64", "arm64"]
+        cls.valid_architectures = ["x86_64", "arm64", "mingw-x86_64"]  # mingw-x86_64 is a special sysroot reference
 
     def test_downloads_directory_exists(self):
         """Test that downloads directory exists."""
@@ -140,10 +140,18 @@ class TestManifestFiles(unittest.TestCase):
             for platform_dir in self.downloads_dir.iterdir():
                 if platform_dir.is_dir() and platform_dir.name in self.valid_platforms:
                     for arch_dir in platform_dir.iterdir():
-                        if arch_dir.is_dir() and arch_dir.name in self.valid_architectures:
-                            manifest_path = arch_dir / "manifest.json"
-                            if manifest_path.exists():
-                                fs_combinations.add((platform_dir.name, arch_dir.name))
+                        if arch_dir.is_dir():
+                            # Handle special case: win/mingw/x86_64 maps to arch "mingw-x86_64"
+                            if arch_dir.name == "mingw" and platform_dir.name == "win":
+                                for mingw_arch_dir in arch_dir.iterdir():
+                                    if mingw_arch_dir.is_dir() and mingw_arch_dir.name in ["x86_64", "arm64"]:
+                                        manifest_path = mingw_arch_dir / "manifest.json"
+                                        if manifest_path.exists():
+                                            fs_combinations.add((platform_dir.name, f"mingw-{mingw_arch_dir.name}"))
+                            elif arch_dir.name in self.valid_architectures:
+                                manifest_path = arch_dir / "manifest.json"
+                                if manifest_path.exists():
+                                    fs_combinations.add((platform_dir.name, arch_dir.name))
 
             # Verify they match
             missing_in_root = fs_combinations - root_combinations
