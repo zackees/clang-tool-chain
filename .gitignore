@@ -159,16 +159,14 @@ data/
 /zcmds/bin/
 
 # LLVM/Clang binaries and downloads
-# Note: assets/ directory IS committed to git (binaries included in repo)
-# Only downloads/ and extracted archives are excluded
+# Note: downloads-bins/ submodule contains published binaries
+# Work directories and extracted archives are excluded
 LLVM-*/
 clang+llvm-*/
 
 # MinGW sysroot extraction work directories and artifacts
-# Note: downloads/mingw/ archives ARE committed (published binaries)
-# Only work/ directories and temporary extraction files are excluded
+# Work directories and temporary extraction files are excluded
 work/
-downloads/mingw/work/
 *.tar.xz
 *.zip
 llvm-mingw-*/

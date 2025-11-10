@@ -290,7 +290,7 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("downloads/mingw/win"),
+        default=Path("downloads-bins/assets/mingw/win"),
         help="Output directory for final archives",
     )
 

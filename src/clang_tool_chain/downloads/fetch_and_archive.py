@@ -10,7 +10,7 @@ This script automates the entire process:
 5. Compresses with zstd level 22
 6. Names according to convention: llvm-{version}-{platform}-{arch}.tar.zst
 7. Generates checksums
-8. Places final archive in downloads/{platform}/{arch}/
+8. Places final archive in downloads-bins/assets/clang/{platform}/{arch}/
 
 Usage:
     python -m clang_tool_chain.downloads.fetch_and_archive --platform win --arch x86_64
@@ -1215,7 +1215,10 @@ Note: Press Ctrl+C at any time to safely interrupt the operation.
         "--work-dir", type=Path, default=Path("work"), help="Working directory for temporary files (default: work)"
     )
     parser.add_argument(
-        "--output-dir", type=Path, default=None, help="Output directory (default: downloads/{platform}/{arch})"
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output directory (default: downloads-bins/assets/clang/{platform}/{arch})",
     )
     parser.add_argument("--zstd-level", type=int, default=22, help="Zstd compression level (default: 22)")
     parser.add_argument("--keep-intermediate", action="store_true", help="Keep intermediate files (for debugging)")
@@ -1229,7 +1232,7 @@ Note: Press Ctrl+C at any time to safely interrupt the operation.
     work_dir = args.work_dir
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    output_dir = args.output_dir or Path("downloads/clang") / args.platform / args.arch
+    output_dir = args.output_dir or Path("downloads-bins/assets/clang") / args.platform / args.arch
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Archive name

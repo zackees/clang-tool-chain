@@ -387,23 +387,24 @@ clang-tool-chain/
 │   │   ├── expand_archive.py       # Extract .tar.zst archives
 │   │   └── test_compression.py     # Test compression methods
 │   └── __version__.py       # Version information
-├── downloads/               # Pre-built archives and manifests
-│   ├── clang/               # Clang toolchain downloads
-│   │   ├── manifest.json    # Root manifest (all platforms)
-│   │   ├── win/             # Windows archives and manifest
-│   │   │   ├── x86_64/
-│   │   │   │   ├── manifest.json
-│   │   │   │   └── llvm-21.1.5-win-x86_64.tar.zst
-│   │   ├── linux/           # Linux archives
-│   │   └── darwin/          # macOS archives
-│   ├── mingw/               # MinGW-w64 sysroot downloads (Windows GNU ABI)
-│   │   ├── manifest.json    # Root manifest
-│   │   ├── README.md        # MinGW sysroot documentation
-│   │   └── win/             # Windows MinGW sysroots
-│   │       └── x86_64/
-│   │           ├── manifest.json
-│   │           └── mingw-sysroot-21.1.5-win-x86_64.tar.zst
-│   └── iwyu/                # Include What You Use downloads
+├── downloads-bins/          # Git submodule with pre-built archives and manifests
+│   └── assets/              # Published binary distributions
+│       ├── clang/           # Clang toolchain archives
+│       │   ├── manifest.json    # Root manifest (all platforms)
+│       │   ├── win/         # Windows archives and manifest
+│       │   │   ├── x86_64/
+│       │   │   │   ├── manifest.json
+│       │   │   │   └── llvm-21.1.5-win-x86_64.tar.zst
+│       │   ├── linux/       # Linux archives
+│       │   └── darwin/      # macOS archives
+│       ├── mingw/           # MinGW-w64 sysroot archives (Windows GNU ABI)
+│       │   ├── manifest.json    # Root manifest
+│       │   ├── README.md    # MinGW sysroot documentation
+│       │   └── win/         # Windows MinGW sysroots
+│       │       └── x86_64/
+│       │           ├── manifest.json
+│       │           └── mingw-sysroot-21.1.5-win-x86_64.tar.zst
+│       └── iwyu/            # Include What You Use archives
 ├── tests/                   # Unit and integration tests
 │   ├── test_cli.py          # CLI command tests
 │   ├── test_downloader.py   # Download/install tests
@@ -587,7 +588,7 @@ The `extract_mingw_sysroot.py` script creates MinGW-w64 sysroot archives for Win
 python -m clang_tool_chain.downloads.extract_mingw_sysroot \
     --arch x86_64 \
     --work-dir work \
-    --output-dir downloads/mingw/win
+    --output-dir downloads-bins/assets/mingw/win
 ```
 
 **What it does:**

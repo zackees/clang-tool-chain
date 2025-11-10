@@ -143,7 +143,7 @@ To add a new platform:
   python: '3.11'
 ```
 
-2. Ensure manifest exists for the platform in `downloads/manifest.json`
+2. Ensure manifest exists for the platform in `downloads-bins/assets/clang/manifest.json`
 
 3. Test locally if possible, or push to a feature branch and verify CI
 

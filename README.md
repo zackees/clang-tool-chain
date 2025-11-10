@@ -891,8 +891,8 @@ clang-tool-chain-c --target=arm64-apple-darwin main.c
 
 The package uses a **two-tier manifest system** for version management:
 
-1. **Root Manifest** (`downloads/clang/manifest.json`) - Indexes all platforms and architectures
-2. **Platform Manifests** (`downloads/clang/{platform}/{arch}/manifest.json`) - Contains version info, download URLs, and SHA256 checksums
+1. **Root Manifest** (`downloads-bins/assets/clang/manifest.json`) - Indexes all platforms and architectures
+2. **Platform Manifests** (`downloads-bins/assets/clang/{platform}/{arch}/manifest.json`) - Contains version info, download URLs, and SHA256 checksums
 
 **On first use:**
 ```
@@ -1006,7 +1006,7 @@ If you need to manually install binaries (e.g., for offline environments):
 
 1. **Download archive:**
    ```bash
-   wget https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst
+   wget https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst
    ```
 
 2. **Extract to installation directory:**
@@ -1226,7 +1226,7 @@ ls ~/.clang-tool-chain/
 2. **Retry the command** (temporary network issue)
 3. **Check GitHub raw content access:**
    ```bash
-   curl -I https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/manifest.json
+   curl -I https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/clang/manifest.json
    ```
 4. **Clear partial downloads:**
    ```bash
@@ -1345,7 +1345,7 @@ Security is a top priority for this project.
 - **Automatic:** SHA256 checksums are verified during download (enabled by default)
 - **Manifest-Based:** Checksums stored in version-controlled manifests
 - **Protection:** Detects corrupted downloads, MITM attacks, and file tampering
-- **Transparency:** All checksums visible in `downloads/clang/{platform}/{arch}/manifest.json`
+- **Transparency:** All checksums visible in `downloads-bins/assets/clang/{platform}/{arch}/manifest.json`
 
 ### Safe Extraction
 
@@ -1365,7 +1365,7 @@ Binaries are served from GitHub raw content (`raw.githubusercontent.com`):
 ```bash
 # Option 1: Manual verification
 clang-tool-chain-fetch --dry-run  # Shows download URLs
-# Verify checksums in downloads/clang/<platform>/<arch>/manifest.json
+# Verify checksums in downloads-bins/assets/clang/<platform>/<arch>/manifest.json
 
 # Option 2: Offline installation
 # Download archive, verify checksum independently, then extract manually
@@ -1491,7 +1491,7 @@ clang-tool-chain-fetch-archive \
 6. ✅ Compresses with **zstd level 22** (94.3% reduction!)
 7. ✅ Generates checksums (SHA256, MD5)
 8. ✅ Names archive: `llvm-{version}-{platform}-{arch}.tar.zst`
-9. ✅ Places in `downloads/clang/{platform}/{arch}/`
+9. ✅ Places in `downloads-bins/assets/clang/{platform}/{arch}/`
 10. ✅ Updates platform manifest with URLs and checksums
 
 **Result:** 51.53 MB archive (from 902 MB original) for Windows x86_64!
@@ -1519,8 +1519,8 @@ Optimize binary size by removing unnecessary files:
 
 ```bash
 python -m clang_tool_chain.downloads.strip_binaries \
-    downloads/clang+llvm-21.1.5-x86_64-pc-windows-msvc \
-    output/win \
+    work/clang+llvm-21.1.5-x86_64-pc-windows-msvc \
+    downloads-bins/assets/clang/win/x86_64 \
     --platform win
 ```
 
@@ -1543,7 +1543,7 @@ Find duplicate binaries by MD5 hash:
 
 ```bash
 python -m clang_tool_chain.downloads.deduplicate_binaries \
-    downloads/clang+llvm-21.1.5-x86_64-pc-windows-msvc/bin
+    work/clang+llvm-21.1.5-x86_64-pc-windows-msvc/bin
 ```
 
 **Output:**
@@ -1578,7 +1578,7 @@ Extract `.tar.zst` archives:
 
 ```bash
 python -m clang_tool_chain.downloads.expand_archive \
-    downloads/llvm-21.1.5-win-x86_64.tar.zst \
+    llvm-21.1.5-win-x86_64.tar.zst \
     output/win
 ```
 
@@ -1632,24 +1632,29 @@ After creating archives, update the manifest files:
 
 1. **Generate SHA256 checksum:**
    ```bash
-   sha256sum downloads/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst
+   sha256sum downloads-bins/assets/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst
    ```
 
-2. **Update platform manifest** (`downloads/clang/win/x86_64/manifest.json`):
+2. **Update platform manifest** (`downloads-bins/assets/clang/win/x86_64/manifest.json`):
    ```json
    {
      "latest": "21.1.5",
      "21.1.5": {
-       "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst",
+       "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst",
        "sha256": "3c21e45edeee591fe8ead5427d25b62ddb26c409575b41db03d6777c77bba44f"
      }
    }
    ```
 
-3. **Commit and push:**
+3. **Commit and push to downloads-bins submodule:**
    ```bash
-   git add downloads/clang/
+   cd downloads-bins
+   git add assets/clang/
    git commit -m "chore: add LLVM 21.1.5 for Windows x86_64"
+   git push
+   cd ..
+   git add downloads-bins
+   git commit -m "chore: update submodule to latest binaries"
    git push
    ```
 

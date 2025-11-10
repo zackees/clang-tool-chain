@@ -20,7 +20,7 @@ python scripts/download_binaries.py
 python scripts/download_binaries.py --platform linux-x86_64
 
 # Specify version and output directory
-python scripts/download_binaries.py --version 21.1.5 --output downloads
+python scripts/download_binaries.py --version 21.1.5 --output work
 ```
 
 **Supported Platforms:**
@@ -31,7 +31,7 @@ python scripts/download_binaries.py --version 21.1.5 --output downloads
 - `darwin-arm64` - macOS Apple Silicon
 
 **Output:**
-Downloads are saved to the `downloads/` directory by default. Each platform is extracted to a separate subdirectory.
+Downloads are saved to the `work/` directory by default. Each platform is extracted to a separate subdirectory.
 
 ### strip_binaries.py
 
@@ -41,8 +41,8 @@ Optimizes downloaded LLVM distributions by removing unnecessary files and stripp
 ```bash
 # Strip binaries for a specific platform
 python scripts/strip_binaries.py \
-  downloads/linux-x86_64-extracted \
-  src/clang_tool_chain/assets/linux/x86 \
+  work/linux-x86_64-extracted \
+  downloads-bins/assets/clang/linux/x86_64 \
   --platform linux-x86_64
 
 # Keep header files (not recommended, increases size)
@@ -82,17 +82,17 @@ Complete workflow to prepare binaries for the package:
 python scripts/download_binaries.py --current-only
 
 # 2. Find the extracted directory (example for Windows)
-# It will be something like: downloads/win-x86_64-extracted/
+# It will be something like: work/win-x86_64-extracted/
 
 # 3. Strip the binaries and move to assets
 python scripts/strip_binaries.py \
-  downloads/win-x86_64-extracted \
-  src/clang_tool_chain/assets/win \
+  work/win-x86_64-extracted \
+  downloads-bins/assets/clang/win/x86_64 \
   --platform win-x86_64 \
   --verbose
 
 # 4. Verify the output
-ls -lh src/clang_tool_chain/assets/win/bin/
+ls -lh downloads-bins/assets/clang/win/x86_64/bin/
 ```
 
 ## Platform-Specific Notes
