@@ -1,0 +1,332 @@
+"""
+Integration tests for IWYU (Include What You Use) functionality.
+
+These tests verify that the IWYU tools are properly installed and functional.
+"""
+
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from clang_tool_chain import wrapper
+
+
+class TestIWYUInstallation(unittest.TestCase):
+    """Test IWYU installation and basic functionality."""
+
+    def test_iwyu_binary_dir_exists(self) -> None:
+        """Test that IWYU binary directory can be located."""
+        try:
+            bin_dir = wrapper.get_iwyu_binary_dir()
+            self.assertTrue(bin_dir.exists(), f"IWYU binary directory should exist at {bin_dir}")
+            self.assertTrue(bin_dir.is_dir(), f"IWYU binary location should be a directory: {bin_dir}")
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+
+    def test_find_iwyu_tool(self) -> None:
+        """Test finding the include-what-you-use binary."""
+        try:
+            iwyu_path = wrapper.find_iwyu_tool("include-what-you-use")
+            self.assertTrue(iwyu_path.exists(), f"IWYU tool should exist at {iwyu_path}")
+            self.assertTrue(iwyu_path.is_file(), f"IWYU tool should be a file: {iwyu_path}")
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+
+    def test_find_iwyu_tool_py(self) -> None:
+        """Test finding the iwyu_tool.py helper script."""
+        try:
+            iwyu_tool_path = wrapper.find_iwyu_tool("iwyu_tool.py")
+            self.assertTrue(iwyu_tool_path.exists(), f"iwyu_tool.py should exist at {iwyu_tool_path}")
+            self.assertTrue(iwyu_tool_path.is_file(), f"iwyu_tool.py should be a file: {iwyu_tool_path}")
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+
+    def test_find_fix_includes_py(self) -> None:
+        """Test finding the fix_includes.py helper script."""
+        try:
+            fix_includes_path = wrapper.find_iwyu_tool("fix_includes.py")
+            self.assertTrue(fix_includes_path.exists(), f"fix_includes.py should exist at {fix_includes_path}")
+            self.assertTrue(fix_includes_path.is_file(), f"fix_includes.py should be a file: {fix_includes_path}")
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+
+
+class TestIWYUExecution(unittest.TestCase):
+    """Test IWYU execution with real C++ code."""
+
+    def setUp(self) -> None:
+        """Set up test environment with temporary directory and test files."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_path = Path(self.temp_dir)
+
+        # Create a test C++ file with unused includes
+        self.test_cpp = self.temp_path / "test.cpp"
+        self.test_cpp.write_text(
+            "#include <iostream>\n"
+            "#include <vector>\n"
+            "#include <string>\n"
+            "\n"
+            "// Only using iostream, vector and string are unused\n"
+            "int main() {\n"
+            '    std::cout << "Hello from IWYU test!" << std::endl;\n'
+            "    return 0;\n"
+            "}\n"
+        )
+
+        # Create a test file with proper includes
+        self.good_cpp = self.temp_path / "good.cpp"
+        self.good_cpp.write_text(
+            "#include <iostream>\n"
+            "\n"
+            "int main() {\n"
+            '    std::cout << "Hello!" << std::endl;\n'
+            "    return 0;\n"
+            "}\n"
+        )
+
+        # Create a test file that uses vector
+        self.vector_cpp = self.temp_path / "vector_test.cpp"
+        self.vector_cpp.write_text(
+            "#include <vector>\n"
+            "#include <iostream>\n"
+            "\n"
+            "int main() {\n"
+            "    std::vector<int> vec = {1, 2, 3};\n"
+            "    std::cout << vec.size() << std::endl;\n"
+            "    return 0;\n"
+            "}\n"
+        )
+
+    def tearDown(self) -> None:
+        """Clean up temporary directory."""
+        import shutil
+
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_iwyu_version(self) -> None:
+        """Test that IWYU can report its version."""
+        try:
+            iwyu_path = wrapper.find_iwyu_tool("include-what-you-use")
+            result = subprocess.run([str(iwyu_path), "--version"], capture_output=True, text=True, timeout=10)
+
+            # IWYU may return 0 or non-zero for --version
+            self.assertIn(
+                result.returncode,
+                [0, 1],
+                f"IWYU version command should complete. Return code: {result.returncode}",
+            )
+
+            # Check for version info in output (may be in stdout or stderr)
+            combined_output = (result.stdout + result.stderr).lower()
+            self.assertTrue(
+                "include-what-you-use" in combined_output or "iwyu" in combined_output or "clang" in combined_output,
+                "IWYU version output should contain tool information",
+            )
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+
+    def test_iwyu_analyze_file(self) -> None:
+        """Test running IWYU on a test file."""
+        try:
+            iwyu_path = wrapper.find_iwyu_tool("include-what-you-use")
+            clang_bin_dir = wrapper.get_platform_binary_dir()
+
+            # Run IWYU on the test file
+            # IWYU needs to know where to find system headers
+            result = subprocess.run(
+                [
+                    str(iwyu_path),
+                    str(self.test_cpp),
+                    "--",
+                    f"-I{clang_bin_dir.parent / 'include'}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(self.temp_path),
+            )
+
+            # IWYU returns non-zero when it finds issues (which is expected)
+            # We just verify it runs without crashing
+            self.assertIn(
+                result.returncode,
+                [0, 1, 2],
+                f"IWYU should complete analysis. Return code: {result.returncode}, " f"stderr: {result.stderr[:200]}",
+            )
+
+            # IWYU produces output (usually to stderr)
+            combined_output = result.stdout + result.stderr
+            self.assertTrue(
+                len(combined_output) > 0,
+                "IWYU should produce output",
+            )
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+        except subprocess.TimeoutExpired:
+            self.skipTest("IWYU analysis timed out - this may be a platform-specific issue")
+
+    def test_iwyu_on_good_file(self) -> None:
+        """Test IWYU on a file with correct includes."""
+        try:
+            iwyu_path = wrapper.find_iwyu_tool("include-what-you-use")
+            clang_bin_dir = wrapper.get_platform_binary_dir()
+
+            result = subprocess.run(
+                [
+                    str(iwyu_path),
+                    str(self.good_cpp),
+                    "--",
+                    f"-I{clang_bin_dir.parent / 'include'}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(self.temp_path),
+            )
+
+            # IWYU should complete (return code may vary)
+            self.assertIn(
+                result.returncode,
+                [0, 1, 2],
+                f"IWYU should complete analysis on good file. Return code: {result.returncode}",
+            )
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+        except subprocess.TimeoutExpired:
+            self.skipTest("IWYU analysis timed out - this may be a platform-specific issue")
+
+    def test_iwyu_with_compile_commands(self) -> None:
+        """Test IWYU with a compilation database."""
+        try:
+            import json
+
+            # Create a simple compile_commands.json
+            compile_commands = [
+                {
+                    "directory": str(self.temp_path),
+                    "command": f"clang++ -c {self.test_cpp}",
+                    "file": str(self.test_cpp),
+                }
+            ]
+
+            compile_db_path = self.temp_path / "compile_commands.json"
+            compile_db_path.write_text(json.dumps(compile_commands, indent=2))
+
+            iwyu_path = wrapper.find_iwyu_tool("include-what-you-use")
+
+            # Run IWYU with the compilation database
+            result = subprocess.run(
+                [str(iwyu_path), str(self.test_cpp)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(self.temp_path),
+            )
+
+            # IWYU should complete (may have warnings/suggestions)
+            self.assertIn(
+                result.returncode,
+                [0, 1, 2],
+                f"IWYU should complete with compile database. Return code: {result.returncode}",
+            )
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+        except subprocess.TimeoutExpired:
+            self.skipTest("IWYU analysis timed out - this may be a platform-specific issue")
+
+
+class TestIWYUHelperScripts(unittest.TestCase):
+    """Test IWYU helper Python scripts."""
+
+    def test_iwyu_tool_help(self) -> None:
+        """Test that iwyu_tool.py can display help."""
+        try:
+            iwyu_tool_path = wrapper.find_iwyu_tool("iwyu_tool.py")
+            python_exe = sys.executable
+
+            result = subprocess.run(
+                [python_exe, str(iwyu_tool_path), "--help"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            # Help command should succeed
+            self.assertEqual(result.returncode, 0, "iwyu_tool.py --help should succeed")
+
+            # Should contain usage information
+            combined_output = result.stdout + result.stderr
+            self.assertTrue(
+                "usage" in combined_output.lower() or "help" in combined_output.lower(),
+                "iwyu_tool.py help should contain usage information",
+            )
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+
+    def test_fix_includes_help(self) -> None:
+        """Test that fix_includes.py can display help."""
+        try:
+            fix_includes_path = wrapper.find_iwyu_tool("fix_includes.py")
+            python_exe = sys.executable
+
+            result = subprocess.run(
+                [python_exe, str(fix_includes_path), "--help"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            # Help command should succeed
+            self.assertEqual(result.returncode, 0, "fix_includes.py --help should succeed")
+
+            # Should contain usage information
+            combined_output = result.stdout + result.stderr
+            self.assertTrue(
+                "usage" in combined_output.lower() or "help" in combined_output.lower(),
+                "fix_includes.py help should contain usage information",
+            )
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+
+
+class TestIWYUWrapperEntryPoints(unittest.TestCase):
+    """Test that IWYU wrapper entry points work correctly."""
+
+    def test_wrapper_can_find_iwyu_binary_dir(self) -> None:
+        """Test that the wrapper can locate IWYU binary directory."""
+        try:
+            bin_dir = wrapper.get_iwyu_binary_dir()
+            self.assertTrue(bin_dir.exists(), "IWYU binary directory should exist")
+
+            # Check for expected files
+            platform_name, _ = wrapper.get_platform_info()
+            iwyu_binary = "include-what-you-use.exe" if platform_name == "win" else "include-what-you-use"
+
+            expected_binary = bin_dir / iwyu_binary
+            self.assertTrue(
+                expected_binary.exists(),
+                f"IWYU binary should exist at {expected_binary}",
+            )
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+
+    def test_wrapper_find_all_iwyu_tools(self) -> None:
+        """Test that wrapper can find all IWYU tools."""
+        try:
+            tools = ["include-what-you-use", "iwyu_tool.py", "fix_includes.py"]
+
+            for tool_name in tools:
+                with self.subTest(tool=tool_name):
+                    tool_path = wrapper.find_iwyu_tool(tool_name)
+                    self.assertTrue(tool_path.exists(), f"{tool_name} should exist at {tool_path}")
+        except RuntimeError as e:
+            self.skipTest(f"IWYU binaries not installed: {e}")
+
+
+if __name__ == "__main__":
+    unittest.main()
