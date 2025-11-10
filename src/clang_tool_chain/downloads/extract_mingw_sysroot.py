@@ -135,6 +135,25 @@ def extract_sysroot(archive_path: Path, extract_dir: Path, arch: str) -> Path:
             shutil.rmtree(generic_dst)
         shutil.copytree(generic_headers, generic_dst, symlinks=True)
 
+    # Copy clang resource headers (mm_malloc.h, intrinsics, etc.)
+    # These are compiler builtin headers needed for compilation
+    clang_resource_src = llvm_mingw_root / "lib" / "clang"
+    if clang_resource_src.exists():
+        # Find the version directory (e.g., "21")
+        version_dirs = [d for d in clang_resource_src.iterdir() if d.is_dir()]
+        if version_dirs:
+            clang_version_dir = version_dirs[0]  # Should only be one
+            resource_include_src = clang_version_dir / "include"
+            if resource_include_src.exists():
+                # Copy to lib/clang/<version>/include in sysroot
+                resource_dst = extract_dir / "lib" / "clang" / clang_version_dir.name / "include"
+                print(f"Copying clang resource headers: {resource_include_src} -> {resource_dst}")
+                resource_dst.parent.mkdir(parents=True, exist_ok=True)
+                if resource_dst.exists():
+                    shutil.rmtree(resource_dst)
+                shutil.copytree(resource_include_src, resource_dst, symlinks=True)
+                print(f"Copied {len(list(resource_dst.glob('*.h')))} resource headers")
+
     # Clean up temp directory
     print("Cleaning up temporary files...")
     shutil.rmtree(temp_extract)
@@ -146,10 +165,10 @@ def extract_sysroot(archive_path: Path, extract_dir: Path, arch: str) -> Path:
 def create_archive(sysroot_dir: Path, output_dir: Path, arch: str) -> Path:
     """Create compressed archive of sysroot."""
     try:
-        import zstandard as zstd
+        import pyzstd
     except ImportError:
-        print("Error: zstandard module not installed")
-        print("Install with: pip install zstandard")
+        print("Error: pyzstd module not installed")
+        print("Install with: pip install pyzstd")
         sys.exit(1)
 
     archive_name = f"mingw-sysroot-{LLVM_VERSION}-win-{arch}.tar.zst"
@@ -169,6 +188,7 @@ def create_archive(sysroot_dir: Path, output_dir: Path, arch: str) -> Path:
         sysroot_path = sysroot_dir.parent / sysroot_name
         include_path = sysroot_dir.parent / "include"
         generic_path = sysroot_dir.parent / "generic-w64-mingw32"
+        lib_clang_path = sysroot_dir.parent / "lib" / "clang"
 
         if sysroot_path.exists():
             print(f"Adding to archive: {sysroot_name}/")
@@ -182,14 +202,17 @@ def create_archive(sysroot_dir: Path, output_dir: Path, arch: str) -> Path:
             print("Adding to archive: generic-w64-mingw32/")
             tar.add(generic_path, arcname="generic-w64-mingw32")
 
+        if lib_clang_path.exists():
+            print("Adding to archive: lib/clang/ (resource headers)")
+            tar.add(lib_clang_path, arcname="lib/clang")
+
     tar_data = tar_buffer.getvalue()
     tar_size = len(tar_data)
     print(f"Tar size: {tar_size / (1024*1024):.2f} MB")
 
     # Compress with zstd level 22
     print("Compressing with zstd level 22...")
-    cctx = zstd.ZstdCompressor(level=22, threads=-1)
-    compressed_data = cctx.compress(tar_data)
+    compressed_data = pyzstd.compress(tar_data, level_or_option=22)
 
     with open(archive_path, "wb") as f:
         f.write(compressed_data)

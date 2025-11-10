@@ -1704,24 +1704,276 @@ clang-tool-chain-cpp-msvc = "clang_tool_chain.wrapper:clang_cpp_msvc_main"
 - `include/` - Complete C/C++ standard library headers (libc++ from LLVM)
 - `include/c++/v1/` - LLVM libc++ headers
 
-**Script Updates:**
-- Changed LLVM-MinGW version from 20241124 to 20251104
-- Changed archive format from tar.xz to .zip (Windows native)
-- Added zipfile module import
-- Added extraction of top-level include/ directory
-- Updated create_archive to include include/ in output
-
-**Files Committed:**
-- `downloads/mingw/manifest.json` - Root manifest
-- `downloads/mingw/README.md` - Maintainer documentation
-- `downloads/mingw/win/x86_64/manifest.json` - Platform manifest
-- `downloads/mingw/win/x86_64/mingw-sysroot-21.1.5-win-x86_64.tar.zst` - Archive (12.14 MB)
-- `downloads/mingw/win/x86_64/mingw-sysroot-21.1.5-win-x86_64.tar.zst.sha256` - Checksum
-- `downloads/mingw/win/x86_64/mingw-sysroot-21.1.5-win-x86_64.tar.zst.md5` - Checksum
-- `src/clang_tool_chain/downloads/extract_mingw_sysroot.py` - Updated extraction tool
-
-**Next Iteration Should Do:**
-- **Phase 3, Task 7:** Update existing Windows tests to expect GNU default
-- OR continue with testing infrastructure (Tasks 8-10)
-
 **Details:** See `.agent_task/ITERATION_5.md`
+
+---
+
+### ⚠️ Iteration 6 (Fixing mm_malloc.h) - BLOCKED
+**Date:** 2025-11-10
+**Task:** Fix missing `mm_malloc.h` header issue
+**Status:** ⚠️ Blocked - Archive extraction reorganization issue
+
+**What Was Accomplished:**
+1. ✅ Investigated and found 232 resource headers in LLVM-MinGW (16 MB)
+2. ✅ Updated `extract_mingw_sysroot.py` to extract and include resource headers
+3. ✅ Regenerated archive v2: 12.89 MB (was 12.14 MB, +750 KB for headers)
+4. ✅ Verified archive contains `lib/clang/21/include/` with 310 entries including mm_malloc.h
+5. ✅ Archive compression excellent: 93.3% reduction (191.77 MB → 12.89 MB)
+
+**New Archive v2 Stats:**
+- Size: 12.89 MB compressed
+- SHA256: `6d8b044a56e40380b49357f19de436cb3f5e8fb37d50287d7f1b22ffe1b77dba`
+- Contents:
+  - `x86_64-w64-mingw32/` - MinGW sysroot
+  - `include/` - C/C++ headers (libc++)
+  - `lib/clang/21/include/` - **NEW: Resource headers (232 files)**
+
+**Blocker Discovered:**
+- `extract_tarball()` in `downloader.py` (lines 536-542) has "smart" logic that reorganizes multi-root archives
+- Detects MinGW archive as "flat structure" and tries to "fix" it by moving contents
+- **Result:** `lib/clang/` directory gets lost/misplaced during extraction
+- Tests still fail with "mm_malloc.h not found" despite it being in archive
+
+**Root Cause:**
+MinGW archive intentionally has 3 top-level directories (`x86_64-w64-mingw32/`, `include/`, `lib/clang/`), but extraction logic expects archives to have single root directory or be completely flat.
+
+**Next Iteration Must:**
+1. Fix `extract_tarball()` to preserve MinGW archive structure
+   - Option A: Detect "mingw-sysroot" in filename and skip reorganization (preferred)
+   - Option B: Create separate `extract_mingw_archive()` function
+2. Clear cache and re-test with corrected extraction
+3. Verify all 11 tests pass
+4. Commit fix and updated archive
+
+**Files Modified:**
+- `src/clang_tool_chain/downloads/extract_mingw_sysroot.py` (resource header extraction)
+- `downloads/mingw/win/x86_64/mingw-sysroot-21.1.5-win-x86_64.tar.zst` (regenerated v2)
+- `downloads/mingw/win/x86_64/manifest.json` (updated SHA256)
+
+**Details:** See `.agent_task/ITERATION_6.md`
+
+---
+
+## Current Issue: Archive Extraction Reorganization
+
+### Problem Summary
+After successfully implementing GNU ABI support and MinGW sysroot download, compilation fails with:
+```
+fatal error: 'mm_malloc.h' file not found
+```
+
+**Error Chain:**
+1. ✅ C++ headers found (`<vector>`, `<string>`, `<iostream>`)
+2. ✅ MinGW sysroot installed at `~/.clang-tool-chain/mingw/win/x86_64/`
+3. ✅ Sysroot path correctly set: `--sysroot=<path>` and `-stdlib=libc++`
+4. ❌ `malloc.h` → `#include <mm_malloc.h>` fails
+
+**Root Cause:**
+`mm_malloc.h` is a clang compiler resource header (provides Intel intrinsics like `_mm_malloc`), not part of MinGW-w64 sysroot.
+
+### Agent Loop to Fix Missing Headers
+
+#### Investigation Phase
+
+**Agent Task A1:** Determine header location strategy
+```yaml
+Task: Investigate where mm_malloc.h should come from
+Commands:
+  # Check if it exists in our clang installation
+  - find C:/Users/niteris/.clang-tool-chain/clang/win/x86_64/ -name "mm_malloc.h"
+  - find C:/Users/niteris/.clang-tool-chain/clang/win/x86_64/ -name "*.h" | grep -E "(mm_|intrin|xmm)"
+
+  # Check clang's resource directory
+  - C:/Users/niteris/.clang-tool-chain/clang/win/x86_64/bin/clang.exe -print-resource-dir
+  - ls "$(clang -print-resource-dir)/include/"
+
+  # Check what's in the LLVM-MinGW source
+  - # Download llvm-mingw-20251104-ucrt-x86_64.zip again
+  - # Unzip and search for mm_malloc.h
+  - find llvm-mingw-*/include/ -name "mm_malloc.h"
+
+Success Criteria:
+  - Determine if mm_malloc.h exists in clang installation
+  - OR if it exists in LLVM-MinGW distribution
+  - OR if we need to add it from elsewhere
+```
+
+#### Solution Options
+
+**Option 1: Add --resource-dir Flag**
+```yaml
+Task: Tell clang where to find its resource headers
+File: src/clang_tool_chain/wrapper.py
+Changes:
+  1. Find clang resource directory at runtime
+  2. Add to _get_gnu_target_args():
+     resource_dir = sysroot_dir.parent.parent / "clang" / platform_name / arch / "lib" / "clang" / "*" / "include"
+     return [
+       f"--target={target}",
+       f"--sysroot={sysroot_path}",
+       "-stdlib=libc++",
+       f"--resource-dir={resource_dir}"  # New line
+     ]
+Success Criteria:
+  - Clang finds mm_malloc.h in resource-dir
+  - Compilation succeeds
+```
+
+**Option 2: Copy Resource Headers to Sysroot**
+```yaml
+Task: Include clang resource headers in MinGW sysroot archive
+Script: src/clang_tool_chain/downloads/extract_mingw_sysroot.py
+Changes:
+  1. After extracting LLVM-MinGW, also extract clang resource headers
+  2. Find: llvm-mingw-*/lib/clang/*/include/
+  3. Copy to: sysroot/include/ (flatten structure)
+  4. Regenerate archive with resource headers included
+  5. Update SHA256 in manifest
+Success Criteria:
+  - mm_malloc.h and other intrinsics headers in sysroot
+  - Archive size increases by ~1-2 MB
+  - Compilation succeeds without --resource-dir
+```
+
+**Option 3: Download Resource Headers Post-Install**
+```yaml
+Task: Copy resource headers after MinGW sysroot extraction
+File: src/clang_tool_chain/downloader.py
+Function: download_and_install_mingw()
+Changes:
+  Add after extraction:
+  ```python
+  # Copy clang resource headers from our installation
+  clang_resource_dir = get_platform_binary_dir().parent / "lib" / "clang"
+  if clang_resource_dir.exists():
+      # Find version directory
+      for version_dir in clang_resource_dir.iterdir():
+          resource_include = version_dir / "include"
+          if resource_include.exists():
+              # Copy to sysroot include/
+              for header in resource_include.glob("*.h"):
+                  shutil.copy(header, install_dir / "include")
+              break
+  ```
+Success Criteria:
+  - Headers copied automatically after download
+  - No archive regeneration needed
+  - Works with existing deployed archives
+```
+
+#### Recommended Approach
+
+**Use Option 3** - Post-install copy from clang installation
+
+**Reasons:**
+1. **No archive regeneration needed** - Works with existing deployed archive
+2. **Automatic** - Headers copied during first-time setup
+3. **Flexible** - Works even if archive doesn't have headers
+4. **Maintainable** - No need to track which headers to include in archive
+5. **Fast deployment** - Can fix immediately without re-uploading archives
+
+#### Implementation Steps
+
+```yaml
+Agent Task A2: Implement post-install header copy
+File: src/clang_tool_chain/downloader.py
+Function: download_and_install_mingw()
+Location: After extract_tarball(), before done_file write
+
+Add code:
+  ```python
+  # Copy clang resource headers (mm_malloc.h, *intrin.h, etc.)
+  logger.info("Copying clang resource headers to MinGW sysroot")
+  try:
+      from . import wrapper
+      platform_name_temp, arch_temp = wrapper.get_platform_info()
+      bin_dir = wrapper.get_platform_binary_dir()
+      clang_root = bin_dir.parent
+
+      # Find clang resource directory
+      clang_lib = clang_root / "lib" / "clang"
+      if clang_lib.exists():
+          # Find first version directory (should only be one)
+          for version_dir in clang_lib.iterdir():
+              if version_dir.is_dir():
+                  resource_include = version_dir / "include"
+                  if resource_include.exists():
+                      dest_include = install_dir / "include"
+                      dest_include.mkdir(parents=True, exist_ok=True)
+
+                      # Copy all .h files
+                      copied_count = 0
+                      for header_file in resource_include.glob("*.h"):
+                          dest_file = dest_include / header_file.name
+                          shutil.copy2(header_file, dest_file)
+                          copied_count += 1
+
+                      logger.info(f"Copied {copied_count} resource headers")
+                      break
+  except Exception as e:
+      logger.warning(f"Could not copy clang resource headers: {e}")
+      logger.warning("Compilation may fail for code using Intel intrinsics")
+  ```
+
+Success Criteria:
+  - Code added to download_and_install_mingw()
+  - Headers copied after extraction
+  - Graceful fallback if headers not found
+  - Logged appropriately
+```
+
+```yaml
+Agent Task A3: Test the fix
+Commands:
+  # Clear MinGW cache to force re-download
+  - rm -rf C:/Users/niteris/.clang-tool-chain/mingw/
+
+  # Run test that was failing
+  - uv run pytest tests/test_gnu_abi.py::TestGNUABI::test_1_basic_cpp11_gnu_target -xvs
+
+  # Check that mm_malloc.h was copied
+  - ls C:/Users/niteris/.clang-tool-chain/mingw/win/x86_64/include/ | grep mm_malloc
+
+  # Run full GNU ABI test suite
+  - uv run pytest tests/test_gnu_abi.py -v
+
+  # Run full test suite
+  - ./test
+
+Success Criteria:
+  - mm_malloc.h exists in sysroot include/
+  - test_1_basic_cpp11_gnu_target passes
+  - All 11 failing tests now pass
+  - No new test failures
+```
+
+```yaml
+Agent Task A4: Commit and push the fix
+Commands:
+  - git add src/clang_tool_chain/downloader.py
+  - git commit -m "fix: Copy clang resource headers to MinGW sysroot during installation"
+  - git push origin main
+
+Success Criteria:
+  - Fix committed
+  - CI tests pass
+  - No breaking changes
+```
+
+### Timeline Estimate
+
+- **A1 Investigation:** 15 minutes
+- **A2 Implementation:** 20 minutes
+- **A3 Testing:** 15 minutes
+- **A4 Commit:** 5 minutes
+
+**Total:** ~55 minutes to fix missing headers issue
+
+### Success Metrics
+
+After fix:
+- ✅ All 11 GNU ABI tests pass
+- ✅ Integration tests pass (test_one_shot_c_compilation, test_one_shot_cpp_compilation)
+- ✅ test_concurrent_download_locking passes
+- ✅ Total: 129 passed, 11 skipped, 0 failed
+- ✅ codeup returns exit code 0
