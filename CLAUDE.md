@@ -4,10 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Python package that distributes pre-built Clang 21.1.5 binaries for Windows, macOS, and Linux with Python wrapper executables. The package provides automatic downloading, installation, and execution of LLVM/Clang toolchain binaries with minimal configuration required.
+This is a Python package that distributes pre-built Clang/LLVM binaries for Windows, macOS, and Linux with Python wrapper executables. The package provides automatic downloading, installation, and execution of LLVM/Clang toolchain binaries with minimal configuration required.
+
+## Version Information
+
+| Platform | Architecture | Clang/LLVM Version |
+|----------|-------------|-------------------|
+| macOS    | x86_64      | 19.1.6            |
+| macOS    | arm64       | 19.1.6            |
+| Windows  | x86_64      | 21.1.5            |
+| Linux    | x86_64      | 21.1.5            |
+| Linux    | arm64       | 21.1.5            |
+
+*Version information as of November 9, 2025*
 
 **Key Features:**
-- Pre-built Clang 21.1.5 binaries (~200-400 MB per platform)
+- Pre-built Clang/LLVM binaries (~200-400 MB per platform)
 - Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)
 - Automatic toolchain download and installation on first use
 - Manifest-based distribution system with checksum verification
@@ -381,7 +393,7 @@ clang-tool-chain-fetch-archive --platform win --arch x86_64 --source-dir ./asset
 ```
 
 **What it does:**
-1. Downloads LLVM 21.1.5 from GitHub (or uses `--source-dir`)
+1. Downloads LLVM from GitHub (or uses `--source-dir`)
 2. Extracts archive
 3. Strips unnecessary files (docs, examples, static libs)
 4. Deduplicates identical binaries (~571 MB savings)
