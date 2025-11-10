@@ -1,0 +1,3 @@
+[submodule "downloads-bins"]
+	path = downloads-bins
+	url = https://github.com/zackees/clang-tool-chain-bins.git

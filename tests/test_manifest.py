@@ -19,7 +19,7 @@ class TestManifestFiles(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test class with downloads directory path."""
-        cls.downloads_dir = Path(__file__).parent.parent / "downloads" / "clang"
+        cls.downloads_dir = Path(__file__).parent.parent / "downloads-bins" / "clang"
         cls.required_version_fields = ["href", "sha256"]
         cls.valid_platforms = ["win", "linux", "darwin"]
         cls.valid_architectures = ["x86_64", "arm64"]
@@ -32,7 +32,7 @@ class TestManifestFiles(unittest.TestCase):
     def test_root_manifest_exists(self):
         """Test that root manifest.json exists in downloads directory."""
         root_manifest = self.downloads_dir / "manifest.json"
-        self.assertTrue(root_manifest.exists(), "Root manifest.json not found in downloads/clang/")
+        self.assertTrue(root_manifest.exists(), "Root manifest.json not found in downloads-bins/clang/")
         self.assertTrue(root_manifest.is_file(), "Root manifest.json is not a file")
 
     def test_root_manifest_valid_json(self):
@@ -43,7 +43,7 @@ class TestManifestFiles(unittest.TestCase):
                 with open(root_manifest, encoding="utf-8") as f:
                     json.load(f)
             except json.JSONDecodeError as e:
-                self.fail(f"Invalid JSON in downloads/manifest.json: {e}")
+                self.fail(f"Invalid JSON in downloads-bins/clang/manifest.json: {e}")
 
     def test_root_manifest_structure(self):
         """Test that root manifest has the expected structure."""
@@ -166,7 +166,7 @@ class TestManifestFiles(unittest.TestCase):
         platform_dirs = [d.name for d in subdirs]
 
         for platform in self.valid_platforms:
-            self.assertIn(platform, platform_dirs, f"Platform directory '{platform}' not found in downloads/clang/")
+            self.assertIn(platform, platform_dirs, f"Platform directory '{platform}' not found in downloads-bins/clang/")
 
     def test_architecture_subdirectories_exist(self):
         """Test that each platform has architecture subdirectories."""
@@ -176,7 +176,7 @@ class TestManifestFiles(unittest.TestCase):
                 arch_subdirs = [d for d in platform_dir.iterdir() if d.is_dir()]
                 # At least one architecture should exist for each platform
                 self.assertTrue(
-                    len(arch_subdirs) > 0, f"No architecture subdirectories found in downloads/clang/{platform}/"
+                    len(arch_subdirs) > 0, f"No architecture subdirectories found in downloads-bins/clang/{platform}/"
                 )
 
     def test_all_manifests_exist(self):

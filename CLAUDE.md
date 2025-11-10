@@ -191,10 +191,12 @@ uv run python -m build
 ### Core Components
 
 **Manifest-Based Distribution System:**
-- Root manifest (`downloads/clang/manifest.json`) indexes all platforms/architectures
+- Binary archives stored in separate repository as git submodule (`downloads-bins/`)
+- Root manifest indexes all platforms/architectures
 - Platform-specific manifests specify versions, download URLs, and SHA256 checksums
 - Toolchains are distributed as `.tar.zst` archives (~52 MB for Windows x64)
-- First tool execution triggers automatic download and installation to `~/.clang-tool-chain/`
+- First tool execution triggers automatic download from GitHub and installation to `~/.clang-tool-chain/`
+- Binary repository: https://github.com/zackees/clang-tool-chain-bins
 
 **Three-Layer Architecture:**
 
@@ -212,7 +214,7 @@ uv run python -m build
    - Provides 14 wrapper entry points (clang, clang++, lld, llvm-ar, llvm-nm, etc.)
 
 3. **Downloader Layer** (`downloader.py`): Automatic toolchain installation
-   - Fetches manifests from GitHub raw content
+   - Fetches manifests from clang-tool-chain-bins repository on GitHub
    - Downloads archives with checksum verification (SHA256)
    - Extracts `.tar.zst` archives using pyzstd decompression
    - Uses file locking (`fasteners.InterProcessLock`) to prevent concurrent downloads
@@ -238,7 +240,8 @@ clang-tool-chain/
 │   │   ├── expand_archive.py       # Extract .tar.zst archives
 │   │   └── test_compression.py     # Test compression methods
 │   └── __version__.py       # Version information
-├── downloads/               # Pre-built archives and manifests
+├── downloads-bins/          # Git submodule for binary archives (442 MB)
+│   │                        # Repository: https://github.com/zackees/clang-tool-chain-bins
 │   ├── clang/               # Clang toolchain downloads
 │   │   ├── manifest.json    # Root manifest (all platforms)
 │   │   ├── win/             # Windows archives and manifest
@@ -401,7 +404,7 @@ clang-tool-chain-fetch-archive --platform win --arch x86_64 --source-dir ./asset
 6. Compresses with zstd level 22 (94.3% reduction)
 7. Generates checksums (SHA256, MD5)
 8. Names archive: `llvm-{version}-{platform}-{arch}.tar.zst`
-9. Places in `downloads/clang/{platform}/{arch}/`
+9. Places in `downloads-bins/clang/{platform}/{arch}/` (submodule directory)
 
 **Result:** 51.53 MB archive (from 902 MB original) for Windows x86_64
 
@@ -415,6 +418,56 @@ Available as Python modules in `clang_tool_chain.downloads`:
 - `create_hardlink_archive.py`: Create hard-linked TAR archives
 - `expand_archive.py`: Extract `.tar.zst` archives
 - `test_compression.py`: Compare compression methods
+
+### Updating Binary Payloads
+
+Binary archives are stored in a separate repository as a git submodule to keep the main repository lightweight. This architecture reduces main repo clone size from ~450 MB to ~20 MB.
+
+**First-time setup (for maintainers):**
+```bash
+# Initialize and update the submodule
+git submodule init
+git submodule update
+```
+
+**Adding new binaries:**
+```bash
+# Navigate to the submodule directory
+cd downloads-bins
+
+# Add new archive to appropriate location
+# Example: cp new-binary.tar.zst clang/win/x86_64/
+
+# Update the manifest.json with new version info
+# Edit clang/win/x86_64/manifest.json to add:
+# - version number
+# - href URL (pointing to clang-tool-chain-bins repo)
+# - sha256 checksum
+
+# Commit and push to the bins repository
+git add .
+git commit -m "Add LLVM version X.Y.Z for win/x86_64"
+git push origin main
+
+# Return to main repository
+cd ..
+
+# Update the submodule reference in main repo
+git add downloads-bins
+git commit -m "Update submodule to latest binaries (version X.Y.Z)"
+git push origin main
+```
+
+**Binary URL pattern:**
+```
+https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/clang/{platform}/{arch}/llvm-{version}-{platform}-{arch}.tar.zst
+```
+
+**Important notes:**
+- End users do NOT need the submodule - binaries are downloaded automatically from GitHub
+- The submodule is only needed for maintainers who update binary distributions
+- Manifest URLs in the bins repository must point to `clang-tool-chain-bins`, not `clang-tool-chain`
+- Always update SHA256 checksums when adding new binaries
 
 ## Development Workflow
 
