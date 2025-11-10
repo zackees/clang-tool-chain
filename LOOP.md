@@ -1745,40 +1745,80 @@ Copy correct archive from `downloads/mingw/` to `downloads-bins/assets/mingw/`, 
 
 ---
 
-## Next Iteration Priority: Fix Archive Mismatch
+### ✅ Iteration 4 (Archive Fix + Resource Headers) - COMPLETED
+**Date:** 2025-11-10
+**Task:** Fix archive mismatch in bins repository and implement resource header support
+**Status:** ✅ Complete - Major Progress (11/14 tests passing)
+
+### ✅ Iteration 5 (Fix Test Failures - Encoding Issues) - COMPLETED
+**Date:** 2025-11-10
+**Task:** Fix the 3 remaining test failures from Iteration 4
+**Status:** ✅ Partial Success - 13/14 tests passing (92.9%, up from 78.6%)
+
+**Deliverables:**
+- Fixed encoding issues in test_gnu_abi.py (14+ subprocess.run calls updated)
+- Added explicit UTF-8 encoding and error handling to all test subprocess calls
+- Fixed None-safety in stderr access (`result.stderr.lower()` → `(result.stderr or "").lower()`)
+- Added `-fuse-ld=lld` flag to use LLVM linker instead of system linker
+- Investigated linking failure - identified missing compiler-rt runtime libraries
+- **Test Results:** 13/14 passing (up from 11/14), only linking test remains
+
+**Tests Fixed:**
+- ✅ `test_2_cpp11_with_msvc_headers_should_fail` (encoding issue resolved)
+- ✅ `test_msvc_target_injection` (encoding issue resolved)
+
+**Remaining Issue:**
+- ⚠️ `test_3_complete_compilation_and_linking` - Needs compiler-rt libraries in sysroot
+
+**Next Iteration Priority:**
+Update `extract_mingw_sysroot.py` to include `lib/clang/*/lib/` directory with compiler-rt runtime libraries (~5-10 MB addition)
+
+**Details:** See `.agent_task/ITERATION_5.md`
+
+---
+
+### (Archive for reference - Iteration 4 details below)
+
+**Commits (Iteration 4):**
+- bins repo: 287a01e (archive update), 9d24b0f (manifest URL fix)
+- main repo: df3d698, 290ded4 (submodule updates), bcbbe46 (resource headers)
+
+**Test Results:**
+- ✅ Basic C++11 compilation works
+- ✅ Resource headers (mm_malloc.h, stddef.h) accessible
+- ✅ Default GNU ABI on Windows functional
+- ⚠️ 3 tests failing: linking, MSVC variant, encoding issues
+
+**Details:** See `.agent_task/ITERATION_4.md`
+
+---
+
+## Next Iteration Priority: Fix Remaining Test Failures
 
 **Immediate Action Required:**
 
-```bash
-# 1. Copy correct archive to bins repo
-cp downloads/mingw/win/x86_64/mingw-sysroot-21.1.5-win-x86_64.tar.zst \
-   downloads-bins/assets/mingw/win/x86_64/
+### Priority 1: Fix Linking (Test 3 - Complete Compilation and Linking)
+**Problem:** Compilation succeeds but linking fails
+**Investigation needed:**
+- Check MinGW libraries in sysroot (`x86_64-w64-mingw32/lib/`)
+- Verify linker is finding startup files (crt*.o)
+- May need explicit library search paths
+- Check if `-fuse-ld=lld` or similar is needed
 
-# 2. Copy checksums and manifest
-cp downloads/mingw/win/x86_64/mingw-sysroot-21.1.5-win-x86_64.tar.zst.{sha256,md5} \
-   downloads-bins/assets/mingw/win/x86_64/
-cp downloads/mingw/win/x86_64/manifest.json \
-   downloads-bins/assets/mingw/win/x86_64/
+### Priority 2: Fix Encoding Issues (Test 2 and MSVC test)
+**Problem:** `UnicodeDecodeError` and `AttributeError: 'NoneType' object has no attribute 'lower'`
+**Fix:**
+- Add explicit `encoding='utf-8', errors='replace'` to all subprocess.run calls
+- Update tests to handle None stderr gracefully
 
-# 3. Commit to bins repo
-cd downloads-bins
-git add assets/mingw/win/x86_64/
-git commit -m "fix: Update MinGW sysroot archive with clang resource headers (lib/clang/21/include/)"
-git push origin main
+### Priority 3: Complete MSVC Variant Support
+**Problem:** MSVC variant test fails
+**Investigation needed:**
+- Verify MSVC SDK detection
+- Test MSVC target injection
+- Ensure MSVC entry points work correctly
 
-# 4. Update submodule reference
-cd ..
-git add downloads-bins
-git commit -m "chore: Update submodule to fixed MinGW sysroot archive"
-
-# 5. Test
-rm -rf ~/.clang-tool-chain/mingw/
-uv run pytest tests/test_gnu_abi.py -v
-```
-
-**Expected Result:** All 11 GNU ABI tests pass after archive update.
-
-**Estimated Time:** 30 minutes
+**Estimated Time:** 45 minutes
 
 ---
 

@@ -631,10 +631,14 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
         logger.warning(f"Resource directory not found: {resource_dir}")
 
     # Add -stdlib=libc++ to use the libc++ standard library included in the sysroot
+    # Add -fuse-ld=lld to use LLVM's linker instead of system ld
+    # Add --unwindlib=none to prevent linking with libgcc_s (not needed with LLVM-MinGW)
     return [
         f"--target={target}",
         f"--sysroot={sysroot_path}",
         "-stdlib=libc++",
+        "-fuse-ld=lld",
+        "--unwindlib=none",
     ] + resource_dir_arg
 
 

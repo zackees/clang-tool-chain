@@ -27,6 +27,8 @@ class TestGNUABI(unittest.TestCase):
                 ["clang-tool-chain-cpp", "--version"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=120,  # 2 minute timeout for download
             )
             if result.returncode != 0:
@@ -61,6 +63,8 @@ int main() {
                 ["clang-tool-chain-cpp", "-std=c++11", "-c", str(test_file)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(self.temp_path),
             )
 
@@ -97,6 +101,8 @@ int main() {
                 ["clang-tool-chain-cpp-msvc", "-std=c++11", "-Werror=c++14-extensions", "-c", str(test_file)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(self.temp_path),
             )
 
@@ -110,7 +116,7 @@ int main() {
                 )
 
             # Check that error mentions C++14 extensions
-            error_output = result.stderr.lower()
+            error_output = (result.stderr or "").lower()
             has_cpp14_error = "c++14" in error_output or "auto" in error_output or "extension" in error_output
             self.assertTrue(
                 has_cpp14_error,
@@ -148,6 +154,8 @@ int main() {
                 ["clang-tool-chain-cpp", "-std=c++11", "-o", str(exe_file), str(test_file)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(self.temp_path),
             )
 
@@ -159,7 +167,7 @@ int main() {
             self.assertTrue(exe_file.exists(), "Executable should be created")
 
             # Try to run the program
-            run_result = subprocess.run([str(exe_file)], capture_output=True, text=True, timeout=5)
+            run_result = subprocess.run([str(exe_file)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5)
 
             self.assertEqual(run_result.returncode, 0, f"Program should run successfully.\nstderr: {run_result.stderr}")
             self.assertIn(
@@ -181,6 +189,8 @@ int main() {
                 ["clang-tool-chain-cpp", "-v", "-c", str(test_file)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(self.temp_path),
             )
 
@@ -217,6 +227,8 @@ int main() {
                 ["clang-tool-chain-cpp", "-v", "-std=c++11", "-c", str(test_file)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(self.temp_path),
             )
 
@@ -246,6 +258,8 @@ int main() {
                 ["clang-tool-chain-cpp", "--target=x86_64-pc-windows-msvc", "-v", "-c", str(test_file)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(self.temp_path),
             )
 
@@ -283,6 +297,8 @@ int main() {
                 ["clang-tool-chain-c", "-v", "-c", str(test_file)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(self.temp_path),
             )
 
@@ -303,7 +319,7 @@ int main() {
     def test_msvc_variant_command_exists(self) -> None:
         """Test that MSVC variant commands are available."""
         # Test that clang-tool-chain-c-msvc exists
-        result_c = subprocess.run(["clang-tool-chain-c-msvc", "--version"], capture_output=True, text=True)
+        result_c = subprocess.run(["clang-tool-chain-c-msvc", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
         self.assertEqual(
             result_c.returncode,
@@ -312,7 +328,7 @@ int main() {
         )
 
         # Test that clang-tool-chain-cpp-msvc exists
-        result_cpp = subprocess.run(["clang-tool-chain-cpp-msvc", "--version"], capture_output=True, text=True)
+        result_cpp = subprocess.run(["clang-tool-chain-cpp-msvc", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
         self.assertEqual(
             result_cpp.returncode,
@@ -341,6 +357,8 @@ class TestMSVCABI(unittest.TestCase):
                 ["clang-tool-chain-c-msvc", "-v", "-c", str(test_file), "-o", str(Path(temp_dir) / "test.o")],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             # Check that the target triple appears in verbose output
