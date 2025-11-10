@@ -282,6 +282,105 @@ def find_sccache_binary() -> str:
     return sccache_path
 
 
+def _detect_windows_sdk() -> dict[str, str] | None:
+    """
+    Detect Windows SDK installation via environment variables.
+
+    This function checks for Visual Studio and Windows SDK environment variables
+    that are typically set by vcvars*.bat or Visual Studio Developer Command Prompt.
+
+    Returns:
+        Dictionary with SDK information if found, None otherwise.
+        Dictionary keys: 'sdk_dir', 'vc_tools_dir', 'sdk_version' (if available)
+
+    Note:
+        This function only checks environment variables. It does not search the
+        registry or filesystem for SDK installations. The goal is to detect if
+        the user has already set up their Visual Studio environment.
+    """
+    sdk_info = {}
+
+    # Check for Windows SDK environment variables
+    # These are set by vcvarsall.bat and similar VS setup scripts
+    sdk_dir = os.environ.get("WindowsSdkDir") or os.environ.get("WindowsSDKDir")
+    if sdk_dir:
+        sdk_info["sdk_dir"] = sdk_dir
+        logger.debug(f"Windows SDK found via environment: {sdk_dir}")
+
+    # Check for Universal CRT SDK (required for C runtime)
+    ucrt_sdk_dir = os.environ.get("UniversalCRTSdkDir")
+    if ucrt_sdk_dir:
+        sdk_info["ucrt_dir"] = ucrt_sdk_dir
+        logger.debug(f"Universal CRT SDK found: {ucrt_sdk_dir}")
+
+    # Check for VC Tools (MSVC compiler toolchain)
+    vc_tools_dir = os.environ.get("VCToolsInstallDir")
+    if vc_tools_dir:
+        sdk_info["vc_tools_dir"] = vc_tools_dir
+        logger.debug(f"VC Tools found: {vc_tools_dir}")
+
+    # Check for VS installation directory
+    vs_install_dir = os.environ.get("VSINSTALLDIR")
+    if vs_install_dir:
+        sdk_info["vs_install_dir"] = vs_install_dir
+        logger.debug(f"Visual Studio installation found: {vs_install_dir}")
+
+    # Check for Windows SDK version
+    sdk_version = os.environ.get("WindowsSDKVersion")
+    if sdk_version:
+        sdk_info["sdk_version"] = sdk_version.rstrip("\\")  # Remove trailing backslash if present
+        logger.debug(f"Windows SDK version: {sdk_version}")
+
+    # Return SDK info if we found at least the SDK directory or VC tools
+    if sdk_info:
+        logger.info(f"Windows SDK detected: {', '.join(sdk_info.keys())}")
+        return sdk_info
+
+    logger.debug("Windows SDK not detected in environment variables")
+    return None
+
+
+def _print_msvc_sdk_warning() -> None:
+    """
+    Print a helpful warning message to stderr when Windows SDK is not detected.
+
+    This is called when MSVC target is being used but we cannot detect the
+    Windows SDK via environment variables. The compilation may still succeed
+    if clang can find the SDK automatically, or it may fail with missing
+    headers/libraries errors.
+    """
+    print("\n" + "=" * 70, file=sys.stderr)
+    print("⚠️  Windows SDK Not Detected in Environment", file=sys.stderr)
+    print("=" * 70, file=sys.stderr)
+    print("\nThe MSVC target requires Windows SDK for system headers and libraries.", file=sys.stderr)
+    print("\nNo SDK environment variables found. This may mean:", file=sys.stderr)
+    print("  • Visual Studio or Windows SDK is not installed", file=sys.stderr)
+    print("  • VS Developer Command Prompt is not being used", file=sys.stderr)
+    print("  • Environment variables are not set (vcvarsall.bat not run)", file=sys.stderr)
+    print("\n" + "-" * 70, file=sys.stderr)
+    print("Recommendation: Set up Visual Studio environment", file=sys.stderr)
+    print("-" * 70, file=sys.stderr)
+    print("\nOption 1: Use Visual Studio Developer Command Prompt", file=sys.stderr)
+    print("  • Search for 'Developer Command Prompt' in Start Menu", file=sys.stderr)
+    print("  • Run your build commands from that prompt", file=sys.stderr)
+    print("\nOption 2: Run vcvarsall.bat in your current shell", file=sys.stderr)
+    print("  • Typical location:", file=sys.stderr)
+    print("    C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat", file=sys.stderr)
+    print("  • Run: vcvarsall.bat x64", file=sys.stderr)
+    print("\nOption 3: Install Visual Studio or Windows SDK", file=sys.stderr)
+    print("  • Visual Studio: https://visualstudio.microsoft.com/downloads/", file=sys.stderr)
+    print("  • Windows SDK only: https://developer.microsoft.com/windows/downloads/windows-sdk/", file=sys.stderr)
+    print("\n" + "-" * 70, file=sys.stderr)
+    print("Alternative: Use GNU ABI (MinGW) instead of MSVC", file=sys.stderr)
+    print("-" * 70, file=sys.stderr)
+    print("\nIf you don't need MSVC compatibility, use the default commands:", file=sys.stderr)
+    print("  • clang-tool-chain-c (uses GNU ABI, no SDK required)", file=sys.stderr)
+    print("  • clang-tool-chain-cpp (uses GNU ABI, no SDK required)", file=sys.stderr)
+    print("\n" + "=" * 70, file=sys.stderr)
+    print("Clang will attempt to find Windows SDK automatically...", file=sys.stderr)
+    print("=" * 70 + "\n", file=sys.stderr)
+
+
 def _print_macos_sdk_error(reason: str) -> None:
     """
     Print a helpful error message to stderr when macOS SDK detection fails.
@@ -417,7 +516,189 @@ def _add_macos_sysroot_if_needed(args: list[str]) -> list[str]:
         return args
 
 
-def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
+def _should_use_gnu_abi(platform_name: str, args: list[str]) -> bool:
+    """
+    Determine if GNU ABI should be used based on platform and arguments.
+
+    Windows defaults to GNU ABI (MinGW) in v2.0+ for cross-platform consistency.
+    This matches the approach of zig cc and ensures consistent C++ ABI across platforms.
+
+    Args:
+        platform_name: Platform name ("win", "linux", "darwin")
+        args: Command-line arguments
+
+    Returns:
+        True if GNU ABI should be used (Windows + no explicit target), False otherwise
+    """
+    # Non-Windows always uses default (which is GNU-like anyway)
+    if platform_name != "win":
+        return False
+
+    # Check if user explicitly specified target
+    args_str = " ".join(args)
+    if "--target=" in args_str or "--target " in args_str:
+        # User specified target explicitly, don't override
+        logger.debug("User specified explicit target, skipping GNU ABI injection")
+        return False
+
+    # Windows defaults to GNU ABI in v2.0+
+    logger.debug("Windows detected without explicit target, will use GNU ABI")
+    return True
+
+
+def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
+    """
+    Get GNU ABI target arguments for Windows.
+
+    This function ensures the MinGW sysroot is installed and returns
+    the necessary compiler arguments to use GNU ABI instead of MSVC ABI.
+
+    Args:
+        platform_name: Platform name
+        arch: Architecture
+
+    Returns:
+        List of additional compiler arguments for GNU ABI
+
+    Raises:
+        RuntimeError: If MinGW sysroot installation fails or is not found
+    """
+    if platform_name != "win":
+        return []
+
+    logger.info(f"Setting up GNU ABI for Windows {arch}")
+
+    # Ensure MinGW sysroot is installed
+    try:
+        sysroot_dir = downloader.ensure_mingw_sysroot_installed(platform_name, arch)
+        logger.debug(f"MinGW sysroot installed at: {sysroot_dir}")
+    except Exception as e:
+        logger.error(f"Failed to install MinGW sysroot: {e}")
+        raise RuntimeError(
+            f"Failed to install MinGW sysroot for Windows GNU ABI support\n"
+            f"Error: {e}\n"
+            f"\n"
+            f"This is required for GNU ABI support on Windows.\n"
+            f"If this persists, please report at:\n"
+            f"https://github.com/zackees/clang-tool-chain/issues"
+        ) from e
+
+    # Determine target triple and sysroot path
+    if arch == "x86_64":
+        target = "x86_64-w64-mingw32"
+        sysroot_name = "x86_64-w64-mingw32"
+    elif arch == "arm64":
+        target = "aarch64-w64-mingw32"
+        sysroot_name = "aarch64-w64-mingw32"
+    else:
+        raise ValueError(f"Unsupported architecture for MinGW: {arch}")
+
+    sysroot_path = sysroot_dir / sysroot_name
+    if not sysroot_path.exists():
+        logger.error(f"MinGW sysroot not found at expected location: {sysroot_path}")
+        raise RuntimeError(
+            f"MinGW sysroot not found: {sysroot_path}\n"
+            f"The sysroot was downloaded but the expected directory is missing.\n"
+            f"Please report this issue at:\n"
+            f"https://github.com/zackees/clang-tool-chain/issues"
+        )
+
+    logger.info(f"Using GNU target: {target} with sysroot: {sysroot_path}")
+
+    return [
+        f"--target={target}",
+        f"--sysroot={sysroot_path}",
+    ]
+
+
+def _should_use_msvc_abi(platform_name: str, args: list[str]) -> bool:
+    """
+    Determine if MSVC ABI should be used based on platform and arguments.
+
+    MSVC ABI is explicitly requested via the *-msvc variant commands.
+    Unlike GNU ABI (which is the Windows default), MSVC ABI is opt-in.
+
+    This function checks if the user has explicitly provided a --target flag.
+    If so, we respect the user's choice and don't inject MSVC target.
+
+    Args:
+        platform_name: Platform name ("win", "linux", "darwin")
+        args: Command-line arguments
+
+    Returns:
+        True if MSVC ABI should be used (Windows + no explicit target), False otherwise
+    """
+    # MSVC ABI only applies to Windows
+    if platform_name != "win":
+        logger.debug("Not Windows platform, MSVC ABI not applicable")
+        return False
+
+    # Check if user explicitly specified target
+    args_str = " ".join(args)
+    if "--target=" in args_str or "--target " in args_str:
+        # User specified target explicitly, don't override
+        logger.debug("User specified explicit target, skipping MSVC ABI injection")
+        return False
+
+    # MSVC variant was requested and no user override
+    logger.debug("MSVC ABI will be used (no user target override)")
+    return True
+
+
+def _get_msvc_target_args(platform_name: str, arch: str) -> list[str]:
+    """
+    Get MSVC ABI target arguments for Windows.
+
+    This function returns the necessary compiler arguments to use MSVC ABI
+    instead of GNU ABI. It also detects Windows SDK availability and shows
+    helpful warnings if the SDK is not found in environment variables.
+
+    Args:
+        platform_name: Platform name
+        arch: Architecture
+
+    Returns:
+        List of additional compiler arguments for MSVC ABI (just --target)
+
+    Note:
+        Unlike GNU ABI which requires downloading a MinGW sysroot, MSVC ABI
+        relies on the system's Visual Studio or Windows SDK installation.
+        We detect SDK presence via environment variables and warn if not found,
+        but still return the target triple and let clang attempt its own SDK detection.
+    """
+    if platform_name != "win":
+        return []
+
+    logger.info(f"Setting up MSVC ABI for Windows {arch}")
+
+    # Detect Windows SDK and warn if not found
+    sdk_info = _detect_windows_sdk()
+    if sdk_info:
+        logger.info(f"Windows SDK detected with keys: {', '.join(sdk_info.keys())}")
+    else:
+        logger.warning("Windows SDK not detected in environment variables")
+        # Show helpful warning about SDK requirements
+        _print_msvc_sdk_warning()
+
+    # Determine target triple for MSVC ABI
+    if arch == "x86_64":
+        target = "x86_64-pc-windows-msvc"
+    elif arch == "arm64":
+        target = "aarch64-pc-windows-msvc"
+    else:
+        raise ValueError(f"Unsupported architecture for MSVC: {arch}")
+
+    logger.info(f"Using MSVC target: {target}")
+
+    # Return just the target triple
+    # Clang will automatically:
+    # - Select lld-link as the linker (MSVC-compatible)
+    # - Use MSVC name mangling for C++
+    # - Attempt to find Windows SDK via its own detection logic
+    return [f"--target={target}"]
+
+
+def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = False) -> NoReturn:
     """
     Execute a tool with the given arguments and exit with its return code.
 
@@ -427,13 +708,14 @@ def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
     Args:
         tool_name: Name of the tool to execute
         args: Arguments to pass to the tool (defaults to sys.argv[1:])
+        use_msvc: If True on Windows, skip GNU ABI injection (use MSVC target)
 
     Raises:
         RuntimeError: If the tool cannot be found or executed
 
-    Environment Variables (macOS only):
-        SDKROOT: Custom SDK path to use (standard macOS variable)
-        CLANG_TOOL_CHAIN_NO_SYSROOT: Set to '1' to disable automatic -isysroot injection
+    Environment Variables:
+        SDKROOT: Custom SDK path to use (macOS, standard macOS variable)
+        CLANG_TOOL_CHAIN_NO_SYSROOT: Set to '1' to disable automatic -isysroot injection (macOS)
     """
     if args is None:
         args = sys.argv[1:]
@@ -453,10 +735,34 @@ def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
         sys.exit(1)
 
     # Add macOS SDK path automatically for clang/clang++ if not already specified
-    platform_name, _ = get_platform_info()
+    platform_name, arch = get_platform_info()
     if platform_name == "darwin" and tool_name in ("clang", "clang++"):
         logger.debug("Checking if macOS sysroot needs to be added")
         args = _add_macos_sysroot_if_needed(args)
+
+    # Add Windows GNU ABI target automatically for clang/clang++ if not MSVC variant
+    if not use_msvc and tool_name in ("clang", "clang++") and _should_use_gnu_abi(platform_name, args):
+        try:
+            gnu_args = _get_gnu_target_args(platform_name, arch)
+            args = gnu_args + args
+            logger.info(f"Using GNU ABI with args: {gnu_args}")
+        except Exception as e:
+            # If GNU setup fails, let the tool try anyway (may fail at compile time)
+            logger.error(f"Failed to set up GNU ABI: {e}")
+            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+
+    # Add Windows MSVC ABI target for clang/clang++ when using MSVC variant
+    if use_msvc and tool_name in ("clang", "clang++") and _should_use_msvc_abi(platform_name, args):
+        try:
+            msvc_args = _get_msvc_target_args(platform_name, arch)
+            args = msvc_args + args
+            logger.info(f"Using MSVC ABI with args: {msvc_args}")
+        except Exception as e:
+            # If MSVC setup fails, let the tool try anyway (may fail at compile time)
+            logger.error(f"Failed to set up MSVC ABI: {e}")
+            print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may fail)...\n", file=sys.stderr)
 
     # Build command
     cmd = [str(tool_path)] + args
@@ -529,7 +835,7 @@ def execute_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
             sys.exit(1)
 
 
-def run_tool(tool_name: str, args: list[str] | None = None) -> int:
+def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = False) -> int:
     """
     Run a tool with the given arguments and return its exit code.
 
@@ -539,6 +845,7 @@ def run_tool(tool_name: str, args: list[str] | None = None) -> int:
     Args:
         tool_name: Name of the tool to execute
         args: Arguments to pass to the tool (defaults to sys.argv[1:])
+        use_msvc: If True on Windows, skip GNU ABI injection (use MSVC target)
 
     Returns:
         Exit code from the tool
@@ -546,9 +853,9 @@ def run_tool(tool_name: str, args: list[str] | None = None) -> int:
     Raises:
         RuntimeError: If the tool cannot be found
 
-    Environment Variables (macOS only):
-        SDKROOT: Custom SDK path to use (standard macOS variable)
-        CLANG_TOOL_CHAIN_NO_SYSROOT: Set to '1' to disable automatic -isysroot injection
+    Environment Variables:
+        SDKROOT: Custom SDK path to use (macOS, standard macOS variable)
+        CLANG_TOOL_CHAIN_NO_SYSROOT: Set to '1' to disable automatic -isysroot injection (macOS)
     """
     if args is None:
         args = sys.argv[1:]
@@ -556,10 +863,35 @@ def run_tool(tool_name: str, args: list[str] | None = None) -> int:
     tool_path = find_tool_binary(tool_name)
 
     # Add macOS SDK path automatically for clang/clang++ if not already specified
-    platform_name, _ = get_platform_info()
+    platform_name, arch = get_platform_info()
     if platform_name == "darwin" and tool_name in ("clang", "clang++"):
         logger.debug("Checking if macOS sysroot needs to be added")
         args = _add_macos_sysroot_if_needed(args)
+
+    # Add Windows GNU ABI target automatically for clang/clang++ if not MSVC variant
+    if not use_msvc and tool_name in ("clang", "clang++") and _should_use_gnu_abi(platform_name, args):
+        try:
+            gnu_args = _get_gnu_target_args(platform_name, arch)
+            args = gnu_args + args
+            logger.info(f"Using GNU ABI with args: {gnu_args}")
+        except Exception as e:
+            # If GNU setup fails, let the tool try anyway (may fail at compile time)
+            logger.error(f"Failed to set up GNU ABI: {e}")
+            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+
+    # Add Windows MSVC ABI target for clang/clang++ when using MSVC variant
+    if use_msvc and tool_name in ("clang", "clang++") and _should_use_msvc_abi(platform_name, args):
+        try:
+            msvc_args = _get_msvc_target_args(platform_name, arch)
+            args = msvc_args + args
+            logger.info(f"Using MSVC ABI with args: {msvc_args}")
+        except Exception as e:
+            # If MSVC setup fails, let the tool try anyway (may fail at compile time)
+            logger.error(f"Failed to set up MSVC ABI: {e}")
+            print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+
     # Build command
     cmd = [str(tool_path)] + args
 
@@ -575,13 +907,23 @@ def run_tool(tool_name: str, args: list[str] | None = None) -> int:
 
 # Wrapper functions for specific tools
 def clang_main() -> NoReturn:
-    """Entry point for clang wrapper."""
+    """Entry point for clang wrapper (GNU ABI on Windows by default)."""
     execute_tool("clang")
 
 
 def clang_cpp_main() -> NoReturn:
-    """Entry point for clang++ wrapper."""
+    """Entry point for clang++ wrapper (GNU ABI on Windows by default)."""
     execute_tool("clang++")
+
+
+def clang_msvc_main() -> NoReturn:
+    """Entry point for clang-tool-chain-c-msvc (MSVC ABI on Windows)."""
+    execute_tool("clang", use_msvc=True)
+
+
+def clang_cpp_msvc_main() -> NoReturn:
+    """Entry point for clang-tool-chain-cpp-msvc (MSVC ABI on Windows)."""
+    execute_tool("clang++", use_msvc=True)
 
 
 def lld_main() -> NoReturn:
@@ -700,8 +1042,13 @@ def build_main() -> NoReturn:
 
 
 # sccache wrapper functions
-def sccache_clang_main() -> NoReturn:
-    """Entry point for sccache + clang wrapper."""
+def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
+    """
+    Entry point for sccache + clang wrapper.
+
+    Args:
+        use_msvc: If True on Windows, use MSVC ABI instead of GNU ABI
+    """
     args = sys.argv[1:]
 
     try:
@@ -716,9 +1063,31 @@ def sccache_clang_main() -> NoReturn:
         sys.exit(1)
 
     # Add macOS SDK path automatically if needed
-    platform_name, _ = get_platform_info()
+    platform_name, arch = get_platform_info()
     if platform_name == "darwin":
         args = _add_macos_sysroot_if_needed(args)
+
+    # Add Windows GNU ABI target automatically (if not using MSVC variant)
+    if not use_msvc and _should_use_gnu_abi(platform_name, args):
+        try:
+            gnu_args = _get_gnu_target_args(platform_name, arch)
+            args = gnu_args + args
+            logger.info(f"Using GNU ABI with sccache: {gnu_args}")
+        except Exception as e:
+            logger.error(f"Failed to set up GNU ABI: {e}")
+            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+
+    # Add Windows MSVC ABI target when using MSVC variant
+    if use_msvc and _should_use_msvc_abi(platform_name, args):
+        try:
+            msvc_args = _get_msvc_target_args(platform_name, arch)
+            args = msvc_args + args
+            logger.info(f"Using MSVC ABI with sccache: {msvc_args}")
+        except Exception as e:
+            logger.error(f"Failed to set up MSVC ABI: {e}")
+            print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may fail)...\n", file=sys.stderr)
 
     # Build command: sccache <clang_path> <args>
     cmd = [sccache_path, str(clang_path)] + args
@@ -751,8 +1120,13 @@ def sccache_clang_main() -> NoReturn:
             sys.exit(1)
 
 
-def sccache_clang_cpp_main() -> NoReturn:
-    """Entry point for sccache + clang++ wrapper."""
+def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
+    """
+    Entry point for sccache + clang++ wrapper.
+
+    Args:
+        use_msvc: If True on Windows, use MSVC ABI instead of GNU ABI
+    """
     args = sys.argv[1:]
 
     try:
@@ -767,9 +1141,31 @@ def sccache_clang_cpp_main() -> NoReturn:
         sys.exit(1)
 
     # Add macOS SDK path automatically if needed
-    platform_name, _ = get_platform_info()
+    platform_name, arch = get_platform_info()
     if platform_name == "darwin":
         args = _add_macos_sysroot_if_needed(args)
+
+    # Add Windows GNU ABI target automatically (if not using MSVC variant)
+    if not use_msvc and _should_use_gnu_abi(platform_name, args):
+        try:
+            gnu_args = _get_gnu_target_args(platform_name, arch)
+            args = gnu_args + args
+            logger.info(f"Using GNU ABI with sccache: {gnu_args}")
+        except Exception as e:
+            logger.error(f"Failed to set up GNU ABI: {e}")
+            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+
+    # Add Windows MSVC ABI target when using MSVC variant
+    if use_msvc and _should_use_msvc_abi(platform_name, args):
+        try:
+            msvc_args = _get_msvc_target_args(platform_name, arch)
+            args = msvc_args + args
+            logger.info(f"Using MSVC ABI with sccache: {msvc_args}")
+        except Exception as e:
+            logger.error(f"Failed to set up MSVC ABI: {e}")
+            print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may fail)...\n", file=sys.stderr)
 
     # Build command: sccache <clang++_path> <args>
     cmd = [sccache_path, str(clang_cpp_path)] + args

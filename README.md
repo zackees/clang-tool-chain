@@ -40,17 +40,72 @@ clang-tool-chain-test  # Runs 7 diagnostic tests
 >
 > See [Platform Support Matrix](#-platform-support-matrix) for details.
 
+### ⚠️ Windows Users: GNU ABI by Default (v2.0+)
+
+**IMPORTANT:** Starting with v2.0.0, Windows defaults to GNU ABI (MinGW-w64) for cross-platform consistency.
+
+This matches the behavior of [zig cc](https://ziglang.org/learn/overview/#cross-compiling-is-a-first-class-use-case) and ensures consistent C++ ABI across all platforms.
+
+**What this means:**
+- ✅ **C++11 strict mode works** - No C++14 extensions in standard library headers
+- ✅ **Cross-platform consistency** - Same ABI on Windows/Linux/macOS
+- ✅ **Arduino/embedded compatibility** - Matches GCC/GNU toolchain behavior
+- ⚠️ **Cannot link with MSVC libraries** - Different C++ ABI (use MSVC variant if needed)
+
+**Default behavior (GNU ABI):**
+```bash
+clang-tool-chain-c main.c -o program       # Uses x86_64-w64-mingw32 target
+clang-tool-chain-cpp main.cpp -o program   # Uses GNU ABI, libc++ stdlib
+```
+
+**For MSVC ABI (Windows-specific projects):**
+```bash
+clang-tool-chain-c-msvc main.c -o program.exe     # Uses x86_64-pc-windows-msvc
+clang-tool-chain-cpp-msvc main.cpp -o program.exe # Uses MSVC ABI, MSVC stdlib
+
+# With sccache for compilation caching
+clang-tool-chain-sccache-c-msvc main.c -o program.exe
+clang-tool-chain-sccache-cpp-msvc main.cpp -o program.exe
+```
+
+**Download sizes:**
+- **First run (GNU target):** ~100-120 MB (includes MinGW-w64 sysroot)
+- **MSVC variant:** ~50 MB (uses Visual Studio SDK if available)
+
+**Windows SDK Requirements:**
+
+MSVC variants require Visual Studio or Windows SDK for system headers/libraries. The package automatically:
+- ✅ Detects SDK via environment variables (WindowsSdkDir, VCToolsInstallDir, etc.)
+- ⚠️ Shows helpful setup instructions if SDK not found
+- 🔧 Suggests alternatives (Visual Studio Dev Prompt, vcvarsall.bat, or GNU ABI)
+
+**When to use MSVC variant:**
+- Linking with MSVC-compiled libraries (DLLs with C++ APIs)
+- Windows-specific projects requiring Visual Studio integration
+- COM/WinRT/Windows Runtime components
+- Using Windows SDK features not available in MinGW
+
+**When to use GNU ABI (default):**
+- Cross-platform projects (same ABI on all platforms)
+- Strict C++11 mode (MSVC requires C++14 extensions)
+- No Windows SDK installation required
+- Arduino/embedded projects (matches GCC)
+
 ### 📋 Command Quick Reference
 
-| Task | Command |
-|------|---------|
-| **Compile C** | `clang-tool-chain-c main.c -o program` |
-| **Compile C++** | `clang-tool-chain-cpp main.cpp -o program` |
-| **Link Objects** | `clang-tool-chain-ld obj1.o obj2.o -o program` |
-| **Create Library** | `clang-tool-chain-ar rcs libname.a obj1.o obj2.o` |
-| **Format Code** | `clang-tool-chain-format -i file.cpp` |
-| **Check Installation** | `clang-tool-chain info` |
-| **Verify Setup** | `clang-tool-chain-test` |
+| Task | Command (Default) | Windows MSVC Variant |
+|------|-------------------|---------------------|
+| **Compile C** | `clang-tool-chain-c main.c -o program` | `clang-tool-chain-c-msvc main.c -o program.exe` |
+| **Compile C++** | `clang-tool-chain-cpp main.cpp -o program` | `clang-tool-chain-cpp-msvc main.cpp -o program.exe` |
+| **Cached C** | `clang-tool-chain-sccache-c main.c -o program` | `clang-tool-chain-sccache-c-msvc main.c -o program.exe` |
+| **Cached C++** | `clang-tool-chain-sccache-cpp main.cpp -o program` | `clang-tool-chain-sccache-cpp-msvc main.cpp -o program.exe` |
+| **Link Objects** | `clang-tool-chain-ld obj1.o obj2.o -o program` | N/A (use compiler) |
+| **Create Library** | `clang-tool-chain-ar rcs libname.a obj1.o obj2.o` | Same |
+| **Format Code** | `clang-tool-chain-format -i file.cpp` | Same |
+| **Check Installation** | `clang-tool-chain info` | Same |
+| **Verify Setup** | `clang-tool-chain-test` | Same |
+
+**Note:** MSVC variants (`*-msvc`) are Windows-only and require Visual Studio or Windows SDK. Automatic SDK detection with helpful error messages included.
 
 ---
 
@@ -358,8 +413,10 @@ clang-tool-chain-sccache --version
 | `clang-tool-chain-fetch` | Fetch utility | Manual download utility for pre-fetching binaries |
 | `clang-tool-chain-paths` | Path utility | Get installation paths in JSON format |
 | `clang-tool-chain-fetch-archive` | Archive utility | Maintainer tool for creating optimized archives |
-| `clang-tool-chain-c` | `clang` | C compiler |
-| `clang-tool-chain-cpp` | `clang++` | C++ compiler |
+| `clang-tool-chain-c` | `clang` | C compiler (GNU ABI on Windows) |
+| `clang-tool-chain-cpp` | `clang++` | C++ compiler (GNU ABI on Windows) |
+| `clang-tool-chain-c-msvc` | `clang` | C compiler (MSVC ABI, Windows only) |
+| `clang-tool-chain-cpp-msvc` | `clang++` | C++ compiler (MSVC ABI, Windows only) |
 | `clang-tool-chain-build` | Build utility | Simple build tool for C/C++ |
 | `clang-tool-chain-sccache` | `sccache` | Direct sccache access (stats, management) |
 | `clang-tool-chain-sccache-c` | `sccache` + `clang` | C compiler with sccache caching |
@@ -618,11 +675,15 @@ steps:
 
 | Platform | Architecture | LLVM Version | Archive Size | Installed Size | Status |
 |----------|--------------|--------------|--------------|----------------|--------|
-| Windows  | x86_64       | 21.1.5       | ~52 MB       | ~200 MB        | ✅ Stable |
+| Windows  | x86_64       | 21.1.5       | ~100 MB*     | ~350 MB        | ✅ Stable |
 | Linux    | x86_64       | 21.1.5       | ~88 MB       | ~350 MB        | ✅ Stable |
 | Linux    | ARM64        | 21.1.5       | ~91 MB       | ~340 MB        | ✅ Stable |
 | macOS    | x86_64       | 19.1.6       | ~75 MB       | ~300 MB        | ✅ Stable |
 | macOS    | ARM64        | 19.1.6       | ~71 MB       | ~285 MB        | ✅ Stable |
+
+\* **Windows Downloads:**
+  - **GNU target (default):** ~100 MB (LLVM + MinGW-w64 sysroot)
+  - **MSVC target (opt-in):** ~50 MB (LLVM only, requires Visual Studio SDK)
 
 **Note:** macOS uses LLVM 19.1.6 due to availability of pre-built binaries. LLVM 21.1.5 support coming soon.
 
@@ -713,6 +774,83 @@ clang-tool-chain uses unmodified LLVM binaries - expect **identical performance*
 | DSL (5 Mbps) | 52 MB | ~90 seconds |
 
 Subsequent compilations are **instant** (no download).
+
+---
+
+## 🎯 Windows Target Selection
+
+### Default Behavior (GNU ABI - Recommended)
+
+The default Windows target is `x86_64-w64-mingw32` (GNU ABI) for cross-platform consistency:
+
+```bash
+# These commands use GNU ABI by default on Windows:
+clang-tool-chain-c hello.c -o hello
+clang-tool-chain-cpp hello.cpp -o hello
+
+# Equivalent to explicitly specifying:
+clang-tool-chain-c --target=x86_64-w64-mingw32 hello.c -o hello
+```
+
+**Why GNU ABI is default:**
+1. **Cross-platform consistency** - Same ABI on Linux/macOS/Windows
+2. **C++11 strict mode support** - MSVC headers require C++14 features even in C++11 mode
+3. **Embedded/Arduino compatibility** - Matches GCC toolchain behavior
+4. **Modern C++ standard library** - Uses LLVM's libc++ (same as macOS/Linux)
+
+This matches the approach of [zig cc](https://ziglang.org/learn/overview/#cross-compiling-is-a-first-class-use-case) and other modern cross-platform toolchains.
+
+### MSVC ABI (Windows-Specific Projects)
+
+For Windows-native projects that need MSVC compatibility:
+
+```bash
+# Use MSVC variants for Windows-specific development:
+clang-tool-chain-c-msvc main.c -o program.exe
+clang-tool-chain-cpp-msvc main.cpp -o program.exe
+
+# Or explicitly specify MSVC target with default commands:
+clang-tool-chain-c --target=x86_64-pc-windows-msvc main.c -o program.exe
+```
+
+**Use MSVC ABI when:**
+- Linking with MSVC-compiled DLLs (with C++ APIs)
+- Using Windows SDK features not in MinGW
+- Requiring Visual Studio debugger integration
+- Building COM/WinRT/Windows Runtime components
+
+### Comparison Table
+
+| Feature | GNU ABI (Default) | MSVC ABI (Opt-in) |
+|---------|------------------|------------------|
+| **C++ Standard Library** | libc++ (LLVM) | MSVC STL |
+| **C++ ABI** | Itanium (like GCC) | Microsoft |
+| **Cross-platform consistency** | ✅ Yes | ❌ Windows-only |
+| **C++11 strict mode** | ✅ Works | ❌ Requires C++14+ |
+| **Link with MSVC libs** | ❌ C++ ABI mismatch | ✅ Compatible |
+| **Arduino/embedded** | ✅ Compatible | ❌ Different ABI |
+| **Download size** | ~100 MB | ~50 MB |
+| **Requires Visual Studio** | ❌ No | ⚠️ Recommended |
+
+### Advanced: Manual Target Selection
+
+You can override the target for any compilation:
+
+```bash
+# Force GNU target (default on Windows anyway):
+clang-tool-chain-c --target=x86_64-w64-mingw32 main.c
+
+# Force MSVC target:
+clang-tool-chain-c --target=x86_64-pc-windows-msvc main.c
+
+# Cross-compile for Linux from Windows:
+clang-tool-chain-c --target=x86_64-unknown-linux-gnu main.c
+
+# Cross-compile for macOS from Windows:
+clang-tool-chain-c --target=arm64-apple-darwin main.c
+```
+
+**Note:** Cross-compilation requires appropriate sysroots (not included by default).
 
 ---
 

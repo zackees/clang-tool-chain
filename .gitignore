@@ -163,3 +163,21 @@ data/
 # Only downloads/ and extracted archives are excluded
 LLVM-*/
 clang+llvm-*/
+
+# MinGW sysroot extraction work directories and artifacts
+# Note: downloads/mingw/ archives ARE committed (published binaries)
+# Only work/ directories and temporary extraction files are excluded
+work/
+downloads/mingw/work/
+*.tar.xz
+*.zip
+llvm-mingw-*/
+
+# Test artifacts
+test.cpp
+test.c
+test*.o
+test*.obj
+test*.exe
+a.out
+a.exe

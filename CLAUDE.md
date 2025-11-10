@@ -8,15 +8,21 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 ## Version Information
 
-| Platform | Architecture | Clang/LLVM Version |
-|----------|-------------|-------------------|
-| macOS    | x86_64      | 19.1.6            |
-| macOS    | arm64       | 19.1.6            |
-| Windows  | x86_64      | 21.1.5            |
-| Linux    | x86_64      | 21.1.5            |
-| Linux    | arm64       | 21.1.5            |
+| Platform | Architecture | Clang/LLVM Version | Additional Components |
+|----------|-------------|-------------------|----------------------|
+| macOS    | x86_64      | 19.1.6            | -                    |
+| macOS    | arm64       | 19.1.6            | -                    |
+| Windows  | x86_64      | 21.1.5            | MinGW-w64 21.1.5 (GNU ABI) |
+| Linux    | x86_64      | 21.1.5            | -                    |
+| Linux    | arm64       | 21.1.5            | -                    |
 
 *Version information as of November 9, 2025*
+
+**Windows GNU ABI Support (v2.0.0+):**
+- Windows defaults to GNU ABI (`x86_64-w64-mingw32`) for cross-platform consistency
+- Includes MinGW-w64 sysroot (~12 MB compressed, 176 MB installed)
+- Compatible with strict C++11 mode (no C++14 extensions in standard library headers)
+- MSVC ABI available via `-msvc` command variants for Windows-specific projects
 
 **Key Features:**
 - Pre-built Clang/LLVM binaries (~200-400 MB per platform)
@@ -122,6 +128,146 @@ export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
   - Freestanding compilation flags are used (`-nostdinc`, `-nostdinc++`, `-nostdlib`, `-ffreestanding`)
   - `CLANG_TOOL_CHAIN_NO_SYSROOT=1` is set
 
+### Windows GNU ABI (Automatic, v2.0.0+)
+
+On Windows, starting with v2.0.0, the default target is **GNU ABI** (`x86_64-w64-mingw32`) for cross-platform consistency.
+
+**Automatic GNU ABI Injection:**
+
+This package implements automatic GNU target selection for Windows (similar to [zig cc](https://ziglang.org/learn/overview/#cross-compiling-is-a-first-class-use-case)):
+
+1. **Explicit `--target` flag**: User-provided target takes priority (no injection)
+2. **Windows platform detection**: Automatically uses `x86_64-w64-mingw32` target
+3. **MinGW sysroot download**: Downloads MinGW-w64 headers/libraries on first use
+4. **Automatic `--sysroot` injection**: Points to `~/.clang-tool-chain/mingw/win/x86_64/`
+
+The wrapper automatically injects `--target=x86_64-w64-mingw32` and `--sysroot` when compiling on Windows, ensuring GNU-compatible standard library headers are found.
+
+**Environment Variables:**
+```bash
+# Override to use MSVC ABI for specific compilations
+clang-tool-chain-c --target=x86_64-pc-windows-msvc main.c
+
+# Use MSVC variant commands (skip GNU injection entirely)
+clang-tool-chain-c-msvc main.c
+clang-tool-chain-cpp-msvc main.cpp
+```
+
+**Why GNU ABI is Default:**
+- **Cross-platform consistency**: Same ABI on Linux/macOS/Windows
+- **C++11 strict mode support**: MSVC headers require C++14 features even in C++11 mode
+- **Arduino/embedded compatibility**: Matches GCC toolchain behavior
+- **Modern C++ stdlib**: Uses LLVM's libc++ (same as macOS/Linux)
+
+**MSVC ABI Variants (Windows-Specific):**
+For Windows-native projects requiring MSVC compatibility:
+- `clang-tool-chain-c-msvc` - Uses `x86_64-pc-windows-msvc` target
+- `clang-tool-chain-cpp-msvc` - Uses MSVC STL instead of libc++
+- Required for: MSVC-compiled DLLs, COM/WinRT, Windows SDK features
+
+**Behavior:**
+- Automatic GNU target injection is skipped when:
+  - User explicitly provides `--target` in arguments
+  - Using MSVC variant commands (`*-msvc`)
+  - MinGW sysroot download or installation fails (falls back to default)
+
+### Windows MSVC ABI (Opt-in, Windows-Specific)
+
+The MSVC ABI variants provide explicit MSVC target configuration for Windows-native development that requires compatibility with Visual Studio-compiled code.
+
+**Automatic MSVC Target Injection:**
+
+This package implements automatic MSVC target selection for MSVC variant commands:
+
+1. **Explicit `--target` flag**: User-provided target takes priority (no injection)
+2. **Windows platform detection**: Automatically uses `x86_64-pc-windows-msvc` target
+3. **Windows SDK detection**: Checks for Visual Studio/Windows SDK environment variables
+4. **Helpful warnings**: Shows installation guidance if SDK not detected
+
+The wrapper automatically injects `--target=x86_64-pc-windows-msvc` when using MSVC variant commands, which:
+- Selects `lld-link` as the linker (MSVC-compatible)
+- Uses MSVC name mangling for C++
+- Relies on system Windows SDK for headers and libraries
+
+**MSVC Variant Commands:**
+```bash
+# C compiler with MSVC ABI
+clang-tool-chain-c-msvc main.c -o main.exe
+
+# C++ compiler with MSVC ABI
+clang-tool-chain-cpp-msvc main.cpp -o main.exe
+
+# sccache + MSVC variants (compilation caching)
+clang-tool-chain-sccache-c-msvc main.c -o main.exe
+clang-tool-chain-sccache-cpp-msvc main.cpp -o main.exe
+```
+
+**When to Use MSVC ABI:**
+- **Linking with MSVC-compiled libraries**: DLLs built with Visual Studio
+- **Windows-specific APIs**: COM, WinRT, Windows Runtime components
+- **Visual Studio integration**: Projects that must match VS build settings
+- **Third-party MSVC libraries**: Libraries distributed as MSVC binaries
+
+**When to Use GNU ABI (Default):**
+- **Cross-platform code**: Same ABI on Linux/macOS/Windows
+- **Strict C++11 mode**: MSVC headers require C++14 features
+- **No Windows SDK**: MinGW sysroot doesn't require VS installation
+- **Embedded/Arduino**: Matches GCC toolchain behavior
+
+**Windows SDK Requirements:**
+
+MSVC ABI compilation requires Visual Studio or Windows SDK to be installed for system headers and libraries. The package automatically detects SDK presence via environment variables:
+
+**Detected Environment Variables:**
+- `WindowsSdkDir` / `WindowsSDKDir` - Windows SDK installation path
+- `UniversalCRTSdkDir` - Universal C Runtime SDK path
+- `VCToolsInstallDir` - Visual C++ Tools installation path
+- `VSINSTALLDIR` - Visual Studio installation directory
+- `WindowsSDKVersion` - SDK version number
+
+**If SDK Not Detected:**
+
+When MSVC variants are used but SDK environment variables are not found, a helpful warning is displayed with solutions:
+
+1. **Use Visual Studio Developer Command Prompt**
+   - Search for "Developer Command Prompt" in Start Menu
+   - Automatically sets up SDK environment variables
+
+2. **Run vcvarsall.bat in current shell**
+   - Location: `C:\Program Files\Microsoft Visual Studio\{version}\VC\Auxiliary\Build\vcvarsall.bat`
+   - Run: `vcvarsall.bat x64`
+
+3. **Install Visual Studio or Windows SDK**
+   - Visual Studio: https://visualstudio.microsoft.com/downloads/
+   - Windows SDK: https://developer.microsoft.com/windows/downloads/windows-sdk/
+
+4. **Alternative: Use GNU ABI instead**
+   - Use default `clang-tool-chain-c` and `clang-tool-chain-cpp` commands
+   - No SDK required (uses MinGW sysroot)
+
+**Target Override Behavior:**
+
+MSVC variants respect user-provided `--target` flags:
+```bash
+# Force GNU target even with MSVC variant
+clang-tool-chain-c-msvc --target=x86_64-w64-mingw32 main.c
+
+# Force custom target
+clang-tool-chain-cpp-msvc --target=aarch64-pc-windows-msvc main.cpp
+```
+
+**Implementation Details:**
+
+The MSVC ABI injection is implemented in `wrapper.py`:
+- `_should_use_msvc_abi()` - Checks if MSVC injection should occur
+- `_get_msvc_target_args()` - Returns `--target=x86_64-pc-windows-msvc`
+- `_detect_windows_sdk()` - Detects SDK via environment variables
+- `_print_msvc_sdk_warning()` - Shows helpful warning if SDK not found
+
+These functions are called by:
+- `execute_tool()` and `run_tool()` for direct compilation
+- `sccache_clang_main()` and `sccache_clang_cpp_main()` for sccache variants
+
 ### Testing
 ```bash
 # Quick diagnostic test of the toolchain installation
@@ -219,6 +365,7 @@ uv run python -m build
    - Extracts `.tar.zst` archives using pyzstd decompression
    - Uses file locking (`fasteners.InterProcessLock`) to prevent concurrent downloads
    - Installation path: `~/.clang-tool-chain/clang/<platform>/<arch>/`
+   - MinGW sysroot path: `~/.clang-tool-chain/mingw/win/x86_64/` (Windows only)
    - Marks successful installation with `done.txt` file
 
 ### Directory Structure
@@ -240,24 +387,30 @@ clang-tool-chain/
 │   │   ├── expand_archive.py       # Extract .tar.zst archives
 │   │   └── test_compression.py     # Test compression methods
 │   └── __version__.py       # Version information
-├── downloads-bins/          # Git submodule for binary archives (442 MB)
-│   │                        # Repository: https://github.com/zackees/clang-tool-chain-bins
-│   └── assets/              # Binary assets directory
-│       ├── clang/           # Clang toolchain downloads
-│       │   ├── manifest.json    # Root manifest (all platforms)
-│       │   ├── win/             # Windows archives and manifest
-│       │   │   ├── x86_64/
-│       │   │   │   ├── manifest.json
-│       │   │   │   └── llvm-21.1.5-win-x86_64.tar.zst
-│       │   ├── linux/           # Linux archives
-│       │   └── darwin/          # macOS archives
-│       └── iwyu/            # Include What You Use downloads
+├── downloads/               # Pre-built archives and manifests
+│   ├── clang/               # Clang toolchain downloads
+│   │   ├── manifest.json    # Root manifest (all platforms)
+│   │   ├── win/             # Windows archives and manifest
+│   │   │   ├── x86_64/
+│   │   │   │   ├── manifest.json
+│   │   │   │   └── llvm-21.1.5-win-x86_64.tar.zst
+│   │   ├── linux/           # Linux archives
+│   │   └── darwin/          # macOS archives
+│   ├── mingw/               # MinGW-w64 sysroot downloads (Windows GNU ABI)
+│   │   ├── manifest.json    # Root manifest
+│   │   ├── README.md        # MinGW sysroot documentation
+│   │   └── win/             # Windows MinGW sysroots
+│   │       └── x86_64/
+│   │           ├── manifest.json
+│   │           └── mingw-sysroot-21.1.5-win-x86_64.tar.zst
+│   └── iwyu/                # Include What You Use downloads
 ├── tests/                   # Unit and integration tests
 │   ├── test_cli.py          # CLI command tests
 │   ├── test_downloader.py   # Download/install tests
 │   ├── test_build_tools.py  # Build tool tests
 │   ├── test_integration.py  # End-to-end tests
-│   └── test_manifest.py     # Manifest parsing tests
+│   ├── test_manifest.py     # Manifest parsing tests
+│   └── test_gnu_abi.py      # Windows GNU ABI tests (TASK.md scenarios)
 ├── pyproject.toml           # Package configuration
 └── .pre-commit-config.yaml  # Pre-commit hooks
 ```
@@ -356,13 +509,17 @@ The package provides these entry points (defined in `pyproject.toml`):
 - `clang-tool-chain-build` → `wrapper:build_main` - Simple C/C++ build tool
 
 **Compiler Wrappers:**
-- `clang-tool-chain-c` → `wrapper:clang_main` - C compiler
-- `clang-tool-chain-cpp` → `wrapper:clang_cpp_main` - C++ compiler
+- `clang-tool-chain-c` → `wrapper:clang_main` - C compiler (GNU ABI on Windows)
+- `clang-tool-chain-cpp` → `wrapper:clang_cpp_main` - C++ compiler (GNU ABI on Windows)
+- `clang-tool-chain-c-msvc` → `wrapper:clang_msvc_main` - C compiler (MSVC ABI, Windows only)
+- `clang-tool-chain-cpp-msvc` → `wrapper:clang_cpp_msvc_main` - C++ compiler (MSVC ABI, Windows only)
 
 **sccache Integration:**
 - `clang-tool-chain-sccache` → `cli:sccache_main` - Direct sccache passthrough (stats, management)
-- `clang-tool-chain-sccache-c` → `cli:sccache_c_main` - sccache + C compiler
-- `clang-tool-chain-sccache-cpp` → `cli:sccache_cpp_main` - sccache + C++ compiler
+- `clang-tool-chain-sccache-c` → `cli:sccache_c_main` - sccache + C compiler (GNU ABI on Windows)
+- `clang-tool-chain-sccache-cpp` → `cli:sccache_cpp_main` - sccache + C++ compiler (GNU ABI on Windows)
+- `clang-tool-chain-sccache-c-msvc` → `cli:sccache_c_msvc_main` - sccache + C compiler (MSVC ABI, Windows only)
+- `clang-tool-chain-sccache-cpp-msvc` → `cli:sccache_cpp_msvc_main` - sccache + C++ compiler (MSVC ABI, Windows only)
 
 **Linker and Archiver:**
 - `clang-tool-chain-ld` → `wrapper:lld_main` - Linker (lld/lld-link)
@@ -419,6 +576,30 @@ Available as Python modules in `clang_tool_chain.downloads`:
 - `create_hardlink_archive.py`: Create hard-linked TAR archives
 - `expand_archive.py`: Extract `.tar.zst` archives
 - `test_compression.py`: Compare compression methods
+- `extract_mingw_sysroot.py`: Extract MinGW-w64 sysroot for Windows GNU ABI support
+
+### MinGW Sysroot Generation (Windows GNU ABI)
+
+The `extract_mingw_sysroot.py` script creates MinGW-w64 sysroot archives for Windows GNU ABI support:
+
+```bash
+# Generate MinGW sysroot archive for Windows x86_64
+python -m clang_tool_chain.downloads.extract_mingw_sysroot \
+    --arch x86_64 \
+    --work-dir work \
+    --output-dir downloads/mingw/win
+```
+
+**What it does:**
+1. Downloads LLVM-MinGW release from GitHub (mstorsjo/llvm-mingw)
+2. Extracts only the sysroot directory (x86_64-w64-mingw32)
+3. Includes C/C++ standard library headers (libc++ from LLVM)
+4. Compresses with zstd level 22 (~93% reduction)
+5. Generates checksums (SHA256, MD5)
+6. Creates manifest.json
+7. Names archive: `mingw-sysroot-{version}-win-{arch}.tar.zst`
+
+**Result:** ~12 MB archive (from 176 MB uncompressed) for Windows x86_64
 
 ### Updating Binary Payloads
 
@@ -485,4 +666,22 @@ uv run pytest tests/test_cli.py -v
 
 # Test downloader
 uv run pytest tests/test_downloader.py -v
+
+# Test Windows GNU ABI support (Windows only)
+uv run pytest tests/test_gnu_abi.py -v
+
+# Run all Windows-specific tests
+uv run pytest -k "windows or gnu or msvc" -v
 ```
+
+**Windows GNU ABI Test Coverage:**
+- `test_gnu_abi.py` - Complete TASK.md scenarios (10 test cases)
+  - Basic C++11 standard library headers with GNU target
+  - C++11 code with MSVC headers (should fail)
+  - Complete compilation and linking
+  - Target triple verification
+  - Default GNU ABI behavior on Windows
+  - Explicit target override
+  - MSVC variant commands
+- `test_cli.py` - Windows GNU default detection
+- `test_downloader.py` - MinGW sysroot download infrastructure (8 test cases)

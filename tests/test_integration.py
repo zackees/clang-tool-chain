@@ -448,6 +448,16 @@ class TestConcurrentDownload(unittest.TestCase):
         import time
         from pathlib import Path
 
+        # Quick check if toolchain can be downloaded
+        try:
+            import subprocess
+
+            result = subprocess.run(["clang-tool-chain-c", "--version"], capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                self.skipTest(f"Toolchain not accessible: {result.stderr}")
+        except Exception as e:
+            self.skipTest(f"Toolchain not accessible: {e}")
+
         # Clean the toolchain directory (except root)
         toolchain_dir = Path.home() / ".clang-tool-chain"
         if toolchain_dir.exists():

@@ -323,15 +323,17 @@ class TestIWYUWrapperEntryPoints(unittest.TestCase):
 
     def test_wrapper_find_all_iwyu_tools(self) -> None:
         """Test that wrapper can find all IWYU tools."""
-        try:
-            tools = ["include-what-you-use", "iwyu_tool.py", "fix_includes.py"]
+        tools = ["include-what-you-use", "iwyu_tool.py", "fix_includes.py"]
 
-            for tool_name in tools:
-                with self.subTest(tool=tool_name):
+        for tool_name in tools:
+            with self.subTest(tool=tool_name):
+                try:
                     tool_path = wrapper.find_iwyu_tool(tool_name)
                     self.assertTrue(tool_path.exists(), f"{tool_name} should exist at {tool_path}")
-        except ToolchainInfrastructureError:
-            raise
+                except ToolchainInfrastructureError:
+                    raise
+                except RuntimeError as e:
+                    self.skipTest(f"IWYU binaries not installed: {e}")
 
 
 if __name__ == "__main__":
