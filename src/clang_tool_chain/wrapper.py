@@ -607,12 +607,35 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
 
     logger.info(f"Using GNU target: {target} with sysroot: {sysroot_path}")
 
+    # Check if resource directory exists in the sysroot
+    # The archive should contain lib/clang/<version>/ with resource headers
+    resource_dir = sysroot_path / "lib" / "clang"
+    resource_dir_arg = []
+    if resource_dir.exists():
+        # Find the version directory (should be only one, e.g., "21")
+        version_dirs = [d for d in resource_dir.iterdir() if d.is_dir()]
+        if version_dirs:
+            # Use the first (and should be only) version directory
+            clang_version_dir = version_dirs[0]
+            resource_include = clang_version_dir / "include"
+            if resource_include.exists():
+                logger.info(f"Found clang resource directory at: {clang_version_dir}")
+                # Use -resource-dir to tell clang where to find its builtin headers
+                # This makes clang look in <resource-dir>/include/ for headers like stddef.h, mm_malloc.h
+                resource_dir_arg = [f"-resource-dir={clang_version_dir}"]
+            else:
+                logger.warning(f"Resource include directory not found: {resource_include}")
+        else:
+            logger.warning(f"No version directories found in: {resource_dir}")
+    else:
+        logger.warning(f"Resource directory not found: {resource_dir}")
+
     # Add -stdlib=libc++ to use the libc++ standard library included in the sysroot
     return [
         f"--target={target}",
         f"--sysroot={sysroot_path}",
         "-stdlib=libc++",
-    ]
+    ] + resource_dir_arg
 
 
 def _should_use_msvc_abi(platform_name: str, args: list[str]) -> bool:
