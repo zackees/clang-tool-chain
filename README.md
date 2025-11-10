@@ -3,6 +3,7 @@
 **A zero-configuration Python package that distributes pre-built Clang/LLVM binaries with automatic downloading and installation.**
 
 [![PyPI version](https://img.shields.io/pypi/v/clang-tool-chain.svg)](https://pypi.org/project/clang-tool-chain/)
+[![Downloads](https://pepy.tech/badge/clang-tool-chain)](https://pepy.tech/project/clang-tool-chain)
 [![Linting](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml)
 [![win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win.yml)
 [![linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-x86.yml)
@@ -26,141 +27,30 @@ pip install clang-tool-chain
 echo 'int main() { return 0; }' > hello.c
 clang-tool-chain-c hello.c -o hello
 ./hello  # Windows: .\hello.exe
+
+# Verify installation (optional but recommended)
+clang-tool-chain-test  # Runs 7 diagnostic tests
 ```
 
 **That's it!** The LLVM toolchain (~52-91 MB) downloads automatically on first use. No manual setup required.
 
----
+> **Note:** This package currently uses:
+> - **LLVM 21.1.5** for Windows and Linux
+> - **LLVM 19.1.6** for macOS (21.1.5 coming soon)
+>
+> See [Platform Support Matrix](#-platform-support-matrix) for details.
 
-## 🎯 Why clang-tool-chain?
+### 📋 Command Quick Reference
 
-### The Problem
-
-Installing LLVM/Clang traditionally requires:
-- Large downloads (1-3 GB installer/archive)
-- System-wide installation with admin privileges
-- Manual PATH configuration
-- Platform-specific installation procedures
-- Version management headaches in CI/CD
-
-### The Solution
-
-`clang-tool-chain` provides:
-
-| Feature | clang-tool-chain | Full LLVM Install | System Compiler | Docker Image |
-|---------|------------------|-------------------|-----------------|--------------|
-| **Size** | 52-91 MB | 1-3 GB | Varies | 500+ MB |
-| **Setup Time** | < 30 seconds | 5-15 minutes | Varies | 1-5 minutes |
-| **Admin Required** | ❌ No | ✅ Yes (usually) | ✅ Yes | ✅ Yes |
-| **Auto Download** | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
-| **Version Control** | ✅ Pin in requirements | ❌ System-wide | ❌ System-wide | ✅ Dockerfile |
-| **Cross-Platform** | ✅ Identical on all OS | ❌ Different procedures | ❌ Different versions | ✅ Yes |
-| **CI/CD Ready** | ✅ Zero config | ❌ Complex setup | ⚠️ Depends on runner | ⚠️ Slow builds |
-| **Offline After DL** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Python Integration** | ✅ Native | ❌ Manual | ❌ Manual | ⚠️ Extra layer |
-
-### Perfect For
-
-- **CI/CD Pipelines** - Reproducible builds with pinned toolchain versions
-- **Educational Environments** - Students get started instantly without installation hassles
-- **Cross-Compilation** - Consistent toolchain across development machines
-- **Containerized Builds** - Minimal Docker image overhead
-- **Development Teams** - Everyone uses the exact same compiler version
-- **Embedded Development** - Lightweight toolchain for resource-constrained workflows
-
----
-
-## ✨ Features
-
-- **🚀 Automatic Download on First Use** - Zero-configuration installation to `~/.clang-tool-chain/`
-- **🔒 Manifest-Based Distribution** - Version-controlled releases with SHA256 checksum verification
-- **⚡ Ultra-Compressed Archives** - 94.3% size reduction using zstd level 22 compression
-- **🌍 Cross-Platform Support** - Windows x64, macOS x64/ARM64, Linux x64/ARM64
-- **🛡️ Concurrent-Safe Installation** - File locking prevents race conditions in parallel builds
-- **🐍 Python Wrapper Commands** - 22 entry points for all essential LLVM tools
-- **📦 Pre-Built Binaries** - Clang 21.1.5 (Linux/Windows), 19.1.7 (macOS)
-- **🔧 Essential Toolchain Utilities** - Compilers, linkers, binary utilities, and code formatters
-
----
-
-## 🔧 How It Works
-
-### Architecture Overview
-
-`clang-tool-chain` uses a sophisticated three-layer architecture:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    CLI Layer (cli.py)                        │
-│  Commands: info, version, list-tools, path, package-version  │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│                 Wrapper Layer (wrapper.py)                   │
-│  • Platform Detection (win/linux/darwin)                     │
-│  • Architecture Normalization (x86_64/arm64)                 │
-│  • Binary Resolution (.exe handling, tool alternatives)      │
-│  • Process Execution (os.execv on Unix, subprocess on Win)   │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│              Downloader Layer (downloader.py)                │
-│  • Fetch root manifest from GitHub                          │
-│  • Fetch platform-specific manifest                         │
-│  • Download .tar.zst archive with progress                  │
-│  • Verify SHA256 checksum                                   │
-│  • Extract with pyzstd decompression                        │
-│  • File locking (prevents concurrent downloads)             │
-│  • Atomic installation with 'done.txt' marker               │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Manifest-Based Distribution System
-
-The package uses a **two-tier manifest system** for version management:
-
-1. **Root Manifest** (`downloads/clang/manifest.json`) - Indexes all platforms and architectures
-2. **Platform Manifests** (`downloads/clang/{platform}/{arch}/manifest.json`) - Contains version info, download URLs, and SHA256 checksums
-
-**On first use:**
-```
-User runs: clang-tool-chain-c hello.c -o hello
-    ↓
-Check: ~/.clang-tool-chain/{platform}/{arch}/done.txt exists?
-    ↓ (No)
-Acquire lock: ~/.clang-tool-chain/{platform}-{arch}.lock
-    ↓
-Fetch: Root manifest → Platform manifest
-    ↓
-Download: .tar.zst archive to temp directory
-    ↓
-Verify: SHA256 checksum
-    ↓
-Extract: Using pyzstd + tarfile (with safety filters)
-    ↓
-Mark complete: Write done.txt
-    ↓
-Release lock → Execute tool
-```
-
-### Platform Detection
-
-Automatic platform and architecture detection:
-
-| System | Platform | Architecture | Install Path |
-|--------|----------|--------------|--------------|
-| Windows 10+ | `win` | `x86_64` | `~/.clang-tool-chain/clang/win/x86_64/` |
-| Linux | `linux` | `x86_64` | `~/.clang-tool-chain/clang/linux/x86_64/` |
-| Linux | `linux` | `arm64` | `~/.clang-tool-chain/clang/linux/arm64/` |
-| macOS | `darwin` | `x86_64` | `~/.clang-tool-chain/clang/darwin/x86_64/` |
-| macOS | `darwin` | `arm64` | `~/.clang-tool-chain/clang/darwin/arm64/` |
-
-### Binary Resolution
-
-The wrapper automatically handles platform differences:
-- **Windows**: Adds `.exe` extension, uses `lld-link` instead of `lld`
-- **Unix**: Uses `lld` or `ld.lld`, handles `chmod +x` permissions
-- **Alternative Names**: Supports tool aliases (e.g., `clang` → `clang-cl` on Windows)
+| Task | Command |
+|------|---------|
+| **Compile C** | `clang-tool-chain-c main.c -o program` |
+| **Compile C++** | `clang-tool-chain-cpp main.cpp -o program` |
+| **Link Objects** | `clang-tool-chain-ld obj1.o obj2.o -o program` |
+| **Create Library** | `clang-tool-chain-ar rcs libname.a obj1.o obj2.o` |
+| **Format Code** | `clang-tool-chain-format -i file.cpp` |
+| **Check Installation** | `clang-tool-chain info` |
+| **Verify Setup** | `clang-tool-chain-test` |
 
 ---
 
@@ -190,6 +80,68 @@ uv pip install -e ".[dev]"
 
 **Note:** Binaries download automatically on first use. No manual setup required!
 
+**macOS Users:** Requires Xcode Command Line Tools for system headers. Run `xcode-select --install` if not already installed.
+
+---
+
+## 🎯 Why clang-tool-chain?
+
+### The Problem
+
+Installing LLVM/Clang traditionally requires:
+- Large downloads (1-3 GB installer/archive)
+- System-wide installation with admin privileges
+- Manual PATH configuration
+- Platform-specific installation procedures
+- Version management headaches in CI/CD
+
+### The Solution
+
+`clang-tool-chain` provides:
+
+| Feature | clang-tool-chain | Full LLVM Install | System Compiler | zig cc |
+|---------|------------------|-------------------|-----------------|--------|
+| **Size** | 52-91 MB | 1-3 GB | Varies | ~80 MB |
+| **Setup Time** | < 30 seconds | 5-15 minutes | Varies | < 30 seconds |
+| **Admin Required** | ❌ No | ✅ Yes (usually) | ✅ Yes | ❌ No |
+| **Auto Download** | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
+| **Version Control** | ✅ Pin in requirements | ❌ System-wide | ❌ System-wide | ⚠️ Tied to Zig version |
+| **Cross-Platform** | ✅ Identical on all OS | ❌ Different procedures | ❌ Different versions | ✅ Yes |
+| **Cross-Compilation** | Platform-specific | ❌ Complex | ❌ Complex | ✅ Single binary, all targets |
+| **CI/CD Ready** | ✅ Zero config | ❌ Complex setup | ⚠️ Depends on runner | ✅ Zero config |
+| **Offline After DL** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Python Integration** | ✅ Native | ❌ Manual | ❌ Manual | ❌ Manual |
+
+### Perfect For
+
+- **CI/CD Pipelines** - Reproducible builds with pinned toolchain versions
+- **Educational Environments** - Students get started instantly without installation hassles
+- **Development Teams** - Everyone uses the exact same compiler version
+- **Containerized Builds** - Minimal Docker image overhead
+- **Python Projects** - Seamless integration with Python build systems
+
+### Not Recommended For
+
+- **Production Embedded Systems** - Use vendor-specific toolchains
+- **Kernel Development** - System compilers with specific patches
+- **Custom LLVM Builds** - If you need specific LLVM patches/features
+- **Air-Gapped Environments** - Requires manual setup (see [Offline Mode](#offline-mode))
+- **Cross-Compilation to Different Architectures** - Use `zig cc` for multi-target cross-compilation
+
+---
+
+## ✨ Features
+
+- **Automatic Download on First Use** - Zero-configuration installation to `~/.clang-tool-chain/`
+- **Manifest-Based Distribution** - Version-controlled releases with SHA256 checksum verification
+- **Ultra-Optimized Archives** - 94.3% size reduction via binary stripping, deduplication, and zstd-22 compression
+- **Cross-Platform Support** - Windows x64, macOS x64/ARM64, Linux x64/ARM64
+- **Concurrent-Safe Installation** - File locking prevents race conditions in parallel builds
+- **Python Wrapper Commands** - 22 entry points for all essential LLVM tools
+- **Pre-Built Binaries** - Clang 21.1.5 (Linux/Windows), 19.1.6 (macOS)
+- **Essential Toolchain Utilities** - Compilers, linkers, binary utilities, and code formatters
+- **Automatic macOS SDK Detection** - Seamlessly finds system headers on macOS without configuration
+
 ---
 
 ## 🚀 Usage
@@ -201,6 +153,9 @@ Manage your toolchain installation:
 ```bash
 # Show installation information and available tools
 clang-tool-chain info
+
+# Run diagnostic tests (verify installation)
+clang-tool-chain test
 
 # List all available wrapper commands
 clang-tool-chain list-tools
@@ -266,6 +221,35 @@ clang-tool-chain-build hello.cpp -o myprogram
 
 # Build with optimization
 clang-tool-chain-build -O2 hello.c
+```
+
+#### CMake Integration
+
+**Option 1: Environment Variables (Recommended)**
+
+```cmake
+# CMakeLists.txt
+cmake_minimum_required(VERSION 3.15)
+project(MyProject)
+
+# No changes needed - respects CC/CXX environment variables
+add_executable(myapp main.cpp)
+```
+
+```bash
+export CC=clang-tool-chain-c
+export CXX=clang-tool-chain-cpp
+cmake -B build
+cmake --build build
+```
+
+**Option 2: Direct Compiler Specification**
+
+```bash
+cmake -B build \
+    -DCMAKE_C_COMPILER=clang-tool-chain-c \
+    -DCMAKE_CXX_COMPILER=clang-tool-chain-cpp
+cmake --build build
 ```
 
 #### Linking
@@ -370,6 +354,7 @@ clang-tool-chain-sccache --version
 | Command | Tool | Description |
 |---------|------|-------------|
 | `clang-tool-chain` | CLI | Main management interface |
+| `clang-tool-chain-test` | Diagnostic | Run 7 diagnostic tests to verify installation |
 | `clang-tool-chain-fetch` | Fetch utility | Manual download utility for pre-fetching binaries |
 | `clang-tool-chain-paths` | Path utility | Get installation paths in JSON format |
 | `clang-tool-chain-fetch-archive` | Archive utility | Maintainer tool for creating optimized archives |
@@ -636,10 +621,10 @@ steps:
 | Windows  | x86_64       | 21.1.5       | ~52 MB       | ~200 MB        | ✅ Stable |
 | Linux    | x86_64       | 21.1.5       | ~88 MB       | ~350 MB        | ✅ Stable |
 | Linux    | ARM64        | 21.1.5       | ~91 MB       | ~340 MB        | ✅ Stable |
-| macOS    | x86_64       | 19.1.7       | ~75 MB       | ~300 MB        | ✅ Stable |
-| macOS    | ARM64        | 19.1.7       | ~71 MB       | ~285 MB        | ✅ Stable |
+| macOS    | x86_64       | 19.1.6       | ~75 MB       | ~300 MB        | ✅ Stable |
+| macOS    | ARM64        | 19.1.6       | ~71 MB       | ~285 MB        | ✅ Stable |
 
-**Note:** macOS uses LLVM 19.1.7 due to availability of pre-built binaries. LLVM 21.1.5 support coming soon.
+**Note:** macOS uses LLVM 19.1.6 due to availability of pre-built binaries. LLVM 21.1.5 support coming soon.
 
 ### Requirements
 
@@ -648,7 +633,7 @@ steps:
 - **Internet**: Required for initial download (works offline after installation)
 - **Operating System**:
   - Windows 10+ (x64)
-  - macOS 11+ (x64 or ARM64/Apple Silicon)
+  - macOS 11+ (x64 or ARM64/Apple Silicon) - **Requires Xcode Command Line Tools**: `xcode-select --install`
   - Linux with glibc 2.27+ (x64 or ARM64)
 
 ---
@@ -675,9 +660,169 @@ steps:
   - Network or cache drives
   - CI/CD artifact caching
 
+### macOS SDK Detection (Automatic)
+
+macOS users no longer need to manually configure SDK paths! The toolchain automatically detects your Xcode Command Line Tools SDK using `xcrun`.
+
+**Requirements:**
+```bash
+xcode-select --install  # One-time setup
+```
+
+**How it works:**
+- Automatically injects `-isysroot` when compiling on macOS
+- Detects SDK via `xcrun --show-sdk-path`
+- Respects `SDKROOT` environment variable if set
+- Uses explicit `-isysroot` flag if provided by user
+- Disabled with `CLANG_TOOL_CHAIN_NO_SYSROOT=1`
+
+**Advanced Configuration:**
+```bash
+# Use custom SDK path (standard macOS variable)
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+
+# Disable automatic SDK detection (not recommended)
+export CLANG_TOOL_CHAIN_NO_SYSROOT=1
+
+# Explicit SDK path (takes priority)
+clang-tool-chain-c -isysroot /path/to/sdk hello.c -o hello
+```
+
+**Automatic injection is skipped when:**
+- User explicitly provides `-isysroot` in arguments
+- `SDKROOT` environment variable is set
+- Freestanding compilation flags are used (`-nostdinc`, `-nostdinc++`, `-nostdlib`, `-ffreestanding`)
+- `CLANG_TOOL_CHAIN_NO_SYSROOT=1` is set
+
+No configuration needed - just compile!
+
+---
+
+## ⚡ Performance
+
+### Compilation Speed
+
+clang-tool-chain uses unmodified LLVM binaries - expect **identical performance** to official LLVM releases.
+
+### Download Benchmarks (First Use)
+
+| Connection | Archive Size | Download Time |
+|------------|--------------|---------------|
+| Fiber (100 Mbps) | 52 MB | ~5 seconds |
+| Cable (20 Mbps) | 52 MB | ~25 seconds |
+| DSL (5 Mbps) | 52 MB | ~90 seconds |
+
+Subsequent compilations are **instant** (no download).
+
+---
+
+## 🔧 How It Works
+
+### Architecture Overview
+
+`clang-tool-chain` uses a sophisticated three-layer architecture:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CLI Layer (cli.py)                        │
+│  Commands: info, version, list-tools, path, package-version  │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                 Wrapper Layer (wrapper.py)                   │
+│  • Platform Detection (win/linux/darwin)                     │
+│  • Architecture Normalization (x86_64/arm64)                 │
+│  • Binary Resolution (.exe handling, tool alternatives)      │
+│  • Process Execution (os.execv on Unix, subprocess on Win)   │
+│  • macOS SDK Auto-Detection (xcrun integration)              │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Downloader Layer (downloader.py)                │
+│  • Fetch root manifest from GitHub                          │
+│  • Fetch platform-specific manifest                         │
+│  • Download .tar.zst archive with progress                  │
+│  • Verify SHA256 checksum                                   │
+│  • Extract with pyzstd decompression                        │
+│  • File locking (prevents concurrent downloads)             │
+│  • Atomic installation with 'done.txt' marker               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Manifest-Based Distribution System
+
+The package uses a **two-tier manifest system** for version management:
+
+1. **Root Manifest** (`downloads/clang/manifest.json`) - Indexes all platforms and architectures
+2. **Platform Manifests** (`downloads/clang/{platform}/{arch}/manifest.json`) - Contains version info, download URLs, and SHA256 checksums
+
+**On first use:**
+```
+User runs: clang-tool-chain-c hello.c -o hello
+    ↓
+Check: ~/.clang-tool-chain/{platform}/{arch}/done.txt exists?
+    ↓ (No)
+Acquire lock: ~/.clang-tool-chain/{platform}-{arch}.lock
+    ↓
+Fetch: Root manifest → Platform manifest
+    ↓
+Download: .tar.zst archive to temp directory
+    ↓
+Verify: SHA256 checksum
+    ↓
+Extract: Using pyzstd + tarfile (with safety filters)
+    ↓
+Mark complete: Write done.txt
+    ↓
+Release lock → Execute tool
+```
+
+### Platform Detection
+
+Automatic platform and architecture detection:
+
+| System | Platform | Architecture | Install Path |
+|--------|----------|--------------|--------------|
+| Windows 10+ | `win` | `x86_64` | `~/.clang-tool-chain/clang/win/x86_64/` |
+| Linux | `linux` | `x86_64` | `~/.clang-tool-chain/clang/linux/x86_64/` |
+| Linux | `linux` | `arm64` | `~/.clang-tool-chain/clang/linux/arm64/` |
+| macOS | `darwin` | `x86_64` | `~/.clang-tool-chain/clang/darwin/x86_64/` |
+| macOS | `darwin` | `arm64` | `~/.clang-tool-chain/clang/darwin/arm64/` |
+
+### Binary Resolution
+
+The wrapper automatically handles platform differences:
+- **Windows**: Adds `.exe` extension, uses `lld-link` instead of `lld`
+- **Unix**: Uses `lld` or `ld.lld`, handles `chmod +x` permissions
+- **macOS**: Automatically detects and injects SDK path via `xcrun`
+- **Alternative Names**: Supports tool aliases (e.g., `clang` → `clang-cl` on Windows)
+
 ---
 
 ## 🔧 Additional Utilities
+
+### clang-tool-chain-test
+
+Run diagnostic tests to verify your installation:
+
+```bash
+# Run 7 diagnostic tests
+clang-tool-chain-test
+
+# Or via main CLI:
+clang-tool-chain test
+```
+
+**Tests performed:**
+1. Platform detection
+2. Toolchain installation verification
+3. clang binary resolution
+4. clang++ binary resolution
+5. clang version check
+6. C compilation test
+7. C++ compilation test
+
+This command is especially useful for debugging installation issues in GitHub Actions or other CI/CD environments.
 
 ### clang-tool-chain-fetch
 
@@ -712,6 +857,387 @@ clang-tool-chain-paths
 BIN_DIR=$(clang-tool-chain-paths | python -c "import sys,json; print(json.load(sys.stdin)['bin_dir'])")
 echo "Binaries located at: $BIN_DIR"
 ```
+
+---
+
+## 🔬 Advanced Topics
+
+### Manual Installation (Without Auto-Download)
+
+If you need to manually install binaries (e.g., for offline environments):
+
+1. **Download archive:**
+   ```bash
+   wget https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst
+   ```
+
+2. **Extract to installation directory:**
+   ```bash
+   # Create installation directory
+   mkdir -p ~/.clang-tool-chain/clang/win/x86_64
+
+   # Extract archive
+   python -m clang_tool_chain.downloads.expand_archive \
+       llvm-21.1.5-win-x86_64.tar.zst \
+       ~/.clang-tool-chain/clang/win/x86_64
+
+   # Mark as complete
+   touch ~/.clang-tool-chain/clang/win/x86_64/done.txt
+   ```
+
+3. **Verify installation:**
+   ```bash
+   clang-tool-chain info
+   ```
+
+### Offline Mode
+
+After initial download, `clang-tool-chain` works completely offline:
+
+```bash
+# First use (requires internet)
+clang-tool-chain-c hello.c -o hello  # Downloads binaries
+
+# Subsequent uses (offline)
+clang-tool-chain-c world.c -o world  # Uses cached binaries
+```
+
+**For fully offline environments:**
+1. Pre-download binaries on a machine with internet
+2. Package `~/.clang-tool-chain/` directory
+3. Extract to target machines
+4. Ensure `done.txt` exists in platform directory
+
+### Version Pinning
+
+Pin specific LLVM versions in `requirements.txt`:
+
+```txt
+# requirements.txt
+clang-tool-chain==1.0.1  # Pins package version (currently uses LLVM 21.1.5/19.1.6)
+```
+
+**Future:** The package will support multiple LLVM versions via manifest updates.
+
+### Concurrent Build Safety
+
+The downloader uses **file locking** (`fasteners.InterProcessLock`) to prevent race conditions:
+
+```python
+# Multiple processes can safely call this simultaneously
+clang-tool-chain-c hello.c -o hello  # Process 1
+clang-tool-chain-c world.c -o world  # Process 2
+```
+
+**What happens:**
+1. Process 1 acquires lock `~/.clang-tool-chain/win-x86_64.lock`
+2. Process 2 waits for lock
+3. Process 1 downloads and installs binaries
+4. Process 1 writes `done.txt` and releases lock
+5. Process 2 acquires lock, sees `done.txt`, skips download
+6. Both processes compile successfully
+
+**Perfect for:**
+- Parallel CI/CD builds
+- Multi-core test runners
+- Concurrent development environments
+
+---
+
+## ❓ FAQ
+
+### What happens on first use?
+
+On first use, `clang-tool-chain` automatically:
+1. Detects your platform and architecture
+2. Fetches the manifest for your platform
+3. Downloads the appropriate archive (~52-91 MB)
+4. Verifies the SHA256 checksum
+5. Extracts to `~/.clang-tool-chain/clang/{platform}/{arch}/`
+6. Executes your command
+
+**Total time:** ~10-60 seconds depending on internet speed.
+
+### Can I use clang-tool-chain offline?
+
+Yes! After the initial download, `clang-tool-chain` works completely offline. The binaries are cached in `~/.clang-tool-chain/`.
+
+### How do I update to a new LLVM version?
+
+Currently, the LLVM version is tied to the package version. To update:
+```bash
+pip install --upgrade clang-tool-chain
+```
+
+Future versions will support multiple LLVM versions via manifest updates.
+
+### Is it safe to delete `~/.clang-tool-chain/`?
+
+Yes! Deleting this directory just removes the cached binaries. They will re-download automatically on next use.
+
+### Can I use multiple LLVM versions simultaneously?
+
+Not currently. Each `clang-tool-chain` package version maps to specific LLVM versions (see Platform Support Matrix). Use virtual environments to isolate different package versions:
+
+```bash
+# Environment 1: LLVM 21.1.5
+python -m venv env1
+source env1/bin/activate
+pip install clang-tool-chain==1.0.1
+
+# Environment 2: Future LLVM version
+python -m venv env2
+source env2/bin/activate
+pip install clang-tool-chain==1.1.0  # (hypothetical future version)
+```
+
+### How does checksum verification work?
+
+Every archive download is verified against SHA256 checksums stored in the platform manifests. If the checksum doesn't match, the download is rejected and an error is raised. This protects against:
+- Corrupted downloads
+- Man-in-the-middle attacks
+- File tampering
+
+### Why does macOS use LLVM 19.1.6 instead of 21.1.5?
+
+LLVM 21.1.5 pre-built binaries for macOS were not available at the time of initial release. We're working on building and distributing LLVM 21.1.5 for macOS. Track progress in the repository issues.
+
+### Can I contribute new platforms or architectures?
+
+Yes! See the [Maintainer Tools](#-maintainer-tools) section for how to create optimized archives. Pull requests welcome!
+
+### Does this work in Docker containers?
+
+Absolutely! See the [CI/CD Integration](#-cicd-integration) section for Docker examples. The automatic download works seamlessly in containers.
+
+### How much disk space do I need?
+
+- **Download:** ~52-91 MB (archive)
+- **Installed:** ~200-350 MB (extracted binaries)
+- **Total:** ~252-441 MB per platform
+
+The archive is deleted after extraction, so you only need space for the installed binaries.
+
+### Can I use this with CMake?
+
+Yes! Set the compiler in your `CMakeLists.txt` or via environment variables:
+
+```bash
+# Option 1: Environment variables
+export CC=clang-tool-chain-c
+export CXX=clang-tool-chain-cpp
+cmake -B build
+
+# Option 2: CMake command line
+cmake -B build \
+    -DCMAKE_C_COMPILER=clang-tool-chain-c \
+    -DCMAKE_CXX_COMPILER=clang-tool-chain-cpp
+```
+
+### What about Windows paths with spaces?
+
+All paths are handled correctly, including those with spaces. The wrappers quote paths appropriately.
+
+### Do I need to install Xcode on macOS?
+
+No! You only need the **Xcode Command Line Tools**, which is much smaller:
+
+```bash
+xcode-select --install
+```
+
+This provides the SDK headers needed for compilation without installing the full Xcode IDE.
+
+---
+
+## 🔍 Troubleshooting
+
+### Binaries Not Found
+
+**Error:** `Clang binaries are not installed`
+
+**Solution:**
+```bash
+# Check installation status
+clang-tool-chain info
+
+# Try manual fetch
+clang-tool-chain-fetch
+
+# Verify installation directory exists
+ls ~/.clang-tool-chain/
+```
+
+### Platform Not Supported
+
+**Error:** `Unsupported platform`
+
+**Solution:** Ensure you're on a supported platform:
+- Windows 10+ (x64)
+- Linux x64 or ARM64 (glibc 2.27+)
+- macOS 11+ (x64 or ARM64)
+
+32-bit systems are **not supported**.
+
+### Download Fails
+
+**Error:** `Failed to download archive` or `Checksum verification failed`
+
+**Solutions:**
+1. **Check internet connection**
+2. **Retry the command** (temporary network issue)
+3. **Check GitHub raw content access:**
+   ```bash
+   curl -I https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/manifest.json
+   ```
+4. **Clear partial downloads:**
+   ```bash
+   rm -rf ~/.clang-tool-chain/
+   ```
+
+### Tool Execution Fails
+
+**Error:** `Permission denied` (Linux/macOS)
+
+**Solution:**
+```bash
+# Ensure execute permissions
+chmod +x ~/.clang-tool-chain/clang/*/bin/*
+
+# Or reinstall
+rm -rf ~/.clang-tool-chain/
+clang-tool-chain-c --version  # Re-downloads with correct permissions
+```
+
+### macOS: stdio.h or iostream Not Found
+
+**Error:** `fatal error: 'stdio.h' file not found` or `'iostream' file not found`
+
+**Cause:** Xcode Command Line Tools not installed or SDK not detected.
+
+**Solution:**
+```bash
+# Install Xcode Command Line Tools
+xcode-select --install
+
+# Verify SDK is detected
+xcrun --show-sdk-path
+
+# Should output something like:
+# /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+
+# Try compilation again
+clang-tool-chain-c hello.c -o hello
+```
+
+**Advanced troubleshooting:**
+```bash
+# Manually specify SDK path
+clang-tool-chain-c -isysroot $(xcrun --show-sdk-path) hello.c -o hello
+
+# Or set SDKROOT environment variable
+export SDKROOT=$(xcrun --show-sdk-path)
+clang-tool-chain-c hello.c -o hello
+```
+
+### Slow First-Time Download
+
+**Observation:** First compilation takes 30-60 seconds
+
+**This is normal!** The toolchain is downloading. Subsequent compilations are instant. To pre-download:
+
+```bash
+# Pre-fetch binaries before your build
+clang-tool-chain-fetch
+
+# Or just run any command
+clang-tool-chain-c --version
+```
+
+### Import Errors
+
+**Error:** `ModuleNotFoundError: No module named 'clang_tool_chain'`
+
+**Solutions:**
+1. **Ensure package is installed:**
+   ```bash
+   pip install clang-tool-chain
+   ```
+
+2. **Check Python environment:**
+   ```bash
+   which python  # Verify correct Python interpreter
+   pip list | grep clang-tool-chain
+   ```
+
+3. **Reinstall:**
+   ```bash
+   pip uninstall clang-tool-chain
+   pip install clang-tool-chain
+   ```
+
+### Custom Installation Path Not Working
+
+**Error:** Binaries install to default location despite `CLANG_TOOL_CHAIN_DOWNLOAD_PATH`
+
+**Solution:** Ensure the environment variable is set **before** running the command:
+
+```bash
+# Linux/macOS
+export CLANG_TOOL_CHAIN_DOWNLOAD_PATH=/custom/path
+clang-tool-chain-c hello.c
+
+# Windows (CMD)
+set CLANG_TOOL_CHAIN_DOWNLOAD_PATH=C:\custom\path
+clang-tool-chain-c hello.c
+
+# Windows (PowerShell)
+$env:CLANG_TOOL_CHAIN_DOWNLOAD_PATH="C:\custom\path"
+clang-tool-chain-c hello.c
+```
+
+---
+
+## 🔒 Security
+
+Security is a top priority for this project.
+
+### Checksum Verification
+
+- **Automatic:** SHA256 checksums are verified during download (enabled by default)
+- **Manifest-Based:** Checksums stored in version-controlled manifests
+- **Protection:** Detects corrupted downloads, MITM attacks, and file tampering
+- **Transparency:** All checksums visible in `downloads/clang/{platform}/{arch}/manifest.json`
+
+### Safe Extraction
+
+- **Python 3.12+ Tarfile Safety:** Uses `filter="data"` to prevent path traversal attacks
+- **Temporary Directory:** Extraction happens in temp directory, then moved atomically
+- **Validation:** Verifies archive integrity before extraction
+
+### Download Security
+
+Binaries are served from GitHub raw content (`raw.githubusercontent.com`):
+- ✅ **Checksum Verified:** SHA256 validation on every download
+- ✅ **Version Locked:** Manifests are version-controlled in the repository
+- ⚠️ **Trust Model:** You're trusting this package maintainer + GitHub infrastructure
+- 🔒 **HTTPS Only:** All downloads use encrypted connections
+
+**For maximum security:**
+```bash
+# Option 1: Manual verification
+clang-tool-chain-fetch --dry-run  # Shows download URLs
+# Verify checksums in downloads/clang/<platform>/<arch>/manifest.json
+
+# Option 2: Offline installation
+# Download archive, verify checksum independently, then extract manually
+```
+
+### Reporting Security Issues
+
+For security vulnerabilities, please see our [Security Policy](SECURITY.md) for responsible disclosure instructions.
+
+**Do NOT** report security issues in public GitHub issues.
 
 ---
 
@@ -793,6 +1319,9 @@ twine check dist/*
 ---
 
 ## 🛠️ Maintainer Tools
+
+<details>
+<summary><b>Click to expand maintainer documentation</b> (for package maintainers only)</summary>
 
 ### Archive Creation Pipeline
 
@@ -955,7 +1484,7 @@ xz level 9:    Size: 89 MB,  Time: 67.3s
 - Original: ~850 MB
 - After optimization: **88 MB archive**
 
-**macOS ARM64 (LLVM 19.1.7):**
+**macOS ARM64 (LLVM 19.1.6):**
 - Original: ~750 MB
 - After optimization: **71 MB archive**
 
@@ -986,327 +1515,7 @@ After creating archives, update the manifest files:
    git push
    ```
 
----
-
-## 🔬 Advanced Topics
-
-### Manual Installation (Without Auto-Download)
-
-If you need to manually install binaries (e.g., for offline environments):
-
-1. **Download archive:**
-   ```bash
-   wget https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst
-   ```
-
-2. **Extract to installation directory:**
-   ```bash
-   # Create installation directory
-   mkdir -p ~/.clang-tool-chain/clang/win/x86_64
-
-   # Extract archive
-   python -m clang_tool_chain.downloads.expand_archive \
-       llvm-21.1.5-win-x86_64.tar.zst \
-       ~/.clang-tool-chain/clang/win/x86_64
-
-   # Mark as complete
-   touch ~/.clang-tool-chain/clang/win/x86_64/done.txt
-   ```
-
-3. **Verify installation:**
-   ```bash
-   clang-tool-chain info
-   ```
-
-### Offline Mode
-
-After initial download, `clang-tool-chain` works completely offline:
-
-```bash
-# First use (requires internet)
-clang-tool-chain-c hello.c -o hello  # Downloads binaries
-
-# Subsequent uses (offline)
-clang-tool-chain-c world.c -o world  # Uses cached binaries
-```
-
-**For fully offline environments:**
-1. Pre-download binaries on a machine with internet
-2. Package `~/.clang-tool-chain/` directory
-3. Extract to target machines
-4. Ensure `done.txt` exists in platform directory
-
-### Version Pinning
-
-Pin specific LLVM versions in `requirements.txt`:
-
-```txt
-# requirements.txt
-clang-tool-chain==0.0.1  # Pins package version (currently uses LLVM 21.1.5)
-```
-
-**Future:** The package will support multiple LLVM versions via manifest updates.
-
-### Concurrent Build Safety
-
-The downloader uses **file locking** (`fasteners.InterProcessLock`) to prevent race conditions:
-
-```python
-# Multiple processes can safely call this simultaneously
-clang-tool-chain-c hello.c -o hello  # Process 1
-clang-tool-chain-c world.c -o world  # Process 2
-```
-
-**What happens:**
-1. Process 1 acquires lock `~/.clang-tool-chain/win-x86_64.lock`
-2. Process 2 waits for lock
-3. Process 1 downloads and installs binaries
-4. Process 1 writes `done.txt` and releases lock
-5. Process 2 acquires lock, sees `done.txt`, skips download
-6. Both processes compile successfully
-
-**Perfect for:**
-- Parallel CI/CD builds
-- Multi-core test runners
-- Concurrent development environments
-
----
-
-## ❓ FAQ
-
-### What happens on first use?
-
-On first use, `clang-tool-chain` automatically:
-1. Detects your platform and architecture
-2. Fetches the manifest for your platform
-3. Downloads the appropriate archive (~52-91 MB)
-4. Verifies the SHA256 checksum
-5. Extracts to `~/.clang-tool-chain/clang/{platform}/{arch}/`
-6. Executes your command
-
-**Total time:** ~10-60 seconds depending on internet speed.
-
-### Can I use clang-tool-chain offline?
-
-Yes! After the initial download, `clang-tool-chain` works completely offline. The binaries are cached in `~/.clang-tool-chain/`.
-
-### How do I update to a new LLVM version?
-
-Currently, the LLVM version is tied to the package version. To update:
-```bash
-pip install --upgrade clang-tool-chain
-```
-
-Future versions will support multiple LLVM versions via manifest updates.
-
-### Is it safe to delete `~/.clang-tool-chain/`?
-
-Yes! Deleting this directory just removes the cached binaries. They will re-download automatically on next use.
-
-### Can I use multiple LLVM versions simultaneously?
-
-Not currently. Each `clang-tool-chain` package version maps to specific LLVM versions (see Platform Support Matrix). Use virtual environments to isolate different package versions:
-
-```bash
-# Environment 1: LLVM 21.1.5
-python -m venv env1
-source env1/bin/activate
-pip install clang-tool-chain==0.0.1
-
-# Environment 2: Future LLVM version
-python -m venv env2
-source env2/bin/activate
-pip install clang-tool-chain==0.1.0  # (hypothetical future version)
-```
-
-### How does checksum verification work?
-
-Every archive download is verified against SHA256 checksums stored in the platform manifests. If the checksum doesn't match, the download is rejected and an error is raised. This protects against:
-- Corrupted downloads
-- Man-in-the-middle attacks
-- File tampering
-
-### Why does macOS use LLVM 19.1.7 instead of 21.1.5?
-
-LLVM 21.1.5 pre-built binaries for macOS were not available at the time of initial release. We're working on building and distributing LLVM 21.1.5 for macOS. Track progress in [Issue #XX](https://github.com/zackees/clang-tool-chain/issues).
-
-### Can I contribute new platforms or architectures?
-
-Yes! See the [Maintainer Tools](#-maintainer-tools) section for how to create optimized archives. Pull requests welcome!
-
-### Does this work in Docker containers?
-
-Absolutely! See the [CI/CD Integration](#-cicd-integration) section for Docker examples. The automatic download works seamlessly in containers.
-
-### How much disk space do I need?
-
-- **Download:** ~52-91 MB (archive)
-- **Installed:** ~200-350 MB (extracted binaries)
-- **Total:** ~252-441 MB per platform
-
-The archive is deleted after extraction, so you only need space for the installed binaries.
-
-### Can I use this with CMake?
-
-Yes! Set the compiler in your `CMakeLists.txt` or via environment variables:
-
-```bash
-# Option 1: Environment variables
-export CC=clang-tool-chain-c
-export CXX=clang-tool-chain-cpp
-cmake -B build
-
-# Option 2: CMake command line
-cmake -B build \
-    -DCMAKE_C_COMPILER=clang-tool-chain-c \
-    -DCMAKE_CXX_COMPILER=clang-tool-chain-cpp
-```
-
-### What about Windows paths with spaces?
-
-All paths are handled correctly, including those with spaces. The wrappers quote paths appropriately.
-
----
-
-## 🔍 Troubleshooting
-
-### Binaries Not Found
-
-**Error:** `Clang binaries are not installed`
-
-**Solution:**
-```bash
-# Check installation status
-clang-tool-chain info
-
-# Try manual fetch
-clang-tool-chain-fetch
-
-# Verify installation directory exists
-ls ~/.clang-tool-chain/
-```
-
-### Platform Not Supported
-
-**Error:** `Unsupported platform`
-
-**Solution:** Ensure you're on a supported platform:
-- Windows 10+ (x64)
-- Linux x64 or ARM64 (glibc 2.27+)
-- macOS 11+ (x64 or ARM64)
-
-32-bit systems are **not supported**.
-
-### Download Fails
-
-**Error:** `Failed to download archive` or `Checksum verification failed`
-
-**Solutions:**
-1. **Check internet connection**
-2. **Retry the command** (temporary network issue)
-3. **Check GitHub raw content access:**
-   ```bash
-   curl -I https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang/manifest.json
-   ```
-4. **Clear partial downloads:**
-   ```bash
-   rm -rf ~/.clang-tool-chain/
-   ```
-
-### Tool Execution Fails
-
-**Error:** `Permission denied` (Linux/macOS)
-
-**Solution:**
-```bash
-# Ensure execute permissions
-chmod +x ~/.clang-tool-chain/clang/*/bin/*
-
-# Or reinstall
-rm -rf ~/.clang-tool-chain/
-clang-tool-chain-c --version  # Re-downloads with correct permissions
-```
-
-### Slow First-Time Download
-
-**Observation:** First compilation takes 30-60 seconds
-
-**This is normal!** The toolchain is downloading. Subsequent compilations are instant. To pre-download:
-
-```bash
-# Pre-fetch binaries before your build
-clang-tool-chain-fetch
-
-# Or just run any command
-clang-tool-chain-c --version
-```
-
-### Import Errors
-
-**Error:** `ModuleNotFoundError: No module named 'clang_tool_chain'`
-
-**Solutions:**
-1. **Ensure package is installed:**
-   ```bash
-   pip install clang-tool-chain
-   ```
-
-2. **Check Python environment:**
-   ```bash
-   which python  # Verify correct Python interpreter
-   pip list | grep clang-tool-chain
-   ```
-
-3. **Reinstall:**
-   ```bash
-   pip uninstall clang-tool-chain
-   pip install clang-tool-chain
-   ```
-
-### Custom Installation Path Not Working
-
-**Error:** Binaries install to default location despite `CLANG_TOOL_CHAIN_DOWNLOAD_PATH`
-
-**Solution:** Ensure the environment variable is set **before** running the command:
-
-```bash
-# Linux/macOS
-export CLANG_TOOL_CHAIN_DOWNLOAD_PATH=/custom/path
-clang-tool-chain-c hello.c
-
-# Windows (CMD)
-set CLANG_TOOL_CHAIN_DOWNLOAD_PATH=C:\custom\path
-clang-tool-chain-c hello.c
-
-# Windows (PowerShell)
-$env:CLANG_TOOL_CHAIN_DOWNLOAD_PATH="C:\custom\path"
-clang-tool-chain-c hello.c
-```
-
----
-
-## 🔒 Security
-
-Security is a top priority for this project.
-
-### Checksum Verification
-
-- **Automatic:** SHA256 checksums are verified during download (enabled by default)
-- **Manifest-Based:** Checksums stored in version-controlled manifests
-- **Protection:** Detects corrupted downloads, MITM attacks, and file tampering
-- **Transparency:** All checksums visible in `downloads/clang/{platform}/{arch}/manifest.json`
-
-### Safe Extraction
-
-- **Python 3.12+ Tarfile Safety:** Uses `filter="data"` to prevent path traversal attacks
-- **Temporary Directory:** Extraction happens in temp directory, then moved atomically
-- **Validation:** Verifies archive integrity before extraction
-
-### Reporting Security Issues
-
-For security vulnerabilities, please see our [Security Policy](SECURITY.md) for responsible disclosure instructions.
-
-**Do NOT** report security issues in public GitHub issues.
+</details>
 
 ---
 
@@ -1330,7 +1539,12 @@ The bundled LLVM/Clang binaries are licensed under the **Apache License 2.0 with
 
 ## 📊 Version History
 
-### 0.0.1 (2025-11-07) - Initial Alpha Release
+### 1.0.1 (2025-11-09)
+- ✅ Automatic macOS SDK detection via xcrun
+- ✅ Improved error messages and troubleshooting
+- ✅ Enhanced documentation with platform-specific guidance
+
+### 1.0.0 (2025-11-07) - Initial Release
 - ✅ Core wrapper infrastructure for 22 wrapper commands
 - ✅ Automatic download and installation system
 - ✅ Manifest-based distribution with SHA256 verification
@@ -1339,7 +1553,7 @@ The bundled LLVM/Clang binaries are licensed under the **Apache License 2.0 with
 - ✅ Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)
 - ✅ File locking for concurrent-safe downloads
 - ✅ Ultra-compressed archives (zstd level 22, 94.3% size reduction)
-- ✅ LLVM 21.1.5 for Windows/Linux, 19.1.7 for macOS
+- ✅ LLVM 21.1.5 for Windows/Linux, 19.1.6 for macOS
 - ✅ Comprehensive test suite with CI/CD integration
 
 ---
@@ -1362,3 +1576,7 @@ That's all you need! The toolchain downloads automatically. Happy compiling! �
 **Repository:** [github.com/zackees/clang-tool-chain](https://github.com/zackees/clang-tool-chain)
 **Issues:** [github.com/zackees/clang-tool-chain/issues](https://github.com/zackees/clang-tool-chain/issues)
 **PyPI:** [pypi.org/project/clang-tool-chain/](https://pypi.org/project/clang-tool-chain/)
+
+---
+
+**Keywords:** clang wrapper, llvm python, portable clang, clang installer, llvm toolchain, cross-platform compiler, python clang, automated llvm, clang docker, ci/cd compiler
