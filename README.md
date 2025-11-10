@@ -40,9 +40,7 @@ clang-tool-chain-test  # Runs 7 diagnostic tests
 >
 > See [Platform Support Matrix](#-platform-support-matrix) for details.
 
-### ⚠️ Windows Users: GNU ABI by Default (v2.0+)
-
-**IMPORTANT:** Starting with v2.0.0, Windows defaults to GNU ABI (MinGW-w64) for cross-platform consistency.
+### ⚠️ Windows Users: GNU ABI by Default
 
 This matches the behavior of [zig cc](https://ziglang.org/learn/overview/#cross-compiling-is-a-first-class-use-case) and ensures consistent C++ ABI across all platforms.
 
