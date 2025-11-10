@@ -15,7 +15,6 @@ import tarfile
 import urllib.request
 import zipfile
 from pathlib import Path
-from typing import Any
 
 # LLVM-MinGW version and download URLs
 LLVM_MINGW_VERSION = "20251104"  # Release date format (latest as of Nov 2024)
@@ -80,7 +79,7 @@ def extract_sysroot(archive_path: Path, extract_dir: Path, arch: str) -> Path:
     temp_extract = extract_dir / "temp"
     temp_extract.mkdir(parents=True, exist_ok=True)
 
-    print(f"Extracting archive...")
+    print("Extracting archive...")
     try:
         # Check if it's a ZIP or tar.xz archive
         if archive_path.suffix == ".zip":
@@ -165,10 +164,7 @@ def create_archive(sysroot_dir: Path, output_dir: Path, arch: str) -> Path:
 
     with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
         # Determine what to archive
-        if arch == "x86_64":
-            sysroot_name = "x86_64-w64-mingw32"
-        else:
-            sysroot_name = "aarch64-w64-mingw32"
+        sysroot_name = "x86_64-w64-mingw32" if arch == "x86_64" else "aarch64-w64-mingw32"
 
         sysroot_path = sysroot_dir.parent / sysroot_name
         include_path = sysroot_dir.parent / "include"
@@ -179,11 +175,11 @@ def create_archive(sysroot_dir: Path, output_dir: Path, arch: str) -> Path:
             tar.add(sysroot_path, arcname=sysroot_name)
 
         if include_path.exists():
-            print(f"Adding to archive: include/")
+            print("Adding to archive: include/")
             tar.add(include_path, arcname="include")
 
         if generic_path.exists():
-            print(f"Adding to archive: generic-w64-mingw32/")
+            print("Adding to archive: generic-w64-mingw32/")
             tar.add(generic_path, arcname="generic-w64-mingw32")
 
     tar_data = tar_buffer.getvalue()
@@ -191,7 +187,7 @@ def create_archive(sysroot_dir: Path, output_dir: Path, arch: str) -> Path:
     print(f"Tar size: {tar_size / (1024*1024):.2f} MB")
 
     # Compress with zstd level 22
-    print(f"Compressing with zstd level 22...")
+    print("Compressing with zstd level 22...")
     cctx = zstd.ZstdCompressor(level=22, threads=-1)
     compressed_data = cctx.compress(tar_data)
 
@@ -209,13 +205,16 @@ def create_archive(sysroot_dir: Path, output_dir: Path, arch: str) -> Path:
 
 def generate_checksums(archive_path: Path) -> dict[str, str]:
     """Generate SHA256 and MD5 checksums."""
-    print(f"\nGenerating checksums...")
+    print("\nGenerating checksums...")
 
     sha256_hash = hashlib.sha256()
     md5_hash = hashlib.md5()
 
     with open(archive_path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
+        while True:
+            chunk = f.read(8192)
+            if not chunk:
+                break
             sha256_hash.update(chunk)
             md5_hash.update(chunk)
 
@@ -243,9 +242,7 @@ def generate_checksums(archive_path: Path) -> dict[str, str]:
 def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Extract MinGW sysroot from LLVM-MinGW release")
-    parser.add_argument(
-        "--arch", required=True, choices=["x86_64", "arm64"], help="Target architecture"
-    )
+    parser.add_argument("--arch", required=True, choices=["x86_64", "arm64"], help="Target architecture")
     parser.add_argument(
         "--work-dir",
         type=Path,

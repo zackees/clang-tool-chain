@@ -68,6 +68,9 @@ clang-tool-chain-build = "clang_tool_chain.wrapper:build_main"
 # Compilers
 clang-tool-chain-c = "clang_tool_chain.wrapper:clang_main"
 clang-tool-chain-cpp = "clang_tool_chain.wrapper:clang_cpp_main"
+# MSVC ABI variants (Windows only)
+clang-tool-chain-c-msvc = "clang_tool_chain.wrapper:clang_msvc_main"
+clang-tool-chain-cpp-msvc = "clang_tool_chain.wrapper:clang_cpp_msvc_main"
 # Linker and Archiver
 clang-tool-chain-ld = "clang_tool_chain.wrapper:lld_main"
 clang-tool-chain-ar = "clang_tool_chain.wrapper:llvm_ar_main"
@@ -87,6 +90,9 @@ clang-tool-chain-tidy = "clang_tool_chain.wrapper:clang_tidy_main"
 clang-tool-chain-sccache = "clang_tool_chain.cli:sccache_main"
 clang-tool-chain-sccache-c = "clang_tool_chain.cli:sccache_c_main"
 clang-tool-chain-sccache-cpp = "clang_tool_chain.cli:sccache_cpp_main"
+# sccache MSVC ABI variants (Windows only)
+clang-tool-chain-sccache-c-msvc = "clang_tool_chain.cli:sccache_c_msvc_main"
+clang-tool-chain-sccache-cpp-msvc = "clang_tool_chain.cli:sccache_cpp_msvc_main"
 # IWYU (Include What You Use)
 clang-tool-chain-iwyu = "clang_tool_chain.wrapper:iwyu_main"
 clang-tool-chain-iwyu-tool = "clang_tool_chain.wrapper:iwyu_tool_main"

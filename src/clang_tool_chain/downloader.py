@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # Base URL for manifest and downloads
 MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang"
 IWYU_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/iwyu"
+MINGW_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/mingw"
 
 # Generic type variable for JSON deserialization
 T = TypeVar("T")
@@ -110,10 +111,17 @@ def _parse_manifest(data: dict[str, Any]) -> Manifest:
     latest = data.get("latest", "")
     versions = {}
 
-    # Parse all version entries (excluding 'latest' key)
-    for key, value in data.items():
-        if key != "latest" and isinstance(value, dict):
-            versions[key] = VersionInfo(version=key, href=value["href"], sha256=value["sha256"])
+    # Check if versions are nested under a "versions" key
+    if "versions" in data and isinstance(data["versions"], dict):
+        # Parse nested versions structure
+        for key, value in data["versions"].items():
+            if isinstance(value, dict) and "href" in value and "sha256" in value:
+                versions[key] = VersionInfo(version=key, href=value["href"], sha256=value["sha256"])
+    else:
+        # Parse flat structure (all non-"latest" keys are version entries)
+        for key, value in data.items():
+            if key != "latest" and isinstance(value, dict) and "href" in value and "sha256" in value:
+                versions[key] = VersionInfo(version=key, href=value["href"], sha256=value["sha256"])
 
     return Manifest(latest=latest, versions=versions)
 
@@ -904,3 +912,218 @@ def ensure_iwyu(platform: str, arch: str) -> None:
         logger.info("Starting IWYU download and installation")
         download_and_install_iwyu(platform, arch)
         logger.info(f"IWYU installation complete for {platform}/{arch}")
+
+
+# ============================================================================
+# MinGW Sysroot Support (Windows GNU ABI)
+# ============================================================================
+
+
+def fetch_mingw_root_manifest() -> RootManifest:
+    """
+    Fetch the MinGW sysroot root manifest file.
+
+    Returns:
+        Root manifest as a RootManifest object
+    """
+    logger.info("Fetching MinGW sysroot root manifest")
+    url = f"{MINGW_MANIFEST_BASE_URL}/manifest.json"
+    data = _fetch_json_raw(url)
+    manifest = _parse_root_manifest(data)
+    logger.info(f"MinGW sysroot root manifest loaded with {len(manifest.platforms)} platforms")
+    return manifest
+
+
+def fetch_mingw_platform_manifest(platform: str, arch: str) -> Manifest:
+    """
+    Fetch the MinGW sysroot platform-specific manifest file.
+
+    Args:
+        platform: Platform name (e.g., "win")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Platform manifest as a Manifest object
+
+    Raises:
+        RuntimeError: If platform/arch combination is not found
+    """
+    logger.info(f"Fetching MinGW sysroot platform manifest for {platform}/{arch}")
+    root_manifest = fetch_mingw_root_manifest()
+
+    # Find the platform in the manifest
+    for plat_entry in root_manifest.platforms:
+        if plat_entry.platform == platform:
+            # Find the architecture
+            for arch_entry in plat_entry.architectures:
+                if arch_entry.arch == arch:
+                    manifest_path = arch_entry.manifest_path
+                    logger.info(f"Found MinGW sysroot manifest path: {manifest_path}")
+                    url = f"{MINGW_MANIFEST_BASE_URL}/{manifest_path}"
+                    data = _fetch_json_raw(url)
+                    manifest = _parse_manifest(data)
+                    logger.info(f"MinGW sysroot platform manifest loaded successfully for {platform}/{arch}")
+                    return manifest
+
+    logger.error(f"MinGW sysroot platform {platform}/{arch} not found in manifest")
+    raise RuntimeError(f"MinGW sysroot platform {platform}/{arch} not found in manifest")
+
+
+def get_mingw_install_dir(platform: str, arch: str) -> Path:
+    """
+    Get the installation directory for MinGW sysroot.
+
+    Args:
+        platform: Platform name (e.g., "win")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the MinGW sysroot installation directory
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    install_dir = toolchain_dir / "mingw" / platform / arch
+    return install_dir
+
+
+def get_mingw_lock_path(platform: str, arch: str) -> Path:
+    """
+    Get the lock file path for MinGW sysroot installation.
+
+    Args:
+        platform: Platform name (e.g., "win")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the lock file
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    toolchain_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = toolchain_dir / f"mingw-{platform}-{arch}.lock"
+    return lock_path
+
+
+def is_mingw_installed(platform: str, arch: str) -> bool:
+    """
+    Check if MinGW sysroot is already installed.
+
+    Args:
+        platform: Platform name (e.g., "win")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        True if installed, False otherwise
+    """
+    install_dir = get_mingw_install_dir(platform, arch)
+    done_file = install_dir / "done.txt"
+    return done_file.exists()
+
+
+# Alias for consistency with test naming
+is_mingw_sysroot_installed = is_mingw_installed
+
+
+def download_and_install_mingw(platform: str, arch: str) -> None:
+    """
+    Download and install MinGW sysroot for the given platform/arch.
+
+    Args:
+        platform: Platform name (e.g., "win")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+    """
+    logger.info(f"Downloading and installing MinGW sysroot for {platform}/{arch}")
+
+    # Fetch the manifest to get download URL and checksum
+    manifest = fetch_mingw_platform_manifest(platform, arch)
+    version_info = manifest.versions[manifest.latest]
+
+    logger.info(f"MinGW sysroot version: {manifest.latest}")
+    logger.info(f"Download URL: {version_info.href}")
+
+    # Create temporary download directory
+    install_dir = get_mingw_install_dir(platform, arch)
+    logger.info(f"Installation directory: {install_dir}")
+
+    # Remove old installation if exists
+    if install_dir.exists():
+        logger.info("Removing old MinGW sysroot installation")
+        shutil.rmtree(install_dir)
+
+    # Create temp directory for download
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        archive_file = temp_path / "mingw-sysroot.tar.zst"
+
+        # Download the archive
+        download_file(version_info.href, archive_file, version_info.sha256)
+
+        # Extract to installation directory
+        logger.info("Extracting MinGW sysroot archive")
+        extract_tarball(archive_file, install_dir)
+
+        # Fix permissions on Unix systems (not needed for Windows but included for consistency)
+        if os.name != "nt":
+            logger.info("Setting executable permissions on MinGW sysroot")
+            fix_file_permissions(install_dir)
+
+        # Mark installation as complete
+        # Ensure install_dir exists before writing done.txt
+        install_dir.mkdir(parents=True, exist_ok=True)
+        done_file = install_dir / "done.txt"
+        with open(done_file, "w") as f:
+            f.write(f"MinGW sysroot {manifest.latest} installed successfully\n")
+
+        logger.info(f"MinGW sysroot installation complete for {platform}/{arch}")
+
+
+# Alias for consistency with test naming
+download_and_install_mingw_sysroot = download_and_install_mingw
+
+
+def ensure_mingw_sysroot_installed(platform: str, arch: str) -> Path:
+    """
+    Ensure MinGW sysroot is installed for Windows GNU ABI support.
+
+    This function uses file locking to prevent concurrent downloads.
+    If the sysroot is not installed, it will be downloaded and installed.
+
+    Args:
+        platform: Platform name ("win")
+        arch: Architecture ("x86_64" or "arm64")
+
+    Returns:
+        Path to the installed MinGW sysroot directory
+
+    Raises:
+        ValueError: If platform is not Windows
+    """
+    if platform != "win":
+        raise ValueError(f"MinGW sysroot only needed on Windows, not {platform}")
+
+    logger.info(f"Ensuring MinGW sysroot is installed for {platform}/{arch}")
+
+    # Quick check without lock - if already installed, return immediately
+    if is_mingw_installed(platform, arch):
+        logger.info(f"MinGW sysroot already installed for {platform}/{arch}")
+        return get_mingw_install_dir(platform, arch)
+
+    # Need to download - acquire lock
+    logger.info(f"MinGW sysroot not installed, acquiring lock for {platform}/{arch}")
+    lock_path = get_mingw_lock_path(platform, arch)
+    logger.debug(f"Lock path: {lock_path}")
+    lock = fasteners.InterProcessLock(str(lock_path))
+
+    logger.info("Waiting to acquire MinGW sysroot installation lock...")
+    with lock:
+        logger.info("Lock acquired")
+
+        # Check again inside lock in case another process just finished installing
+        if is_mingw_installed(platform, arch):
+            logger.info("Another process installed MinGW sysroot while we waited")
+            return get_mingw_install_dir(platform, arch)
+
+        # Download and install
+        logger.info("Starting MinGW sysroot download and installation")
+        download_and_install_mingw(platform, arch)
+        logger.info(f"MinGW sysroot installation complete for {platform}/{arch}")
+
+    return get_mingw_install_dir(platform, arch)

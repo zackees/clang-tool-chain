@@ -9,7 +9,7 @@ properly set executable permissions on all binaries in the bin/ directory.
 import tarfile
 from pathlib import Path
 
-import pytest
+import pytest  # type: ignore[import-not-found]
 
 from clang_tool_chain.downloads.fetch_and_archive import (
     create_tar_archive,

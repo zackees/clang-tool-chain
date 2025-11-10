@@ -4,6 +4,7 @@ Tests for the downloader module.
 
 import hashlib
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -539,6 +540,113 @@ class TestDownloader(unittest.TestCase):
             static_mode = static_lib.stat().st_mode
             self.assertFalse(static_mode & stat.S_IXUSR, "Static lib should not be executable")
             self.assertEqual(static_mode & 0o777, 0o644, f"Static lib should be 0o644, got {oct(static_mode & 0o777)}")
+
+
+@unittest.skipUnless(sys.platform == "win32", "Windows-only tests")
+class TestMinGWDownloader(unittest.TestCase):
+    """Test cases for MinGW sysroot downloader."""
+
+    @patch("clang_tool_chain.downloader.is_mingw_installed")
+    def test_ensure_mingw_sysroot_already_installed(self, mock_is_installed: Mock) -> None:
+        """Test ensure_mingw_sysroot_installed when already installed."""
+        mock_is_installed.return_value = True
+
+        # Should return immediately without downloading
+        result = downloader.ensure_mingw_sysroot_installed("win", "x86_64")
+
+        # Should return a valid path
+        self.assertIsInstance(result, Path)
+        self.assertEqual(mock_is_installed.call_count, 1)
+
+    @patch("clang_tool_chain.downloader.download_and_install_mingw")
+    @patch("clang_tool_chain.downloader.is_mingw_installed")
+    def test_ensure_mingw_sysroot_needs_install(self, mock_is_installed: Mock, mock_download: Mock) -> None:
+        """Test ensure_mingw_sysroot_installed when installation is needed."""
+        # First check returns False, second (inside lock) also returns False
+        mock_is_installed.side_effect = [False, False]
+        mock_download.return_value = None  # download_and_install_mingw returns None
+
+        result = downloader.ensure_mingw_sysroot_installed("win", "x86_64")
+
+        # Should have called download_and_install
+        mock_download.assert_called_once_with("win", "x86_64")
+        self.assertIsInstance(result, Path)
+
+    def test_get_mingw_install_dir(self) -> None:
+        """Test that get_mingw_install_dir returns correct path."""
+        result = downloader.get_mingw_install_dir("win", "x86_64")
+        self.assertIsInstance(result, Path)
+        self.assertTrue(str(result).endswith("mingw/win/x86_64") or str(result).endswith("mingw\\win\\x86_64"))
+
+    def test_get_mingw_lock_path(self) -> None:
+        """Test that get_mingw_lock_path returns correct lock file path."""
+        result = downloader.get_mingw_lock_path("win", "x86_64")
+        self.assertIsInstance(result, Path)
+        self.assertTrue(str(result).endswith("mingw-win-x86_64.lock"))
+
+    def test_is_mingw_sysroot_installed_false(self) -> None:
+        """Test is_mingw_sysroot_installed returns False when not installed."""
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("clang_tool_chain.downloader.get_mingw_install_dir", return_value=Path(tmpdir) / "nonexistent"),
+        ):
+            result = downloader.is_mingw_installed("win", "x86_64")
+            self.assertFalse(result)
+
+    def test_is_mingw_sysroot_installed_true(self) -> None:
+        """Test is_mingw_sysroot_installed returns True when done.txt exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            install_dir = Path(tmpdir)
+            install_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create done.txt file
+            done_file = install_dir / "done.txt"
+            done_file.write_text("MinGW sysroot installation completed\n")
+
+            with patch("clang_tool_chain.downloader.get_mingw_install_dir", return_value=install_dir):
+                result = downloader.is_mingw_installed("win", "x86_64")
+                self.assertTrue(result)
+
+    @patch("clang_tool_chain.downloader._fetch_json_raw")
+    def test_fetch_mingw_root_manifest(self, mock_fetch_json_raw: Mock) -> None:
+        """Test fetching MinGW root manifest."""
+        test_data = {
+            "platforms": [
+                {"platform": "win", "architectures": [{"arch": "x86_64", "manifest_path": "win/x86_64/manifest.json"}]}
+            ]
+        }
+        mock_fetch_json_raw.return_value = test_data
+
+        result = downloader.fetch_mingw_root_manifest()
+        self.assertIsInstance(result, downloader.RootManifest)
+        self.assertEqual(len(result.platforms), 1)
+        self.assertEqual(result.platforms[0].platform, "win")
+
+    @patch("clang_tool_chain.downloader._fetch_json_raw")
+    def test_fetch_mingw_platform_manifest(self, mock_fetch_json_raw: Mock) -> None:
+        """Test fetching MinGW platform-specific manifest."""
+        root_manifest_data = {
+            "platforms": [
+                {"platform": "win", "architectures": [{"arch": "x86_64", "manifest_path": "win/x86_64/manifest.json"}]}
+            ]
+        }
+        platform_manifest_data = {
+            "latest": "21.1.5",
+            "versions": {
+                "21.1.5": {
+                    "version": "21.1.5",
+                    "href": "win/x86_64/mingw-sysroot-21.1.5-win-x86_64.tar.zst",
+                    "sha256": "abc123",
+                }
+            },
+        }
+
+        mock_fetch_json_raw.side_effect = [root_manifest_data, platform_manifest_data]
+
+        result = downloader.fetch_mingw_platform_manifest("win", "x86_64")
+        self.assertIsInstance(result, downloader.Manifest)
+        self.assertEqual(result.latest, "21.1.5")
+        self.assertIn("21.1.5", result.versions)
 
 
 if __name__ == "__main__":

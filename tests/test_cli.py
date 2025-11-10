@@ -5,6 +5,7 @@ These tests verify the command-line interface works correctly.
 """
 
 import sys
+import tempfile
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -292,13 +293,17 @@ class TestSccacheWrappers(unittest.TestCase):
         self.assertEqual(call_args[2:], ["main.c", "-o", "main"])
 
     @patch("sys.argv", ["clang-tool-chain-sccache-c", "main.c"])
+    @patch("clang_tool_chain.wrapper.find_tool_binary")
     @patch("clang_tool_chain.sccache_runner.get_sccache_path")
     @patch("clang_tool_chain.sccache_runner.run_sccache_via_isoenv")
     @patch("sys.stderr", new_callable=StringIO)
-    def test_sccache_c_main_sccache_not_found(self, mock_stderr: StringIO, mock_isoenv: Mock, mock_which: Mock) -> None:
+    def test_sccache_c_main_sccache_not_found(
+        self, mock_stderr: StringIO, mock_isoenv: Mock, mock_which: Mock, mock_find: Mock
+    ) -> None:
         """Test sccache_c_main when sccache is not in PATH."""
         mock_which.return_value = None
         mock_isoenv.return_value = 0
+        mock_find.return_value = "/fake/path/to/clang"
 
         result = cli.sccache_c_main()
 
@@ -379,15 +384,17 @@ class TestSccacheWrappers(unittest.TestCase):
         self.assertIn("clang++", str(call_args[1]))
 
     @patch("sys.argv", ["clang-tool-chain-sccache-cpp", "main.cpp"])
+    @patch("clang_tool_chain.wrapper.find_tool_binary")
     @patch("clang_tool_chain.sccache_runner.get_sccache_path")
     @patch("clang_tool_chain.sccache_runner.run_sccache_via_isoenv")
     @patch("sys.stderr", new_callable=StringIO)
     def test_sccache_cpp_main_sccache_not_found(
-        self, mock_stderr: StringIO, mock_isoenv: Mock, mock_which: Mock
+        self, mock_stderr: StringIO, mock_isoenv: Mock, mock_which: Mock, mock_find: Mock
     ) -> None:
         """Test sccache_cpp_main when sccache is not in PATH."""
         mock_which.return_value = None
         mock_isoenv.return_value = 0
+        mock_find.return_value = "/fake/path/to/clang++"
 
         result = cli.sccache_cpp_main()
 
@@ -454,6 +461,58 @@ class MainTester(unittest.TestCase):
         self.assertTrue(callable(clang_tool_chain.cli.sccache_c_main))
         self.assertTrue(hasattr(clang_tool_chain.cli, "sccache_cpp_main"))
         self.assertTrue(callable(clang_tool_chain.cli.sccache_cpp_main))
+
+    def test_msvc_functions_exist(self) -> None:
+        """Test that MSVC variant wrapper functions exist."""
+        from clang_tool_chain import wrapper
+
+        self.assertTrue(hasattr(wrapper, "clang_msvc_main"))
+        self.assertTrue(callable(wrapper.clang_msvc_main))
+        self.assertTrue(hasattr(wrapper, "clang_cpp_msvc_main"))
+        self.assertTrue(callable(wrapper.clang_cpp_msvc_main))
+
+
+@unittest.skipUnless(sys.platform == "win32", "Windows-only tests")
+class TestWindowsGNUDefault(unittest.TestCase):
+    """Test Windows GNU ABI default behavior."""
+
+    def setUp(self) -> None:
+        """Set up test environment."""
+        self.temp_dir = Path(tempfile.mkdtemp())
+
+    def tearDown(self) -> None:
+        """Clean up test files."""
+        import shutil
+
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_windows_gnu_default_detection(self) -> None:
+        """Test that should_use_gnu_abi returns True on Windows by default."""
+        from clang_tool_chain import wrapper
+
+        # Test that Windows without --target should use GNU
+        result = wrapper._should_use_gnu_abi("win", ["test.c", "-o", "test.exe"])
+        self.assertTrue(result, "Windows should default to GNU ABI")
+
+        # Test that explicit --target disables GNU injection
+        result = wrapper._should_use_gnu_abi("win", ["--target=x86_64-pc-windows-msvc", "test.c"])
+        self.assertFalse(result, "Explicit --target should prevent GNU injection")
+
+        # Test that non-Windows doesn't trigger GNU
+        result = wrapper._should_use_gnu_abi("linux", ["test.c", "-o", "test"])
+        self.assertFalse(result, "Non-Windows platforms should not trigger GNU injection")
+
+    def test_list_tools_includes_msvc_variants(self) -> None:
+        """Test that list-tools includes MSVC variants."""
+        from io import StringIO
+
+        with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+            args = MagicMock()
+            cli.cmd_list_tools(args)
+            output = mock_stdout.getvalue()
+
+            self.assertIn("clang-tool-chain-c-msvc", output, "Should list MSVC C compiler variant")
+            self.assertIn("clang-tool-chain-cpp-msvc", output, "Should list MSVC C++ compiler variant")
 
 
 if __name__ == "__main__":

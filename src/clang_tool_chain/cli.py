@@ -7,6 +7,7 @@ Provides commands for managing and using the LLVM toolchain.
 import argparse
 import subprocess
 import sys
+from typing import NoReturn
 
 from . import sccache_runner, wrapper
 
@@ -32,6 +33,19 @@ def cmd_info(args: argparse.Namespace) -> int:
     except RuntimeError as e:
         print(f"Error detecting platform: {e}")
         return 1
+
+    # Windows GNU ABI information
+    if platform_name == "win":
+        print("Windows Target Configuration:")
+        print("  Default ABI:  GNU (x86_64-w64-mingw32)")
+        print("  MSVC ABI:     Available via clang-tool-chain-c-msvc")
+        print("                and clang-tool-chain-cpp-msvc")
+        print()
+        print("Why GNU ABI is default:")
+        print("  - Cross-platform consistency (same ABI on Linux/macOS/Windows)")
+        print("  - C++11 strict mode support (MSVC headers require C++14+)")
+        print("  - Arduino/embedded compatibility (matches GCC toolchain)")
+        print()
 
     # Assets directory
     assets_dir = wrapper.get_assets_dir()
@@ -95,8 +109,10 @@ def cmd_list_tools(args: argparse.Namespace) -> int:
     print()
 
     tools = [
-        ("clang-tool-chain-c", "C compiler (clang)"),
-        ("clang-tool-chain-cpp", "C++ compiler (clang++)"),
+        ("clang-tool-chain-c", "C compiler (clang) - GNU ABI on Windows"),
+        ("clang-tool-chain-cpp", "C++ compiler (clang++) - GNU ABI on Windows"),
+        ("clang-tool-chain-c-msvc", "C compiler (clang) - MSVC ABI (Windows only)"),
+        ("clang-tool-chain-cpp-msvc", "C++ compiler (clang++) - MSVC ABI (Windows only)"),
         ("clang-tool-chain-ld", "LLVM linker (lld/lld-link)"),
         ("clang-tool-chain-ar", "Archive tool (llvm-ar)"),
         ("clang-tool-chain-nm", "Symbol table viewer (llvm-nm)"),
@@ -533,6 +549,26 @@ def sccache_cpp_main() -> int:
         return 1
 
     return sccache_runner.run_sccache_with_compiler(str(clang_cpp_path), args)
+
+
+def sccache_c_msvc_main() -> NoReturn:
+    """
+    Entry point for sccache + clang C compiler wrapper with MSVC ABI.
+
+    This command wraps the clang C compiler with sccache for compilation caching,
+    using MSVC ABI target on Windows.
+    """
+    wrapper.sccache_clang_main(use_msvc=True)
+
+
+def sccache_cpp_msvc_main() -> NoReturn:
+    """
+    Entry point for sccache + clang++ C++ compiler wrapper with MSVC ABI.
+
+    This command wraps the clang++ C++ compiler with sccache for compilation caching,
+    using MSVC ABI target on Windows.
+    """
+    wrapper.sccache_clang_cpp_main(use_msvc=True)
 
 
 if __name__ == "__main__":
