@@ -62,7 +62,6 @@ clang-tool-chain-test = "clang_tool_chain.cli:test_main"
 # Download utilities
 clang-tool-chain-fetch = "clang_tool_chain.fetch:main"
 clang-tool-chain-paths = "clang_tool_chain.paths:main"
-clang-tool-chain-fetch-archive = "clang_tool_chain.downloads.fetch_and_archive:main"
 # Build utility
 clang-tool-chain-build = "clang_tool_chain.wrapper:build_main"
 # Compilers

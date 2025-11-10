@@ -592,16 +592,29 @@ The package provides these entry points (defined in `pyproject.toml`):
 
 ## Maintainer Tools
 
+Maintainer scripts for creating binary archives are located in the **submodule** at `downloads-bins/tools/`. This keeps the main repository lightweight and separates binary distribution tooling from the package code.
+
+**Setup:**
+```bash
+# Initialize the submodule (first time only)
+git submodule init
+git submodule update
+
+# Navigate to tools directory
+cd downloads-bins/tools
+```
+
 ### Archive Creation Pipeline
 
-The `clang-tool-chain-fetch-archive` command automates the complete packaging process:
+The `fetch_and_archive.py` script automates the complete packaging process:
 
 ```bash
 # Create optimized archive for Windows x86_64
-clang-tool-chain-fetch-archive --platform win --arch x86_64
+cd downloads-bins/tools
+python fetch_and_archive.py --platform win --arch x86_64
 
 # Use existing binaries (skip download)
-clang-tool-chain-fetch-archive --platform win --arch x86_64 --source-dir ./assets/win
+python fetch_and_archive.py --platform win --arch x86_64 --source-dir ./extracted
 ```
 
 **What it does:**
@@ -613,32 +626,39 @@ clang-tool-chain-fetch-archive --platform win --arch x86_64 --source-dir ./asset
 6. Compresses with zstd level 22 (94.3% reduction)
 7. Generates checksums (SHA256, MD5)
 8. Names archive: `llvm-{version}-{platform}-{arch}.tar.zst`
-9. Places in `downloads-bins/assets/clang/{platform}/{arch}/` (submodule directory)
+9. Places in `../assets/clang/{platform}/{arch}/`
+
+**Requirements:**
+```bash
+pip install zstandard
+```
 
 **Result:** 51.53 MB archive (from 902 MB original) for Windows x86_64
 
 ### Individual Maintainer Scripts
 
-Available as Python modules in `clang_tool_chain.downloads`:
+Located in `downloads-bins/tools/`:
 
+- `fetch_and_archive.py`: Complete pipeline for LLVM toolchain archives
+- `extract_mingw_sysroot.py`: Extract MinGW-w64 sysroot for Windows GNU ABI
 - `download_binaries.py`: Download LLVM releases from GitHub
 - `strip_binaries.py`: Remove unnecessary files to optimize size
 - `deduplicate_binaries.py`: Identify duplicate binaries by MD5 hash
 - `create_hardlink_archive.py`: Create hard-linked TAR archives
 - `expand_archive.py`: Extract `.tar.zst` archives
 - `test_compression.py`: Compare compression methods
-- `extract_mingw_sysroot.py`: Extract MinGW-w64 sysroot for Windows GNU ABI support
+- `create_iwyu_archives.py`: Create include-what-you-use archives
+
+See `downloads-bins/tools/README.md` for detailed documentation.
 
 ### MinGW Sysroot Generation (Windows GNU ABI)
 
-The `extract_mingw_sysroot.py` script creates MinGW-w64 sysroot archives for Windows GNU ABI support:
+The `extract_mingw_sysroot.py` script creates MinGW-w64 sysroot archives:
 
 ```bash
 # Generate MinGW sysroot archive for Windows x86_64
-python -m clang_tool_chain.downloads.extract_mingw_sysroot \
-    --arch x86_64 \
-    --work-dir work \
-    --output-dir downloads-bins/assets/mingw/win
+cd downloads-bins/tools
+python extract_mingw_sysroot.py --arch x86_64 --work-dir work
 ```
 
 **What it does:**
@@ -649,6 +669,7 @@ python -m clang_tool_chain.downloads.extract_mingw_sysroot \
 5. Generates checksums (SHA256, MD5)
 6. Creates manifest.json
 7. Names archive: `mingw-sysroot-{version}-win-{arch}.tar.zst`
+8. Places in `../assets/mingw/win/{arch}/`
 
 **Result:** ~12 MB archive (from 176 MB uncompressed) for Windows x86_64
 
