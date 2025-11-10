@@ -506,22 +506,34 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
             # The archive should extract to a single directory with the expected name
             # If it doesn't match dest_dir name, rename it
             if not dest_dir.exists():
-                # Look for any directory in the parent (excluding done.txt and other files)
-                extracted_dirs = [d for d in dest_dir.parent.iterdir() if d.is_dir()]
+                # Look for what was extracted in the parent directory
+                extracted_items = list(dest_dir.parent.iterdir())
+                extracted_dirs = [d for d in extracted_items if d.is_dir()]
+                extracted_files = [f for f in extracted_items if f.is_file() and f.name != "done.txt"]
+
                 logger.debug(
-                    f"Found {len(extracted_dirs)} directories in {dest_dir.parent}: {[d.name for d in extracted_dirs]}"
+                    f"Found {len(extracted_dirs)} directories and {len(extracted_files)} files in {dest_dir.parent}: "
+                    f"dirs={[d.name for d in extracted_dirs]}, files={[f.name for f in extracted_files[:5]]}"
                 )
 
-                if extracted_dirs:
-                    # Find the most likely candidate (should be the only directory, or the newest)
-                    # Filter out dest_dir itself in case it was already created
-                    candidates = [d for d in extracted_dirs if d != dest_dir]
-                    if candidates:
-                        actual_dir = candidates[0]  # Take the first (and should be only) directory
-                        logger.info(f"Renaming extracted directory {actual_dir} to {dest_dir}")
-                        shutil.move(str(actual_dir), str(dest_dir))
-                    else:
-                        logger.warning(f"No extracted directory found to rename to {dest_dir}")
+                # Case 1: Archive extracted to a single top-level directory (e.g., clang archives)
+                # Filter out dest_dir itself in case it was already created
+                candidates = [d for d in extracted_dirs if d != dest_dir]
+                if len(candidates) == 1 and len(extracted_files) == 0:
+                    actual_dir = candidates[0]
+                    logger.info(f"Renaming extracted directory {actual_dir} to {dest_dir}")
+                    shutil.move(str(actual_dir), str(dest_dir))
+                # Case 2: Archive has flat structure with bin/, share/, etc. (e.g., IWYU archives)
+                elif extracted_dirs or extracted_files:
+                    logger.info(f"Archive has flat structure, moving contents into {dest_dir}")
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    for item in extracted_items:
+                        if item.is_dir() or (item.is_file() and item.name != "done.txt"):
+                            target = dest_dir / item.name
+                            logger.debug(f"Moving {item} to {target}")
+                            shutil.move(str(item), str(target))
+                else:
+                    logger.warning(f"No extracted content found to move to {dest_dir}")
 
             logger.info(f"Successfully extracted to {dest_dir}")
 
