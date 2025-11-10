@@ -632,13 +632,19 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
 
     # Add -stdlib=libc++ to use the libc++ standard library included in the sysroot
     # Add -fuse-ld=lld to use LLVM's linker instead of system ld
-    # Add --unwindlib=none to prevent linking with libgcc_s (not needed with LLVM-MinGW)
+    # Add -rtlib=compiler-rt to use LLVM's compiler-rt instead of libgcc
+    # Add --unwindlib=libunwind to use LLVM's libunwind instead of libgcc_s
+    # Add -static-libgcc -static-libstdc++ to link runtime libraries statically
+    # This avoids DLL dependency issues at runtime
     return [
         f"--target={target}",
         f"--sysroot={sysroot_path}",
         "-stdlib=libc++",
+        "-rtlib=compiler-rt",
         "-fuse-ld=lld",
-        "--unwindlib=none",
+        "--unwindlib=libunwind",
+        "-static-libgcc",
+        "-static-libstdc++",
     ] + resource_dir_arg
 
 

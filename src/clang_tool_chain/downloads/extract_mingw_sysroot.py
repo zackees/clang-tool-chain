@@ -154,6 +154,21 @@ def extract_sysroot(archive_path: Path, extract_dir: Path, arch: str) -> Path:
                 shutil.copytree(resource_include_src, resource_dst, symlinks=True)
                 print(f"Copied {len(list(resource_dst.glob('*.h')))} resource headers")
 
+            # Copy compiler-rt runtime libraries (libclang_rt.builtins.a, etc.)
+            # These are needed for linking to provide runtime support functions
+            resource_lib_src = clang_version_dir / "lib"
+            if resource_lib_src.exists():
+                resource_lib_dst = extract_dir / "lib" / "clang" / clang_version_dir.name / "lib"
+                print(f"Copying compiler-rt libraries: {resource_lib_src} -> {resource_lib_dst}")
+                resource_lib_dst.parent.mkdir(parents=True, exist_ok=True)
+                if resource_lib_dst.exists():
+                    shutil.rmtree(resource_lib_dst)
+                shutil.copytree(resource_lib_src, resource_lib_dst, symlinks=True)
+
+                # Count library files
+                lib_count = len(list(resource_lib_dst.glob("**/*.a")))
+                print(f"Copied {lib_count} compiler-rt library files")
+
     # Clean up temp directory
     print("Cleaning up temporary files...")
     shutil.rmtree(temp_extract)
