@@ -263,7 +263,7 @@ class TestDownloader(unittest.TestCase):
         win_manifest_data = {
             "latest": "21.1.5",
             "21.1.5": {
-                "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst",
+                "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst",
                 "sha256": "3c21e45edeee591fe8ead5427d25b62ddb26c409575b41db03d6777c77bba44f",
             },
         }
@@ -272,7 +272,7 @@ class TestDownloader(unittest.TestCase):
         linux_arm64_manifest_data = {
             "latest": "21.1.5",
             "21.1.5": {
-                "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/clang/linux/arm64/llvm-21.1.5-linux-arm64.tar.zst",
+                "href": "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/clang/linux/arm64/llvm-21.1.5-linux-arm64.tar.zst",
                 "sha256": "deadbeefcafebabe0123456789abcdef0123456789abcdef0123456789abcdef",
             },
         }

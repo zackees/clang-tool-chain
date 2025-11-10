@@ -242,15 +242,16 @@ clang-tool-chain/
 │   └── __version__.py       # Version information
 ├── downloads-bins/          # Git submodule for binary archives (442 MB)
 │   │                        # Repository: https://github.com/zackees/clang-tool-chain-bins
-│   ├── clang/               # Clang toolchain downloads
-│   │   ├── manifest.json    # Root manifest (all platforms)
-│   │   ├── win/             # Windows archives and manifest
-│   │   │   ├── x86_64/
-│   │   │   │   ├── manifest.json
-│   │   │   │   └── llvm-21.1.5-win-x86_64.tar.zst
-│   │   ├── linux/           # Linux archives
-│   │   └── darwin/          # macOS archives
-│   └── iwyu/                # Include What You Use downloads
+│   └── assets/              # Binary assets directory
+│       ├── clang/           # Clang toolchain downloads
+│       │   ├── manifest.json    # Root manifest (all platforms)
+│       │   ├── win/             # Windows archives and manifest
+│       │   │   ├── x86_64/
+│       │   │   │   ├── manifest.json
+│       │   │   │   └── llvm-21.1.5-win-x86_64.tar.zst
+│       │   ├── linux/           # Linux archives
+│       │   └── darwin/          # macOS archives
+│       └── iwyu/            # Include What You Use downloads
 ├── tests/                   # Unit and integration tests
 │   ├── test_cli.py          # CLI command tests
 │   ├── test_downloader.py   # Download/install tests
@@ -404,7 +405,7 @@ clang-tool-chain-fetch-archive --platform win --arch x86_64 --source-dir ./asset
 6. Compresses with zstd level 22 (94.3% reduction)
 7. Generates checksums (SHA256, MD5)
 8. Names archive: `llvm-{version}-{platform}-{arch}.tar.zst`
-9. Places in `downloads-bins/clang/{platform}/{arch}/` (submodule directory)
+9. Places in `downloads-bins/assets/clang/{platform}/{arch}/` (submodule directory)
 
 **Result:** 51.53 MB archive (from 902 MB original) for Windows x86_64
 
@@ -460,7 +461,7 @@ git push origin main
 
 **Binary URL pattern:**
 ```
-https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/clang/{platform}/{arch}/llvm-{version}-{platform}-{arch}.tar.zst
+https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/clang/{platform}/{arch}/llvm-{version}-{platform}-{arch}.tar.zst
 ```
 
 **Important notes:**
