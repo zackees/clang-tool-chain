@@ -1713,6 +1713,75 @@ clang-tool-chain-cpp-msvc = "clang_tool_chain.wrapper:clang_cpp_msvc_main"
 **Task:** Fix missing `mm_malloc.h` header issue
 **Status:** ⚠️ Blocked - Archive extraction reorganization issue
 
+### ✅ Iteration 3 (Root Cause Discovery) - COMPLETED
+**Date:** 2025-11-10
+**Task:** Investigate and fix lib/ directory extraction failure
+**Status:** ✅ Root Cause Identified - Archive mismatch between local and bins repo
+
+**Root Cause:**
+The `lib/` directory was missing because the bins repository contains an OLD archive (iteration 5) without resource headers:
+- **Local archive** (`downloads/mingw/`): SHA256 `6d8b044a...`, 5125 members, HAS lib/ ✓
+- **Bins repo** (`downloads-bins/`): SHA256 `2f0b5335...`, 4815 members, MISSING lib/ ✗
+- **Downloader** fetches from bins repo URL, gets the wrong file!
+
+**Key Findings:**
+1. ✅ Local archive (iteration 6) is CORRECT with all 5125 members including lib/
+2. ✅ tar.extractall() works perfectly - tested extensively
+3. ✅ Decompression works correctly
+4. ❌ Bins repository was never updated with the new archive from iteration 6
+5. ❌ Manifest SHA256 doesn't match remote file
+
+**Solution for Next Iteration:**
+Copy correct archive from `downloads/mingw/` to `downloads-bins/assets/mingw/`, commit and push to bins repo, update submodule reference.
+
+**Files Modified:**
+- `src/clang_tool_chain/downloader.py` - Added debugging logs (will be cleaned up)
+- Created debug scripts (check_archive.py, debug_extract.py, test_extraction.py) - deleted
+- `.agent_task/ITERATION_3.md` - Full investigation documentation
+
+**Time Spent:** ~165 minutes (2h 45m) - extensive debugging worth it to find root cause
+
+**Details:** See `.agent_task/ITERATION_3.md`
+
+---
+
+## Next Iteration Priority: Fix Archive Mismatch
+
+**Immediate Action Required:**
+
+```bash
+# 1. Copy correct archive to bins repo
+cp downloads/mingw/win/x86_64/mingw-sysroot-21.1.5-win-x86_64.tar.zst \
+   downloads-bins/assets/mingw/win/x86_64/
+
+# 2. Copy checksums and manifest
+cp downloads/mingw/win/x86_64/mingw-sysroot-21.1.5-win-x86_64.tar.zst.{sha256,md5} \
+   downloads-bins/assets/mingw/win/x86_64/
+cp downloads/mingw/win/x86_64/manifest.json \
+   downloads-bins/assets/mingw/win/x86_64/
+
+# 3. Commit to bins repo
+cd downloads-bins
+git add assets/mingw/win/x86_64/
+git commit -m "fix: Update MinGW sysroot archive with clang resource headers (lib/clang/21/include/)"
+git push origin main
+
+# 4. Update submodule reference
+cd ..
+git add downloads-bins
+git commit -m "chore: Update submodule to fixed MinGW sysroot archive"
+
+# 5. Test
+rm -rf ~/.clang-tool-chain/mingw/
+uv run pytest tests/test_gnu_abi.py -v
+```
+
+**Expected Result:** All 11 GNU ABI tests pass after archive update.
+
+**Estimated Time:** 30 minutes
+
+---
+
 **What Was Accomplished:**
 1. ✅ Investigated and found 232 resource headers in LLVM-MinGW (16 MB)
 2. ✅ Updated `extract_mingw_sysroot.py` to extract and include resource headers

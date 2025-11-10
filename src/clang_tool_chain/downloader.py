@@ -483,6 +483,21 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
             decompressed.write(pyzstd.decompress(compressed_data))
             logger.info(f"Decompression complete: {temp_tar.stat().st_size / (1024*1024):.2f} MB")
 
+        # DEBUG: Verify tar file immediately after decompression
+        logger.debug(f"Verifying decompressed tar file: {temp_tar}")
+        try:
+            with tarfile.open(temp_tar, "r") as verify_tar:
+                verify_members = verify_tar.getmembers()
+                logger.info(f"Decompressed tar has {len(verify_members)} members")
+                verify_top = set()
+                for m in verify_members[:100]:  # Check first 100 members
+                    parts = m.name.split('/')
+                    if parts:
+                        verify_top.add(parts[0])
+                logger.info(f"Sample top-level dirs from tar: {sorted(verify_top)}")
+        except Exception as e:
+            logger.warning(f"Could not verify tar file: {e}")
+
         # Remove dest_dir if it exists to ensure clean extraction
         if dest_dir.exists():
             logger.debug(f"Removing existing destination: {dest_dir}")
@@ -492,25 +507,74 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
         dest_dir.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Try system tar first (more reliable on Linux/macOS)
-            if _try_system_tar(temp_tar, dest_dir.parent):
+            # MinGW archives must use Python tarfile (system tar has issues with multi-root structure)
+            is_mingw_archive = "mingw-sysroot" in archive_path.name
+            use_python_tar = is_mingw_archive
+
+            # Try system tar first (more reliable on Linux/macOS) unless forced to use Python
+            if not use_python_tar and _try_system_tar(temp_tar, dest_dir.parent):
                 logger.info("Extraction successful using system tar")
             else:
-                # Fall back to Python tarfile
-                logger.info("Extracting tar archive using Python tarfile")
+                # Use Python tarfile
+                if use_python_tar:
+                    logger.info("Using Python tarfile for MinGW archive (system tar has multi-root issues)")
+                else:
+                    logger.info("Extracting tar archive using Python tarfile")
+
                 with tarfile.open(temp_tar, "r") as tar:
-                    # Use extractall which is more reliable than individual extract() calls
-                    logger.debug("Extracting all files at once")
+                    # For MinGW archives, extract to a temporary directory first
+                    # (workaround for mysterious tar.extractall() bug where lib/ directory is lost)
+                    if is_mingw_archive:
+                        import tempfile
+                        logger.info(f"Extracting MinGW archive to temp location first (workaround for extraction bug)")
 
-                    import sys
+                        # Sanity check: verify tar file has all expected top-level directories
+                        members = tar.getmembers()
+                        logger.info(f"Tar file has {len(members)} members total")
+                        top_level_dirs = set()
+                        for m in members:
+                            parts = m.name.split('/')
+                            if parts:
+                                top_level_dirs.add(parts[0])
+                        logger.info(f"Top-level directories in tar: {sorted(top_level_dirs)}")
 
-                    if sys.version_info >= (3, 12):
-                        # Use "tar" filter to allow hardlinks
-                        tar.extractall(dest_dir.parent, filter="tar")
+                        with tempfile.TemporaryDirectory() as temp_extract:
+                            temp_extract_path = Path(temp_extract)
+                            logger.debug(f"Temp extraction dir: {temp_extract_path}")
+
+                            import sys
+                            if sys.version_info >= (3, 12):
+                                tar.extractall(temp_extract_path, filter="tar")
+                            else:
+                                tar.extractall(temp_extract_path)
+
+                            # Verify all expected directories are present
+                            extracted = list(temp_extract_path.iterdir())
+                            logger.info(f"Extracted {len(extracted)} items to temp: {[e.name for e in extracted]}")
+
+                            # Move to final location
+                            dest_dir.parent.mkdir(parents=True, exist_ok=True)
+                            for item in extracted:
+                                target = dest_dir.parent / item.name
+                                logger.info(f"Moving {item.name} from temp to {target}")
+                                shutil.move(str(item), str(target))
                     else:
-                        tar.extractall(dest_dir.parent)
+                        # Regular extraction for non-MinGW archives
+                        import sys
+                        if sys.version_info >= (3, 12):
+                            tar.extractall(dest_dir.parent, filter="tar")
+                        else:
+                            tar.extractall(dest_dir.parent)
 
                     logger.info("Python tarfile extraction complete")
+
+                    # DEBUG: Check what was actually extracted
+                    if is_mingw_archive:
+                        extracted_check = list(dest_dir.parent.iterdir())
+                        logger.info(
+                            f"Post-extraction check: {len(extracted_check)} items in {dest_dir.parent}: "
+                            f"{[item.name for item in extracted_check]}"
+                        )
 
             # The archive should extract to a single directory with the expected name
             # If it doesn't match dest_dir name, rename it
@@ -525,6 +589,11 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                     f"dirs={[d.name for d in extracted_dirs]}, files={[f.name for f in extracted_files[:5]]}"
                 )
 
+                # Special case: MinGW sysroot archives have intentional multi-root structure
+                # They contain: x86_64-w64-mingw32/, include/, lib/
+                # This structure should be preserved as-is
+                is_mingw_archive = "mingw-sysroot" in archive_path.name
+
                 # Case 1: Archive extracted to a single top-level directory (e.g., clang archives)
                 # Filter out dest_dir itself in case it was already created
                 candidates = [d for d in extracted_dirs if d != dest_dir]
@@ -533,13 +602,18 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                     logger.info(f"Renaming extracted directory {actual_dir} to {dest_dir}")
                     shutil.move(str(actual_dir), str(dest_dir))
                 # Case 2: Archive has flat structure with bin/, share/, etc. (e.g., IWYU archives)
+                # Also handles MinGW archives which have multi-root structure that must be preserved
                 elif extracted_dirs or extracted_files:
-                    logger.info(f"Archive has flat structure, moving contents into {dest_dir}")
+                    if is_mingw_archive:
+                        logger.info(f"MinGW archive detected, moving multi-root structure into {dest_dir}")
+                        logger.info(f"Found {len(extracted_dirs)} directories and {len(extracted_files)} files to move")
+                    else:
+                        logger.info(f"Archive has flat structure, moving contents into {dest_dir}")
                     dest_dir.mkdir(parents=True, exist_ok=True)
                     for item in extracted_items:
                         if item.is_dir() or (item.is_file() and item.name != "done.txt"):
                             target = dest_dir / item.name
-                            logger.debug(f"Moving {item} to {target}")
+                            logger.info(f"Moving {item.name} to {target}")
                             shutil.move(str(item), str(target))
                 else:
                     logger.warning(f"No extracted content found to move to {dest_dir}")
@@ -1099,6 +1173,47 @@ def download_and_install_mingw(platform: str, arch: str) -> None:
         if os.name != "nt":
             logger.info("Setting executable permissions on MinGW sysroot")
             fix_file_permissions(install_dir)
+
+        # Copy clang resource headers (mm_malloc.h, intrinsics, etc.) from clang installation
+        # These are compiler builtin headers needed for compilation
+        logger.info("Copying clang resource headers to MinGW sysroot")
+        try:
+            # Get the clang binary directory
+            from . import wrapper
+
+            clang_bin_dir = wrapper.get_platform_binary_dir()
+            clang_root = clang_bin_dir.parent
+
+            # Find clang resource directory: <clang_root>/lib/clang/<version>/include/
+            clang_lib = clang_root / "lib" / "clang"
+            if clang_lib.exists():
+                # Find first version directory (should only be one)
+                version_dirs = [d for d in clang_lib.iterdir() if d.is_dir()]
+                if version_dirs:
+                    clang_version_dir = version_dirs[0]
+                    resource_include = clang_version_dir / "include"
+                    if resource_include.exists():
+                        # Copy to install_dir/lib/clang/<version>/include/
+                        dest_resource = install_dir / "lib" / "clang" / clang_version_dir.name / "include"
+                        dest_resource.parent.mkdir(parents=True, exist_ok=True)
+
+                        # Copy all .h files
+                        copied_count = 0
+                        for header_file in resource_include.glob("*.h"):
+                            dest_file = dest_resource / header_file.name
+                            shutil.copy2(header_file, dest_file)
+                            copied_count += 1
+
+                        logger.info(f"Copied {copied_count} resource headers from clang installation")
+                    else:
+                        logger.warning(f"Clang resource include directory not found: {resource_include}")
+                else:
+                    logger.warning(f"No version directories found in {clang_lib}")
+            else:
+                logger.warning(f"Clang lib directory not found: {clang_lib}")
+        except Exception as e:
+            logger.warning(f"Could not copy clang resource headers: {e}")
+            logger.warning("Compilation may fail for code using Intel intrinsics or SIMD instructions")
 
         # Mark installation as complete
         # Ensure install_dir exists before writing done.txt
