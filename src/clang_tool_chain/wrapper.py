@@ -589,14 +589,13 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
     # Determine target triple and sysroot path
     if arch == "x86_64":
         target = "x86_64-w64-mingw32"
-        sysroot_name = "x86_64-w64-mingw32"
     elif arch == "arm64":
         target = "aarch64-w64-mingw32"
-        sysroot_name = "aarch64-w64-mingw32"
     else:
         raise ValueError(f"Unsupported architecture for MinGW: {arch}")
 
-    sysroot_path = sysroot_dir / sysroot_name
+    # The sysroot is the directory containing include/ and the target subdirectory
+    sysroot_path = sysroot_dir
     if not sysroot_path.exists():
         logger.error(f"MinGW sysroot not found at expected location: {sysroot_path}")
         raise RuntimeError(
@@ -608,9 +607,11 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
 
     logger.info(f"Using GNU target: {target} with sysroot: {sysroot_path}")
 
+    # Add -stdlib=libc++ to use the libc++ standard library included in the sysroot
     return [
         f"--target={target}",
         f"--sysroot={sysroot_path}",
+        "-stdlib=libc++",
     ]
 
 
