@@ -2,6 +2,10 @@
 Integration tests for IWYU (Include What You Use) functionality.
 
 These tests verify that the IWYU tools are properly installed and functional.
+
+Note: These tests will FAIL (not skip) if the IWYU infrastructure is broken
+(404 errors, missing manifests, etc). This ensures that broken URLs are caught
+in CI rather than silently ignored.
 """
 
 import subprocess
@@ -14,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from clang_tool_chain import wrapper
+from clang_tool_chain.downloader import ToolchainInfrastructureError
 
 
 class TestIWYUInstallation(unittest.TestCase):
@@ -25,8 +30,9 @@ class TestIWYUInstallation(unittest.TestCase):
             bin_dir = wrapper.get_iwyu_binary_dir()
             self.assertTrue(bin_dir.exists(), f"IWYU binary directory should exist at {bin_dir}")
             self.assertTrue(bin_dir.is_dir(), f"IWYU binary location should be a directory: {bin_dir}")
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            # Infrastructure errors should fail the test, not skip it
+            raise
 
     def test_find_iwyu_tool(self) -> None:
         """Test finding the include-what-you-use binary."""
@@ -34,8 +40,8 @@ class TestIWYUInstallation(unittest.TestCase):
             iwyu_path = wrapper.find_iwyu_tool("include-what-you-use")
             self.assertTrue(iwyu_path.exists(), f"IWYU tool should exist at {iwyu_path}")
             self.assertTrue(iwyu_path.is_file(), f"IWYU tool should be a file: {iwyu_path}")
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_find_iwyu_tool_py(self) -> None:
         """Test finding the iwyu_tool.py helper script."""
@@ -43,8 +49,8 @@ class TestIWYUInstallation(unittest.TestCase):
             iwyu_tool_path = wrapper.find_iwyu_tool("iwyu_tool.py")
             self.assertTrue(iwyu_tool_path.exists(), f"iwyu_tool.py should exist at {iwyu_tool_path}")
             self.assertTrue(iwyu_tool_path.is_file(), f"iwyu_tool.py should be a file: {iwyu_tool_path}")
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_find_fix_includes_py(self) -> None:
         """Test finding the fix_includes.py helper script."""
@@ -52,8 +58,8 @@ class TestIWYUInstallation(unittest.TestCase):
             fix_includes_path = wrapper.find_iwyu_tool("fix_includes.py")
             self.assertTrue(fix_includes_path.exists(), f"fix_includes.py should exist at {fix_includes_path}")
             self.assertTrue(fix_includes_path.is_file(), f"fix_includes.py should be a file: {fix_includes_path}")
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
 
 class TestIWYUExecution(unittest.TestCase):
@@ -127,8 +133,8 @@ class TestIWYUExecution(unittest.TestCase):
                 "include-what-you-use" in combined_output or "iwyu" in combined_output or "clang" in combined_output,
                 "IWYU version output should contain tool information",
             )
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_iwyu_analyze_file(self) -> None:
         """Test running IWYU on a test file."""
@@ -165,8 +171,8 @@ class TestIWYUExecution(unittest.TestCase):
                 len(combined_output) > 0,
                 "IWYU should produce output",
             )
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
         except subprocess.TimeoutExpired:
             self.skipTest("IWYU analysis timed out - this may be a platform-specific issue")
 
@@ -195,8 +201,8 @@ class TestIWYUExecution(unittest.TestCase):
                 [0, 1, 2],
                 f"IWYU should complete analysis on good file. Return code: {result.returncode}",
             )
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
         except subprocess.TimeoutExpired:
             self.skipTest("IWYU analysis timed out - this may be a platform-specific issue")
 
@@ -234,8 +240,8 @@ class TestIWYUExecution(unittest.TestCase):
                 [0, 1, 2],
                 f"IWYU should complete with compile database. Return code: {result.returncode}",
             )
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
         except subprocess.TimeoutExpired:
             self.skipTest("IWYU analysis timed out - this may be a platform-specific issue")
 
@@ -265,8 +271,8 @@ class TestIWYUHelperScripts(unittest.TestCase):
                 "usage" in combined_output.lower() or "help" in combined_output.lower(),
                 "iwyu_tool.py help should contain usage information",
             )
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_fix_includes_help(self) -> None:
         """Test that fix_includes.py can display help."""
@@ -290,8 +296,8 @@ class TestIWYUHelperScripts(unittest.TestCase):
                 "usage" in combined_output.lower() or "help" in combined_output.lower(),
                 "fix_includes.py help should contain usage information",
             )
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
 
 class TestIWYUWrapperEntryPoints(unittest.TestCase):
@@ -312,8 +318,8 @@ class TestIWYUWrapperEntryPoints(unittest.TestCase):
                 expected_binary.exists(),
                 f"IWYU binary should exist at {expected_binary}",
             )
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_wrapper_find_all_iwyu_tools(self) -> None:
         """Test that wrapper can find all IWYU tools."""
@@ -324,8 +330,8 @@ class TestIWYUWrapperEntryPoints(unittest.TestCase):
                 with self.subTest(tool=tool_name):
                     tool_path = wrapper.find_iwyu_tool(tool_name)
                     self.assertTrue(tool_path.exists(), f"{tool_name} should exist at {tool_path}")
-        except RuntimeError as e:
-            self.skipTest(f"IWYU binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
 
 if __name__ == "__main__":

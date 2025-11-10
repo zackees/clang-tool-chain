@@ -32,10 +32,29 @@ logger = logging.getLogger(__name__)
 
 # Base URL for manifest and downloads
 MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/clang"
-IWYU_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/iwyu"
+IWYU_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain/main/downloads/IWYU"
 
 # Generic type variable for JSON deserialization
 T = TypeVar("T")
+
+
+# ============================================================================
+# Custom Exceptions
+# ============================================================================
+
+
+class ToolchainInfrastructureError(Exception):
+    """
+    Raised when toolchain infrastructure is broken (404, network errors, etc).
+
+    This exception indicates a problem with the package's distribution infrastructure
+    that should cause tests to FAIL rather than skip. Examples:
+    - Manifest files return 404
+    - Download URLs are broken
+    - Network errors accessing expected resources
+    """
+
+    pass
 
 
 @dataclass
@@ -182,7 +201,7 @@ def _fetch_json_raw(url: str) -> dict[str, Any]:
         Parsed JSON as a dictionary
 
     Raises:
-        RuntimeError: If fetching or parsing fails
+        ToolchainInfrastructureError: If fetching or parsing fails
     """
     logger.info(f"Fetching JSON from: {url}")
     try:
@@ -195,7 +214,7 @@ def _fetch_json_raw(url: str) -> dict[str, Any]:
             return result
     except Exception as e:
         logger.error(f"Failed to fetch JSON from {url}: {e}")
-        raise RuntimeError(f"Failed to fetch JSON from {url}: {e}") from e
+        raise ToolchainInfrastructureError(f"Failed to fetch JSON from {url}: {e}") from e
 
 
 def fetch_root_manifest() -> RootManifest:
@@ -287,7 +306,7 @@ def download_file(url: str, dest_path: Path, expected_sha256: str | None = None)
         expected_sha256: Optional SHA256 checksum to verify
 
     Raises:
-        RuntimeError: If download fails or checksum doesn't match
+        ToolchainInfrastructureError: If download fails or checksum doesn't match
     """
     logger.info(f"Downloading file from {url}")
     logger.info(f"Destination: {dest_path}")
@@ -311,13 +330,16 @@ def download_file(url: str, dest_path: Path, expected_sha256: str | None = None)
             # Verify checksum if provided
             if expected_sha256 and not verify_checksum(tmp_path, expected_sha256):
                 tmp_path.unlink()
-                raise RuntimeError(f"Checksum verification failed for {url}")
+                raise ToolchainInfrastructureError(f"Checksum verification failed for {url}")
 
             # Move to final destination
             logger.debug(f"Moving {tmp_path} to {dest_path}")
             tmp_path.replace(dest_path)
             logger.info(f"File downloaded successfully to {dest_path}")
 
+    except ToolchainInfrastructureError:
+        # Re-raise infrastructure errors as-is
+        raise
     except Exception as e:
         logger.error(f"Download failed: {e}")
         # Clean up temporary file if it exists
@@ -325,7 +347,7 @@ def download_file(url: str, dest_path: Path, expected_sha256: str | None = None)
             tmp_path = locals()["tmp_path"]
             if tmp_path.exists():
                 tmp_path.unlink()
-        raise RuntimeError(f"Failed to download {url}: {e}") from e
+        raise ToolchainInfrastructureError(f"Failed to download {url}: {e}") from e
 
 
 def fix_file_permissions(install_dir: Path) -> None:

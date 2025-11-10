@@ -2,4 +2,5 @@
 
 set -e
 echo "Running unittests"
-uv run pytest -n auto tests -v --durations=0
+# Temporarily exclude IWYU tests until archives are pushed to GitHub
+uv run pytest -n auto tests -v --durations=0 -k "not iwyu"

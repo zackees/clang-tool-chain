@@ -3,11 +3,11 @@
 Create IWYU archives for all platforms.
 
 This script:
-1. Scans downloads/iwyu/ for extracted binaries
+1. Scans downloads/IWYU/ for extracted binaries
 2. Creates tar archives with proper permissions
 3. Compresses with zstd level 22
 4. Generates SHA256 checksums
-5. Outputs archives to downloads/iwyu/{platform}/{arch}/
+5. Outputs archives to downloads/IWYU/{platform}/{arch}/
 
 Unlike the Clang toolchain, IWYU has no duplicate binaries, so no deduplication is needed.
 """
@@ -24,7 +24,7 @@ def create_tar_archive(source_dir: Path, output_tar: Path) -> Path:
     Create tar archive with correct permissions for IWYU.
 
     Args:
-        source_dir: Directory containing bin/ and share/ (e.g., downloads/iwyu/win/x86_64/)
+        source_dir: Directory containing bin/ and share/ (e.g., downloads/IWYU/win/x86_64/)
         output_tar: Output tar file path
 
     Returns:
@@ -200,7 +200,7 @@ def process_platform_arch(iwyu_root: Path, platform: str, arch: str, version: st
     Process a single platform/arch combination.
 
     Args:
-        iwyu_root: Root downloads/iwyu directory
+        iwyu_root: Root downloads/IWYU directory
         platform: Platform name (win, linux, darwin)
         arch: Architecture (x86_64, arm64)
         version: IWYU version (e.g., "0.25")
@@ -268,8 +268,8 @@ def main() -> None:
     parser.add_argument(
         "--iwyu-root",
         type=Path,
-        default=Path("downloads/iwyu"),
-        help="Root IWYU downloads directory (default: downloads/iwyu)",
+        default=Path("downloads/IWYU"),
+        help="Root IWYU downloads directory (default: downloads/IWYU)",
     )
     parser.add_argument("--version", default="0.25", help="IWYU version (default: 0.25)")
     parser.add_argument("--zstd-level", type=int, default=22, help="Zstd compression level (default: 22)")

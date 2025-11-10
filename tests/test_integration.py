@@ -16,6 +16,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from clang_tool_chain import wrapper
+from clang_tool_chain.downloader import ToolchainInfrastructureError
 
 
 class TestHelloWorldCompilation(unittest.TestCase):
@@ -83,8 +84,8 @@ class TestHelloWorldCompilation(unittest.TestCase):
             run_result = subprocess.run([str(output)], capture_output=True, text=True)
             self.assertEqual(run_result.returncode, 0, "Executable should run successfully")
             self.assertIn("Hello from C!", run_result.stdout, "Output should contain expected text")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_one_shot_cpp_compilation(self) -> None:
         """Test compiling C++ source directly to executable in one step."""
@@ -102,8 +103,8 @@ class TestHelloWorldCompilation(unittest.TestCase):
             run_result = subprocess.run([str(output)], capture_output=True, text=True)
             self.assertEqual(run_result.returncode, 0, "Executable should run successfully")
             self.assertIn("Hello from C++!", run_result.stdout, "Output should contain expected text")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_separate_compile_and_link(self) -> None:
         """Test compiling to object file then linking separately."""
@@ -126,8 +127,8 @@ class TestHelloWorldCompilation(unittest.TestCase):
             run_result = subprocess.run([str(output)], capture_output=True, text=True)
             self.assertEqual(run_result.returncode, 0, "Executable should run successfully")
             self.assertIn("Hello from C!", run_result.stdout, "Output should contain expected text")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_static_library_creation_and_linking(self) -> None:
         """Test creating a static library with llvm-ar and linking against it."""
@@ -165,8 +166,8 @@ class TestHelloWorldCompilation(unittest.TestCase):
             self.assertEqual(run_result.returncode, 0, "Executable should run successfully")
             self.assertIn("Main function", run_result.stdout, "Output should contain main function text")
             self.assertIn("Helper function called!", run_result.stdout, "Output should contain helper text")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     @unittest.skipUnless(
         sys.platform.startswith("linux") or sys.platform.startswith("darwin"),
@@ -196,8 +197,8 @@ class TestHelloWorldCompilation(unittest.TestCase):
 
             # Thin archives should be smaller (they just reference the object file)
             self.assertLess(thin_size, regular_size, "Thin archive should be smaller than regular archive")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
 
 class TestBinaryUtilities(unittest.TestCase):
@@ -251,8 +252,8 @@ class TestBinaryUtilities(unittest.TestCase):
             self.assertTrue(
                 "main" in output or "global_variable" in output, "llvm-nm output should contain symbol information"
             )
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_llvm_objdump_disassemble(self) -> None:
         """Test llvm-objdump can disassemble object file."""
@@ -273,8 +274,8 @@ class TestBinaryUtilities(unittest.TestCase):
             # Should see either function names or assembly-like content
             has_content = any(marker in output for marker in ["main", "disassembly", "file format"])
             self.assertTrue(has_content, "llvm-objdump output should contain disassembly or file format info")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_llvm_readelf_headers(self) -> None:
         """Test llvm-readelf can read ELF headers."""
@@ -302,8 +303,8 @@ class TestBinaryUtilities(unittest.TestCase):
             else:
                 # Linux should contain ELF header information
                 self.assertIn("elf", output, "llvm-readelf output should contain ELF information")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_llvm_strip_debug_info(self) -> None:
         """Test llvm-strip can remove debug information from binary."""
@@ -334,8 +335,8 @@ class TestBinaryUtilities(unittest.TestCase):
             self.assertLessEqual(
                 stripped_size, original_size, "Stripped binary should be smaller or same size as original"
             )
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_llvm_objcopy_section_manipulation(self) -> None:
         """Test llvm-objcopy can manipulate sections in object file."""
@@ -358,8 +359,8 @@ class TestBinaryUtilities(unittest.TestCase):
             original_size = self.obj_file.stat().st_size
             copied_size = copied_obj.stat().st_size
             self.assertEqual(copied_size, original_size, "Copied file should have same size as original")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_llvm_ranlib_generate_index(self) -> None:
         """Test llvm-ranlib can generate index for static library."""
@@ -385,8 +386,8 @@ class TestBinaryUtilities(unittest.TestCase):
 
             # Library should still exist and be valid
             self.assertTrue(static_lib.exists(), "Library should still exist after ranlib")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
 
 class TestCompilerVersions(unittest.TestCase):
@@ -400,8 +401,8 @@ class TestCompilerVersions(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, "clang --version should succeed")
             self.assertIn("clang version", result.stdout.lower(), "Output should contain version info")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_clang_cpp_version(self) -> None:
         """Test clang++ --version works."""
@@ -411,8 +412,8 @@ class TestCompilerVersions(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, "clang++ --version should succeed")
             self.assertIn("clang version", result.stdout.lower(), "Output should contain version info")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_llvm_ar_version(self) -> None:
         """Test llvm-ar --version works."""
@@ -424,8 +425,8 @@ class TestCompilerVersions(unittest.TestCase):
             output = result.stdout.lower()
             # llvm-ar reports as "llvm" in version string
             self.assertTrue("llvm" in output or "ar" in output, "Output should contain version info")
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
 
 class TestConcurrentDownload(unittest.TestCase):
@@ -600,8 +601,8 @@ class TestStaticAnalysis(unittest.TestCase):
                 f"stdout: {result.stdout}, stderr: {result.stderr}",
             )
 
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_analyzer_division_by_zero(self) -> None:
         """Test that analyzer detects division by zero."""
@@ -626,8 +627,8 @@ class TestStaticAnalysis(unittest.TestCase):
             # The analyzer should produce some output
             self.assertTrue(len(combined_output) > 0, "Analyzer should produce output for division by zero")
 
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_analyzer_null_dereference(self) -> None:
         """Test that analyzer detects null pointer dereference."""
@@ -653,8 +654,8 @@ class TestStaticAnalysis(unittest.TestCase):
             combined_output = result.stdout + result.stderr
             self.assertTrue(len(combined_output) > 0, "Analyzer should produce output")
 
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_analyzer_with_output_format(self) -> None:
         """Test analyzer with different output formats."""
@@ -681,8 +682,8 @@ class TestStaticAnalysis(unittest.TestCase):
             # Verify analyzer ran
             self.assertIn(result.returncode, [0, 1], "Analyzer should complete")
 
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
     def test_analyzer_multiple_files(self) -> None:
         """Test analyzer can analyze multiple source files."""
@@ -713,8 +714,8 @@ class TestStaticAnalysis(unittest.TestCase):
                     f"Analyzer should complete for {test_file.name}",
                 )
 
-        except RuntimeError as e:
-            self.skipTest(f"Binaries not installed: {e}")
+        except ToolchainInfrastructureError:
+            raise
 
 
 if __name__ == "__main__":

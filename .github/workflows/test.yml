@@ -215,6 +215,12 @@ jobs:
       shell: bash
       timeout-minutes: 10
 
+    - name: Run IWYU tests
+      run: |
+        uv run pytest tests/test_iwyu.py -v --tb=short
+      shell: bash
+      timeout-minutes: 15
+
     - name: Create test C program
       run: |
         cat > test_hello.c << 'EOF'
