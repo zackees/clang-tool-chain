@@ -376,9 +376,9 @@ int main() {
         test_file.write_text(test_code)
         exe_file = self.temp_path / "stl_test.exe"
 
-        # Compile with C++11 standard
+        # Compile with C++14 standard (MSVC STL requires C++14 features)
         result = subprocess.run(
-            ["clang-tool-chain-cpp-msvc", "-std=c++11", str(test_file), "-o", str(exe_file)],
+            ["clang-tool-chain-cpp-msvc", "-std=c++14", str(test_file), "-o", str(exe_file)],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -620,8 +620,8 @@ int main() {
         if not self.has_msvc_sdk:
             self.skipTest("Visual Studio SDK not available")
 
-        # C++11 features
-        test_file = self.temp_path / "cpp11.cpp"
+        # C++14 features (MSVC STL requires C++14 minimum)
+        test_file = self.temp_path / "cpp14.cpp"
         test_code = """
 #include <iostream>
 #include <vector>
@@ -637,10 +637,10 @@ int main() {
 }
 """
         test_file.write_text(test_code)
-        exe_file = self.temp_path / "cpp11.exe"
+        exe_file = self.temp_path / "cpp14.exe"
 
         result = subprocess.run(
-            ["clang-tool-chain-cpp-msvc", "-std=c++11", str(test_file), "-o", str(exe_file)],
+            ["clang-tool-chain-cpp-msvc", "-std=c++14", str(test_file), "-o", str(exe_file)],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -651,7 +651,7 @@ int main() {
         self.assertEqual(
             result.returncode,
             0,
-            f"C++11 compilation should succeed.\nstdout: {result.stdout}\nstderr: {result.stderr}",
+            f"C++14 compilation should succeed.\nstdout: {result.stdout}\nstderr: {result.stderr}",
         )
 
         run_result = subprocess.run([str(exe_file)], capture_output=True, text=True, timeout=5)
