@@ -8,11 +8,14 @@ Note: These tests will FAIL (not skip) if the IWYU infrastructure is broken
 in CI rather than silently ignored.
 """
 
+import platform
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+import pytest
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -62,6 +65,7 @@ class TestIWYUInstallation(unittest.TestCase):
             raise
 
 
+@pytest.mark.serial
 class TestIWYUExecution(unittest.TestCase):
     """Test IWYU execution with real C++ code."""
 
@@ -246,6 +250,7 @@ class TestIWYUExecution(unittest.TestCase):
             self.skipTest("IWYU analysis timed out - this may be a platform-specific issue")
 
 
+@pytest.mark.serial
 class TestIWYUHelperScripts(unittest.TestCase):
     """Test IWYU helper Python scripts."""
 
