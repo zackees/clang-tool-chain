@@ -8,7 +8,6 @@ Note: These tests will FAIL (not skip) if the IWYU infrastructure is broken
 in CI rather than silently ignored.
 """
 
-import platform
 import subprocess
 import sys
 import tempfile

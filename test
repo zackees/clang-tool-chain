@@ -2,6 +2,11 @@
 
 set -e
 echo "Running unittests"
-# Skip IWYU execution tests on Windows due to missing MSYS2 runtime DLLs
-# The installation tests still run to verify download/extraction infrastructure
-uv run pytest -n auto tests -v --durations=0 -k "not (test_iwyu_version or test_iwyu_analyze_file or test_iwyu_on_good_file or test_iwyu_with_compile_commands or test_fix_includes_help or test_iwyu_tool_help)"
+
+# Run parallel-safe tests first (excludes @pytest.mark.serial tests)
+echo "==> Running parallel tests..."
+uv run pytest -n auto -m "not serial" tests -v --durations=0
+
+# Run serial tests sequentially (includes IWYU and build_run tests)
+echo "==> Running serial tests..."
+uv run pytest -m "serial" tests -v --durations=0

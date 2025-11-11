@@ -763,3 +763,163 @@ uv run pytest -k "windows or gnu or msvc" -v
   - MSVC variant commands
 - `test_cli.py` - Windows GNU default detection
 - `test_downloader.py` - MinGW sysroot download infrastructure (8 test cases)
+
+## Troubleshooting Binary Dependencies (DLLs and .so files)
+
+### Missing DLL/Shared Library Issues
+
+If binaries in the distributed archives fail with errors like "command not found" (exit code 127) or access violations (0xC0000005), they may be missing DLL/.so file dependencies.
+
+**Diagnostic Steps:**
+
+1. **Check for missing dependencies** (Linux/MSYS2):
+   ```bash
+   ldd path/to/binary
+   # Look for "=> not found" entries
+   ```
+
+2. **Check for missing dependencies** (Windows cmd):
+   ```cmd
+   dumpbin /dependents path\to\binary.exe
+   ```
+
+3. **Check for missing dependencies** (macOS):
+   ```bash
+   otool -L path/to/binary
+   # Look for libraries not found in standard paths
+   ```
+
+**Repacking Archives with Missing Dependencies:**
+
+If you identify missing DLLs or .so files:
+
+1. **Locate the required dependencies**:
+   - For LLVM/Clang tools: Download from llvm-mingw, official LLVM releases, or system package managers
+   - Verify version compatibility (same LLVM major version)
+   - Example for LLVM 21.x on Windows:
+     ```bash
+     # Download llvm-mingw distribution
+     wget https://github.com/mstorsjo/llvm-mingw/releases/download/20251104/llvm-mingw-20251104-msvcrt-x86_64.zip
+     unzip llvm-mingw-*.zip
+
+     # Find required DLLs
+     find llvm-mingw-* -name "libLLVM-21.dll" -o -name "libclang-cpp.dll"
+     ```
+
+2. **Extract the current archive**:
+   ```bash
+   cd /tmp/repack_work
+   python ~/dev/clang-tool-chain/downloads-bins/tools/expand_archive.py \
+     ~/dev/clang-tool-chain/downloads-bins/assets/{tool}/{platform}/{arch}/{archive}.tar.zst \
+     extracted/
+   ```
+
+3. **Add missing dependencies**:
+   ```bash
+   # Copy DLLs/.so files to the bin directory
+   cp path/to/required/*.dll extracted/bin/
+
+   # Verify all dependencies are resolved
+   ldd extracted/bin/your-binary.exe  # Should show no "not found" entries
+   ```
+
+4. **Test the binary with dependencies**:
+   ```bash
+   cd extracted/bin
+   ./your-binary.exe --version  # Should not crash
+   ```
+
+5. **Repackage the archive**:
+   ```python
+   # Create tar archive
+   import tarfile
+   from pathlib import Path
+
+   def tar_filter(tarinfo):
+       if tarinfo.isfile() and ('/bin/' in tarinfo.name or tarinfo.name.startswith('bin/')):
+           if tarinfo.name.endswith(('.py', '.exe', '.dll', '.so')):
+               tarinfo.mode = 0o755  # Executable
+           else:
+               tarinfo.mode = 0o644  # Readable
+       return tarinfo
+
+   with tarfile.open('new-archive.tar', 'w') as tar:
+       tar.add('extracted/bin', arcname='bin', filter=tar_filter)
+       tar.add('extracted/share', arcname='share', filter=tar_filter)
+   ```
+
+6. **Compress with zstd**:
+   ```python
+   import zstandard as zstd
+
+   cctx = zstd.ZstdCompressor(level=22, threads=-1)
+   with open('new-archive.tar', 'rb') as ifh, open('new-archive.tar.zst', 'wb') as ofh:
+       reader = cctx.stream_reader(ifh, size=Path('new-archive.tar').stat().st_size)
+       while True:
+           chunk = reader.read(1024 * 1024)
+           if not chunk:
+               break
+           ofh.write(chunk)
+   ```
+
+7. **Generate checksum and update manifest**:
+   ```python
+   import hashlib
+
+   sha256_hash = hashlib.sha256()
+   with open('new-archive.tar.zst', 'rb') as f:
+       for byte_block in iter(lambda: f.read(4096), b''):
+           sha256_hash.update(byte_block)
+
+   checksum = sha256_hash.hexdigest()
+   print(f'SHA256: {checksum}')
+
+   # Update downloads-bins/assets/{tool}/{platform}/{arch}/manifest.json
+   # Replace the sha256 field with the new checksum
+   ```
+
+8. **Test the new archive**:
+   ```bash
+   # Remove old installation
+   rm -rf ~/.clang-tool-chain/{tool}/
+
+   # Copy new archive to downloads-bins location
+   cp new-archive.tar.zst ~/dev/clang-tool-chain/downloads-bins/assets/{tool}/{platform}/{arch}/
+
+   # Run tests to verify
+   uv run pytest tests/test_{tool}.py -v
+   ```
+
+**Important Caveats:**
+
+⚠️ **Binary Compatibility Warning**: Adding DLLs from different sources can cause compatibility issues:
+
+- **Version mismatches**: DLLs must match the LLVM version used to build the binary
+- **Compiler differences**: Binaries built with GCC may not work with MSVC-compiled DLLs
+- **ABI incompatibilities**: Different C++ standard library implementations (libc++ vs libstdc++ vs MSVC STL)
+- **Runtime errors**: May crash with BAD_INITIAL_STACK (0xC0000009) or other memory errors
+
+**If bundling DLLs fails**, consider these alternatives:
+
+1. **Rebuild from source with static linking** (recommended for long-term stability):
+   - Download tool source code
+   - Build against LLVM with `-static` linker flags
+   - Results in larger binary but no external dependencies
+   - Example CMake flags: `-DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++ -static"`
+
+2. **Use system package managers**:
+   - Document that users need to install LLVM/Clang development packages
+   - MSYS2: `pacman -S mingw-w64-x86_64-llvm`
+   - Debian/Ubuntu: `apt install llvm-dev libclang-dev`
+   - macOS: `brew install llvm`
+
+3. **Skip functionality on affected platforms**:
+   - Add `@pytest.mark.skipif` decorators for platform-specific tests
+   - Document limitation in README and error messages
+   - Provide workarounds (WSL, Docker, alternative tools)
+
+**See Also:**
+- `IWYU_FIX_RECOMMENDATION.md` - Case study of IWYU Windows DLL bundling attempt and lessons learned
+- `downloads-bins/tools/README.md` - Maintainer tools documentation
+- `downloads-bins/tools/expand_archive.py` - Archive extraction tool
+- `downloads-bins/tools/create_iwyu_archives.py` - Example archive creation script

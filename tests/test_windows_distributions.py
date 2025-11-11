@@ -12,7 +12,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
 
+
+@pytest.mark.serial
 @unittest.skipUnless(sys.platform == "win32", "Windows-only tests")
 class TestWindowsGNUDistribution(unittest.TestCase):
     """Test suite for Windows GNU ABI distribution (default)."""
@@ -233,6 +236,7 @@ int main() {
                     f.unlink()
 
 
+@pytest.mark.serial
 @unittest.skipUnless(sys.platform == "win32", "Windows-only tests")
 class TestWindowsMSVCDistribution(unittest.TestCase):
     """Test suite for Windows MSVC ABI distribution (opt-in)."""
@@ -506,6 +510,7 @@ extern "C" int exported_function() {
                     f.unlink()
 
 
+@pytest.mark.serial
 @unittest.skipUnless(sys.platform == "win32", "Windows-only tests")
 class TestWindowsDistributionSeparation(unittest.TestCase):
     """Test that GNU and MSVC distributions are properly separated."""

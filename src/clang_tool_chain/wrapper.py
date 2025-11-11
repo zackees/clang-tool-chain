@@ -200,7 +200,18 @@ def find_tool_binary(tool_name: str) -> Path:
     tool_path = bin_dir / f"{tool_name}.exe" if platform_name == "win" else bin_dir / tool_name
     logger.debug(f"Looking for tool at: {tool_path}")
 
-    if not tool_path.exists():
+    # Check if tool exists with retry for Windows file system issues
+    tool_exists = tool_path.exists()
+    if not tool_exists and platform_name == "win":
+        # On Windows, Path.exists() can sometimes return False due to file system
+        # caching or hardlink issues, especially during parallel test execution.
+        # Retry with a small delay and also check with os.path.exists()
+        import time
+
+        time.sleep(0.01)  # 10ms delay
+        tool_exists = tool_path.exists() or os.path.exists(str(tool_path))
+
+    if not tool_exists:
         logger.warning(f"Tool not found at primary location: {tool_path}")
         # Try alternative names for some tools
         alternatives = {
@@ -524,8 +535,9 @@ def _should_use_gnu_abi(platform_name: str, args: list[str]) -> bool:
     """
     Determine if GNU ABI should be used based on platform and arguments.
 
-    Windows defaults to GNU ABI (MinGW) in v2.0+ for cross-platform consistency.
+    Windows defaults to GNU ABI (windows-gnu target) in v1.0.5+ for cross-platform consistency.
     This matches the approach of zig cc and ensures consistent C++ ABI across platforms.
+    Uses MinGW sysroot for headers/libraries.
 
     Args:
         platform_name: Platform name ("win", "linux", "darwin")
@@ -551,7 +563,7 @@ def _should_use_gnu_abi(platform_name: str, args: list[str]) -> bool:
             logger.debug("User specified non-GNU target, skipping GNU ABI injection")
             return False
 
-    # Windows defaults to GNU ABI in v2.0+
+    # Windows defaults to GNU ABI in v1.0.5+
     logger.debug("Windows detected without explicit target, will use GNU ABI")
     return True
 
@@ -645,14 +657,6 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
     else:
         logger.warning(f"Resource directory not found: {resource_dir}")
 
-    # Add explicit include paths for C++ stdlib and system headers
-    # When -resource-dir is specified, clang doesn't automatically add the
-    # sysroot's include paths, so we need to add them explicitly.
-    include_args = [
-        f"-isystem{sysroot_path}/include/c++/v1",  # libc++ headers
-        f"-isystem{sysroot_path}/include",  # System C headers (from MinGW)
-    ]
-
     # Add -stdlib=libc++ to use the libc++ standard library included in the sysroot
     # Add -fuse-ld=lld to use LLVM's linker instead of system ld (link-time only)
     # Add -rtlib=compiler-rt to use LLVM's compiler-rt instead of libgcc (link-time only)
@@ -698,7 +702,7 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
     else:
         logger.info("Skipping link-time flags (compile-only detected via -c)")
 
-    return gnu_args + resource_dir_arg + include_args
+    return gnu_args + resource_dir_arg
 
 
 def _should_use_msvc_abi(platform_name: str, args: list[str]) -> bool:
@@ -1556,7 +1560,18 @@ def find_iwyu_tool(tool_name: str) -> Path:
 
     logger.debug(f"Looking for IWYU tool at: {tool_path}")
 
-    if not tool_path.exists():
+    # Check if tool exists with retry for Windows file system issues
+    tool_exists = tool_path.exists()
+    if not tool_exists and platform_name == "win":
+        # On Windows, Path.exists() can sometimes return False due to file system
+        # caching or hardlink issues, especially during parallel test execution.
+        # Retry with a small delay and also check with os.path.exists()
+        import time
+
+        time.sleep(0.01)  # 10ms delay
+        tool_exists = tool_path.exists() or os.path.exists(str(tool_path))
+
+    if not tool_exists:
         logger.error(f"IWYU tool not found: {tool_path}")
         # List available tools
         available_tools = [f.name for f in bin_dir.iterdir() if f.is_file()]

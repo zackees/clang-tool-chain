@@ -1,8 +1,20 @@
 """
-Test Windows GNU ABI support (TASK.md scenarios).
+Test Windows GNU ABI support (v1.0.5+).
 
 These tests verify that clang-tool-chain properly supports Windows GNU ABI target
-as specified in TASK.md.
+(x86_64-w64-windows-gnu) with automatic MinGW sysroot download and configuration.
+
+Windows defaults to GNU ABI (windows-gnu target) for cross-platform consistency,
+matching the approach of zig cc. This uses Clang's native GNU ABI support for Windows,
+with MinGW-w64 sysroot providing headers and libraries. The windows-gnu target provides
+C++11 strict mode compatibility and avoids MSVC header issues.
+
+Features tested:
+- Automatic GNU ABI (windows-gnu target) injection on Windows
+- MinGW-w64 sysroot download and configuration
+- Target triple handling (auto vs explicit)
+- MSVC variant commands for Windows-specific projects
+- C++11 strict mode compatibility
 """
 
 import subprocess
@@ -11,10 +23,18 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
 
+
+@pytest.mark.serial
 @unittest.skipUnless(sys.platform == "win32", "Windows-only tests")
 class TestGNUABI(unittest.TestCase):
-    """Test suite for Windows GNU ABI support from TASK.md."""
+    """
+    Test suite for Windows GNU ABI support (v1.0.5+).
+
+    Tests Clang's windows-gnu target with automatic MinGW-w64 sysroot download,
+    target triple injection, and C++11 strict mode compatibility on Windows.
+    """
 
     def setUp(self) -> None:
         """Set up test environment with temporary directory."""
@@ -43,7 +63,13 @@ class TestGNUABI(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_1_basic_cpp11_gnu_target(self) -> None:
-        """Test 1: Basic C++11 Standard Library Headers (GNU Target)."""
+        """
+        Test basic C++11 standard library headers with automatic GNU ABI.
+
+        Default Windows behavior (v1.0.5+): Automatically uses windows-gnu target
+        (x86_64-w64-windows-gnu) with MinGW-w64 sysroot. This ensures C++11 strict
+        mode compatibility without requiring C++14 extensions.
+        """
         test_file = self.temp_path / "test_gnu_target.cpp"
         test_code = """#include <initializer_list>
 #include <vector>
@@ -82,7 +108,13 @@ int main() {
                     f.unlink()
 
     def test_2_cpp11_with_msvc_headers_should_fail(self) -> None:
-        """Test 2: C++11 Code with MSVC Headers (Should Fail in Strict Mode)."""
+        """
+        Test MSVC variant with C++11 strict mode (expected to fail or skip).
+
+        MSVC headers require C++14 extensions even in C++11 mode. This test
+        demonstrates why GNU ABI is the default on Windows - it provides true
+        C++11 strict mode compatibility. Uses clang-tool-chain-cpp-msvc variant.
+        """
         test_file = self.temp_path / "test_msvc_target.cpp"
         test_code = """#include <type_traits>
 #include <vector>
@@ -130,7 +162,12 @@ int main() {
                 obj_file.unlink()
 
     def test_3_complete_compilation_and_linking(self) -> None:
-        """Test 3: Complete Compilation and Linking (GNU Target)."""
+        """
+        Test complete compilation, linking, and execution with GNU ABI.
+
+        Verifies that the automatic GNU ABI setup produces working executables
+        that can run on Windows. Tests iostream, vector, string, and range-based for.
+        """
         test_file = self.temp_path / "test_full.cpp"
         test_code = """#include <iostream>
 #include <vector>
@@ -181,7 +218,12 @@ int main() {
                     f.unlink()
 
     def test_4_verify_target_triple(self) -> None:
-        """Test 4: Verify Target Triple."""
+        """
+        Test that verbose output shows GNU target triple injection.
+
+        Verifies that the wrapper automatically injects --target=x86_64-w64-windows-gnu
+        when compiling on Windows without an explicit --target flag.
+        """
         test_file = self.temp_path / "test.cpp"
         test_file.write_text("int main() { return 0; }\n")
 
@@ -213,7 +255,12 @@ int main() {
                     f.unlink()
 
     def test_default_is_gnu_on_windows(self) -> None:
-        """Test that default compilation uses GNU ABI on Windows."""
+        """
+        Test that Windows defaults to GNU ABI (v1.0.5+ behavior).
+
+        Without explicit --target flag, clang-tool-chain-cpp should automatically
+        use windows-gnu target (x86_64-w64-windows-gnu) for cross-platform consistency.
+        """
         test_file = self.temp_path / "test_default.cpp"
         test_code = """#include <iostream>
 int main() {
@@ -249,7 +296,12 @@ int main() {
                     f.unlink()
 
     def test_explicit_msvc_target_override(self) -> None:
-        """Test that explicit --target=x86_64-pc-windows-msvc overrides GNU default."""
+        """
+        Test that explicit --target=x86_64-pc-windows-msvc overrides GNU default.
+
+        Users can explicitly request MSVC ABI by passing --target flag, which
+        prevents automatic GNU ABI injection. Requires Visual Studio SDK.
+        """
         test_file = self.temp_path / "test_explicit_msvc.cpp"
         test_code = "int main() { return 0; }\n"
         test_file.write_text(test_code)
@@ -283,7 +335,12 @@ int main() {
                     f.unlink()
 
     def test_c_compilation_gnu_default(self) -> None:
-        """Test that C compilation also defaults to GNU target."""
+        """
+        Test that C compilation also defaults to GNU ABI on Windows.
+
+        Both clang-tool-chain-c and clang-tool-chain-cpp should use windows-gnu target
+        by default on Windows (v1.0.5+).
+        """
         test_file = self.temp_path / "test_c.c"
         test_code = """#include <stdio.h>
 int main() {
@@ -319,7 +376,12 @@ int main() {
                     f.unlink()
 
     def test_msvc_variant_command_exists(self) -> None:
-        """Test that MSVC variant commands are available."""
+        """
+        Test that MSVC variant commands are available.
+
+        clang-tool-chain-c-msvc and clang-tool-chain-cpp-msvc provide opt-in
+        MSVC ABI support for Windows-specific projects that require MSVC compatibility.
+        """
         # Test that clang-tool-chain-c-msvc exists
         result_c = subprocess.run(
             ["clang-tool-chain-c-msvc", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace"
@@ -353,10 +415,24 @@ int main() {
 
 @unittest.skipUnless(sys.platform == "win32", "MSVC ABI tests are Windows-only")
 class TestMSVCABI(unittest.TestCase):
-    """Test MSVC ABI support on Windows."""
+    """
+    Test MSVC ABI support on Windows (opt-in via -msvc variants).
+
+    These tests verify that the MSVC variant commands (clang-tool-chain-c-msvc,
+    clang-tool-chain-cpp-msvc) properly inject MSVC target and detect Windows SDK.
+
+    MSVC ABI is opt-in for Windows-specific projects that require compatibility
+    with Visual Studio-compiled libraries. Most tests skip gracefully if Visual
+    Studio SDK is not installed.
+    """
 
     def test_msvc_target_injection(self) -> None:
-        """Test that MSVC variants inject the correct target triple."""
+        """
+        Test that MSVC variants inject --target=x86_64-pc-windows-msvc.
+
+        Verifies that clang-tool-chain-c-msvc and clang-tool-chain-cpp-msvc
+        automatically add the MSVC target triple in verbose output.
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a simple C file
             test_file = Path(temp_dir) / "test.c"
@@ -387,7 +463,12 @@ class TestMSVCABI(unittest.TestCase):
             )
 
     def test_msvc_respects_user_target(self) -> None:
-        """Test that MSVC variants respect user-provided --target flag."""
+        """
+        Test that MSVC variants respect explicit --target override.
+
+        Users can override the MSVC variant's automatic target injection by
+        providing their own --target flag (e.g., forcing GNU ABI).
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a simple C file
             test_file = Path(temp_dir) / "test.c"
@@ -417,7 +498,12 @@ class TestMSVCABI(unittest.TestCase):
             )
 
     def test_msvc_basic_compilation(self) -> None:
-        """Test basic compilation with MSVC variant."""
+        """
+        Test basic object file compilation with MSVC variant.
+
+        Attempts to compile a simple C++ file with iostream using the MSVC ABI.
+        Gracefully skips if Visual Studio SDK is not installed.
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a simple C++ file
             test_file = Path(temp_dir) / "test.cpp"
@@ -460,7 +546,12 @@ int main() {
             self.assertTrue(obj_file.exists(), "Object file should be created")
 
     def test_msvc_complete_build(self) -> None:
-        """Test complete compilation and linking with MSVC variant."""
+        """
+        Test complete compilation, linking, and execution with MSVC ABI.
+
+        Produces a working executable using MSVC ABI and runs it to verify output.
+        Requires Visual Studio SDK; gracefully skips if not available.
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a simple C++ file
             test_file = Path(temp_dir) / "test.cpp"
@@ -512,7 +603,13 @@ int main() {
             self.assertIn("Hello MSVC", run_result.stdout, "Executable should produce expected output")
 
     def test_gnu_vs_msvc_symbol_differences(self) -> None:
-        """Test that GNU and MSVC variants produce different symbol mangling (integration test)."""
+        """
+        Test that GNU and MSVC ABIs produce different name mangling.
+
+        Integration test that verifies GNU ABI (default) and MSVC ABI (-msvc variant)
+        use different C++ name mangling schemes. Uses llvm-nm to inspect symbols.
+        Requires Visual Studio SDK for MSVC compilation.
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a C++ file with a class and methods (will have name mangling)
             test_file = Path(temp_dir) / "test.cpp"
@@ -606,7 +703,12 @@ extern "C" int exported_function() {
             )
 
     def test_msvc_sdk_warning_display(self) -> None:
-        """Test that SDK warning is displayed when SDK not detected."""
+        """
+        Test that SDK warning function works correctly.
+
+        Verifies that _print_msvc_sdk_warning() produces helpful guidance about
+        Visual Studio SDK installation and setup when SDK is not detected.
+        """
         # This test verifies that the warning function works
         # We can't easily test it in actual compilation without mocking env vars,
         # but we can at least verify the function exists and can be called
