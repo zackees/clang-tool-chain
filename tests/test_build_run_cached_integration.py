@@ -178,6 +178,50 @@ int main() {
 
         print("\n=== All cache workflow steps passed! ===")
 
+    def test_cached_with_cpp11_flag(self):
+        """Test that --cached works correctly with C++11 flag."""
+        cpp_file = self.temp_path / "cached_cpp11.cpp"
+        hash_file = cpp_file.with_suffix(".hash")
+
+        cpp_file.write_text(
+            """
+#include <iostream>
+#include <vector>
+int main() {
+    std::vector<int> v = {1, 2, 3};  // C++11 initializer list
+    for (auto x : v) {  // C++11 range-based for loop
+        std::cout << x << " ";
+    }
+    std::cout << "CPP11_CACHED" << std::endl;
+    return 0;
+}
+"""
+        )
+
+        # First run with --cached and C++11 flag
+        result1 = subprocess.run(
+            ["clang-tool-chain-build-run", "--cached", str(cpp_file), "-std=c++11"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        self.assertEqual(result1.returncode, 0, f"First run with C++11 should succeed\nStderr: {result1.stderr}")
+        self.assertIn("CPP11_CACHED", result1.stdout)
+        self.assertTrue(hash_file.exists(), "Hash file should be created")
+
+        # Second run (should use cache)
+        result2 = subprocess.run(
+            ["clang-tool-chain-build-run", "--cached", str(cpp_file), "-std=c++11"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        self.assertEqual(result2.returncode, 0, f"Second run should succeed\nStderr: {result2.stderr}")
+        self.assertIn("CPP11_CACHED", result2.stdout)
+        self.assertIn("Cache hit", result2.stderr, "Should use cache on second run with C++11")
+
     def test_cached_with_compiler_flags(self):
         """Test that --cached works correctly with compiler flags."""
         cpp_file = self.temp_path / "cached_flags.cpp"

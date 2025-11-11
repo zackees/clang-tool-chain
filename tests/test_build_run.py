@@ -54,7 +54,7 @@ class TestBuildRunCommand(unittest.TestCase):
 
         # Run using subprocess since build_run_main uses sys.exit
         result = subprocess.run(
-            [sys.executable, "-m", "clang_tool_chain.cli", "build-run", str(cpp_file)],
+            ["clang-tool-chain-build-run", str(cpp_file)],
             capture_output=True,
             text=True,
             timeout=60,
@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
 
         # Run with arguments
         result = subprocess.run(
-            [sys.executable, "-m", "clang_tool_chain.cli", "build-run", str(cpp_file), "--", "arg1", "arg2"],
+            ["clang-tool-chain-build-run", str(cpp_file), "--", "arg1", "arg2"],
             capture_output=True,
             text=True,
             timeout=60,
@@ -91,6 +91,36 @@ int main(int argc, char* argv[]) {
         self.assertEqual(result.returncode, 0, f"Build-run should succeed\nStderr: {result.stderr}")
         self.assertIn("arg1", result.stdout)
         self.assertIn("arg2", result.stdout)
+
+    def test_build_run_with_cpp11_flag(self):
+        """Test building with C++11 flag."""
+        # Create a C++ file that uses C++11 features
+        cpp_file = self.temp_path / "cpp11.cpp"
+        cpp_file.write_text(
+            """
+#include <iostream>
+#include <vector>
+int main() {
+    std::vector<int> v = {1, 2, 3};  // C++11 initializer list
+    for (auto x : v) {  // C++11 range-based for loop
+        std::cout << x << " ";
+    }
+    std::cout << "CPP11_WORKS" << std::endl;
+    return 0;
+}
+"""
+        )
+
+        # Run with C++11 flag
+        result = subprocess.run(
+            ["clang-tool-chain-build-run", str(cpp_file), "-std=c++11"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        self.assertEqual(result.returncode, 0, f"Build-run with C++11 should succeed\nStderr: {result.stderr}")
+        self.assertIn("CPP11_WORKS", result.stdout)
 
     def test_build_run_with_compiler_flags(self):
         """Test building with compiler flags."""
@@ -110,7 +140,7 @@ int main() {
 
         # Run with C++17 flag
         result = subprocess.run(
-            [sys.executable, "-m", "clang_tool_chain.cli", "build-run", str(cpp_file), "-std=c++17"],
+            ["clang-tool-chain-build-run", str(cpp_file), "-std=c++17"],
             capture_output=True,
             text=True,
             timeout=60,
@@ -128,7 +158,7 @@ int main() {
 
         # First run with --cached
         result = subprocess.run(
-            [sys.executable, "-m", "clang_tool_chain.cli", "build-run", "--cached", str(cpp_file)],
+            ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
             timeout=60,
@@ -146,7 +176,7 @@ int main() {
 
         # First run
         result1 = subprocess.run(
-            [sys.executable, "-m", "clang_tool_chain.cli", "build-run", "--cached", str(cpp_file)],
+            ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
             timeout=60,
@@ -155,7 +185,7 @@ int main() {
 
         # Second run (should use cache)
         result2 = subprocess.run(
-            [sys.executable, "-m", "clang_tool_chain.cli", "build-run", "--cached", str(cpp_file)],
+            ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
             timeout=60,
@@ -173,7 +203,7 @@ int main() {
 
         # First run
         result1 = subprocess.run(
-            [sys.executable, "-m", "clang_tool_chain.cli", "build-run", "--cached", str(cpp_file)],
+            ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
             timeout=60,
@@ -186,7 +216,7 @@ int main() {
 
         # Second run (should recompile due to hash mismatch)
         result2 = subprocess.run(
-            [sys.executable, "-m", "clang_tool_chain.cli", "build-run", "--cached", str(cpp_file)],
+            ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
             timeout=60,
@@ -231,7 +261,7 @@ int main() {
         c_file.write_text('#include <stdio.h>\nint main() { printf("C_SUCCESS\\n"); return 0; }')
 
         result = subprocess.run(
-            [sys.executable, "-m", "clang_tool_chain.cli", "build-run", str(c_file)],
+            ["clang-tool-chain-build-run", str(c_file)],
             capture_output=True,
             text=True,
             timeout=60,
@@ -247,7 +277,7 @@ int main() {
         cpp_file.write_text("int main() { THIS_IS_INVALID; return 0; }")
 
         result = subprocess.run(
-            [sys.executable, "-m", "clang_tool_chain.cli", "build-run", str(cpp_file)],
+            ["clang-tool-chain-build-run", str(cpp_file)],
             capture_output=True,
             text=True,
             timeout=60,
