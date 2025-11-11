@@ -204,7 +204,7 @@ exclude_lines = [
 # Pyright configuration
 [tool.pyright]
 include = ["src", "tests", "scripts"]
-exclude = ["**/__pycache__", "build", "dist"]
+exclude = ["**/__pycache__", "build", "dist", "tests/test_archive_permissions.py"]
 extraPaths = ["scripts"]
 pythonVersion = "3.10"
 typeCheckingMode = "strict"

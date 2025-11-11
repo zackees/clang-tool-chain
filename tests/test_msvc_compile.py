@@ -42,7 +42,7 @@ class TestMSVCCompilation(unittest.TestCase):
                 print("=" * 70 + "\n")
 
         except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
-            raise unittest.SkipTest(f"Toolchain not accessible: {e}")
+            raise unittest.SkipTest(f"Toolchain not accessible: {e}") from e
 
     @staticmethod
     def _check_msvc_sdk() -> bool:
