@@ -679,10 +679,13 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
         logger.debug("User already specified --target, skipping auto-injection")
 
     # Always add sysroot and stdlib (needed for both compilation and linking)
+    # Add -D_LIBCPP_HAS_THREAD_API_PTHREAD to ensure libc++ uses pthread threading
+    # This is required for MinGW-w64 where winpthreads provides pthread compatibility
     gnu_args.extend(
         [
             f"--sysroot={sysroot_path}",
             "-stdlib=libc++",
+            "-D_LIBCPP_HAS_THREAD_API_PTHREAD",
         ]
     )
 
