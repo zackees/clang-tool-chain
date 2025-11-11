@@ -345,10 +345,11 @@ class TestManifestFiles(unittest.TestCase):
                                     version_data = data[version]
                                     href = version_data.get("href", "")
 
-                                    # Verify it's a GitHub raw URL
+                                    # Verify it's a GitHub URL (raw or media for LFS)
                                     self.assertTrue(
-                                        href.startswith("https://raw.githubusercontent.com/"),
-                                        f"Invalid href URL in version '{version}' of {path_str}/manifest.json - must be GitHub raw URL",
+                                        href.startswith("https://raw.githubusercontent.com/")
+                                        or href.startswith("https://media.githubusercontent.com/media/"),
+                                        f"Invalid href URL in version '{version}' of {path_str}/manifest.json - must be GitHub raw or media URL",
                                     )
 
                                     # Verify it contains the expected filename pattern
