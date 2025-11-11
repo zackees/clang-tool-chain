@@ -532,25 +532,31 @@ def _should_use_gnu_abi(platform_name: str, args: list[str]) -> bool:
         args: Command-line arguments
 
     Returns:
-        True if GNU ABI should be used (Windows + no explicit target), False otherwise
+        True if GNU ABI should be used (Windows + GNU target or no explicit target), False otherwise
     """
     # Non-Windows always uses default (which is GNU-like anyway)
     if platform_name != "win":
         return False
 
-    # Check if user explicitly specified target
+    # Check if user explicitly specified a target
     args_str = " ".join(args)
     if "--target=" in args_str or "--target " in args_str:
-        # User specified target explicitly, don't override
-        logger.debug("User specified explicit target, skipping GNU ABI injection")
-        return False
+        # User specified target explicitly
+        # Check if it's a GNU/MinGW target (contains "-gnu" or "mingw")
+        if "-gnu" in args_str.lower() or "mingw" in args_str.lower():
+            logger.debug("User specified GNU/MinGW target, will use GNU ABI")
+            return True
+        else:
+            # MSVC or other target, don't use GNU ABI
+            logger.debug("User specified non-GNU target, skipping GNU ABI injection")
+            return False
 
     # Windows defaults to GNU ABI in v2.0+
     logger.debug("Windows detected without explicit target, will use GNU ABI")
     return True
 
 
-def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
+def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list[str]:
     """
     Get GNU ABI target arguments for Windows.
 
@@ -560,6 +566,7 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
     Args:
         platform_name: Platform name
         arch: Architecture
+        args: Original command-line arguments (to check if --target already specified)
 
     Returns:
         List of additional compiler arguments for GNU ABI
@@ -594,6 +601,10 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
         target = "aarch64-w64-windows-gnu"  # Canonical MinGW triple
     else:
         raise ValueError(f"Unsupported architecture for MinGW: {arch}")
+
+    # Check if user already specified --target
+    args_str = " ".join(args)
+    user_specified_target = "--target=" in args_str or "--target " in args_str
 
     # The sysroot is the directory containing include/ and the target subdirectory
     sysroot_path = sysroot_dir
@@ -643,25 +654,51 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
     ]
 
     # Add -stdlib=libc++ to use the libc++ standard library included in the sysroot
-    # Add -fuse-ld=lld to use LLVM's linker instead of system ld
-    # Add -rtlib=compiler-rt to use LLVM's compiler-rt instead of libgcc
-    # Add --unwindlib=libunwind to use LLVM's libunwind instead of libgcc_s
-    # Add -static-libgcc -static-libstdc++ to link runtime libraries statically
+    # Add -fuse-ld=lld to use LLVM's linker instead of system ld (link-time only)
+    # Add -rtlib=compiler-rt to use LLVM's compiler-rt instead of libgcc (link-time only)
+    # Add --unwindlib=libunwind to use LLVM's libunwind instead of libgcc_s (link-time only)
+    # Add -static-libgcc -static-libstdc++ to link runtime libraries statically (link-time only)
     # This avoids DLL dependency issues at runtime
-    return (
+
+    # Detect if this is a compile-only operation (has -c flag but no linking flags)
+    is_compile_only = "-c" in args and not any(arg in args for arg in ["-o", "--output"])
+    # Actually, better check: if -c is present, it's compile-only unless there's also a link output
+    # The presence of -c means "compile only, don't link"
+    is_compile_only = "-c" in args
+
+    # Build the argument list, conditionally including --target if not already specified
+    gnu_args = []
+    if not user_specified_target:
+        gnu_args.append(f"--target={target}")
+        logger.debug(f"Adding --target={target} (not specified by user)")
+    else:
+        logger.debug("User already specified --target, skipping auto-injection")
+
+    # Always add sysroot and stdlib (needed for both compilation and linking)
+    gnu_args.extend(
         [
-            f"--target={target}",
             f"--sysroot={sysroot_path}",
             "-stdlib=libc++",
-            "-rtlib=compiler-rt",
-            "-fuse-ld=lld",
-            "--unwindlib=libunwind",
-            "-static-libgcc",
-            "-static-libstdc++",
         ]
-        + resource_dir_arg
-        + include_args
     )
+
+    # Only add link-time flags if not compiling only
+    if not is_compile_only:
+        gnu_args.extend(
+            [
+                "-rtlib=compiler-rt",
+                "-fuse-ld=lld",
+                "--unwindlib=libunwind",
+                "-static-libgcc",
+                "-static-libstdc++",
+                "-lpthread",  # Required for pthread functions on Windows MinGW (winpthreads)
+            ]
+        )
+        logger.info("Added link-time flags (not compile-only)")
+    else:
+        logger.info("Skipping link-time flags (compile-only detected via -c)")
+
+    return gnu_args + resource_dir_arg + include_args
 
 
 def _should_use_msvc_abi(platform_name: str, args: list[str]) -> bool:
@@ -796,7 +833,7 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
     # Add Windows GNU ABI target automatically for clang/clang++ if not MSVC variant
     if not use_msvc and tool_name in ("clang", "clang++") and _should_use_gnu_abi(platform_name, args):
         try:
-            gnu_args = _get_gnu_target_args(platform_name, arch)
+            gnu_args = _get_gnu_target_args(platform_name, arch, args)
             args = gnu_args + args
             logger.info(f"Using GNU ABI with args: {gnu_args}")
         except Exception as e:
@@ -924,7 +961,7 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
     # Add Windows GNU ABI target automatically for clang/clang++ if not MSVC variant
     if not use_msvc and tool_name in ("clang", "clang++") and _should_use_gnu_abi(platform_name, args):
         try:
-            gnu_args = _get_gnu_target_args(platform_name, arch)
+            gnu_args = _get_gnu_target_args(platform_name, arch, args)
             args = gnu_args + args
             logger.info(f"Using GNU ABI with args: {gnu_args}")
         except Exception as e:
@@ -1325,7 +1362,7 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
     # Add Windows GNU ABI target automatically (if not using MSVC variant)
     if not use_msvc and _should_use_gnu_abi(platform_name, args):
         try:
-            gnu_args = _get_gnu_target_args(platform_name, arch)
+            gnu_args = _get_gnu_target_args(platform_name, arch, args)
             args = gnu_args + args
             logger.info(f"Using GNU ABI with sccache: {gnu_args}")
         except Exception as e:
@@ -1403,7 +1440,7 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
     # Add Windows GNU ABI target automatically (if not using MSVC variant)
     if not use_msvc and _should_use_gnu_abi(platform_name, args):
         try:
-            gnu_args = _get_gnu_target_args(platform_name, arch)
+            gnu_args = _get_gnu_target_args(platform_name, arch, args)
             args = gnu_args + args
             logger.info(f"Using GNU ABI with sccache: {gnu_args}")
         except Exception as e:
