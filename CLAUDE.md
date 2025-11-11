@@ -19,7 +19,7 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 *Version information as of November 9, 2025*
 
 **Windows GNU ABI Support (v2.0.0+):**
-- Windows defaults to GNU ABI (`x86_64-w64-mingw32`) for cross-platform consistency
+- Windows defaults to GNU ABI (`x86_64-w64-windows-gnu`) for cross-platform consistency
 - Includes MinGW-w64 sysroot (~12 MB compressed, 176 MB installed)
 - Compatible with strict C++11 mode (no C++14 extensions in standard library headers)
 - MSVC ABI available via `-msvc` command variants for Windows-specific projects
@@ -130,18 +130,18 @@ export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
 
 ### Windows GNU ABI (Automatic, v2.0.0+)
 
-On Windows, starting with v2.0.0, the default target is **GNU ABI** (`x86_64-w64-mingw32`) for cross-platform consistency.
+On Windows, starting with v2.0.0, the default target is **GNU ABI** (`x86_64-w64-windows-gnu`) for cross-platform consistency.
 
 **Automatic GNU ABI Injection:**
 
 This package implements automatic GNU target selection for Windows (similar to [zig cc](https://ziglang.org/learn/overview/#cross-compiling-is-a-first-class-use-case)):
 
 1. **Explicit `--target` flag**: User-provided target takes priority (no injection)
-2. **Windows platform detection**: Automatically uses `x86_64-w64-mingw32` target
+2. **Windows platform detection**: Automatically uses `x86_64-w64-windows-gnu` target
 3. **MinGW sysroot download**: Downloads MinGW-w64 headers/libraries on first use
 4. **Automatic `--sysroot` injection**: Points to `~/.clang-tool-chain/mingw/win/x86_64/`
 
-The wrapper automatically injects `--target=x86_64-w64-mingw32` and `--sysroot` when compiling on Windows, ensuring GNU-compatible standard library headers are found.
+The wrapper automatically injects `--target=x86_64-w64-windows-gnu` and `--sysroot` when compiling on Windows, ensuring GNU-compatible standard library headers are found.
 
 **Environment Variables:**
 ```bash
@@ -250,7 +250,7 @@ When MSVC variants are used but SDK environment variables are not found, a helpf
 MSVC variants respect user-provided `--target` flags:
 ```bash
 # Force GNU target even with MSVC variant
-clang-tool-chain-c-msvc --target=x86_64-w64-mingw32 main.c
+clang-tool-chain-c-msvc --target=x86_64-w64-windows-gnu main.c
 
 # Force custom target
 clang-tool-chain-cpp-msvc --target=aarch64-pc-windows-msvc main.cpp

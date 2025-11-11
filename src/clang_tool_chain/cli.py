@@ -36,7 +36,7 @@ def cmd_info(args: argparse.Namespace) -> int:
     # Windows GNU ABI information
     if platform_name == "win":
         print("Windows Target Configuration:")
-        print("  Default ABI:  GNU (x86_64-w64-mingw32)")
+        print("  Default ABI:  GNU (x86_64-w64-windows-gnu)")
         print("  MSVC ABI:     Available via clang-tool-chain-c-msvc")
         print("                and clang-tool-chain-cpp-msvc")
         print()

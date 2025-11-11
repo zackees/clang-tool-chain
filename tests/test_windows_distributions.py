@@ -535,6 +535,8 @@ void MyClass::myMethod(int x) {
                 ["clang-tool-chain-cpp", "-c", str(test_file), "-o", str(gnu_obj)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             self.assertEqual(result_gnu.returncode, 0, "GNU compilation should succeed")
 
@@ -544,6 +546,8 @@ void MyClass::myMethod(int x) {
                 ["clang-tool-chain-cpp-msvc", "-c", str(test_file), "-o", str(msvc_obj)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             # Skip if MSVC SDK not available

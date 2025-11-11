@@ -132,7 +132,9 @@ int main() {
         )
 
         # Verify recompilation occurred
-        self.assertEqual(result3.returncode, 42, f"Third run should succeed with new exit code\nStderr: {result3.stderr}")
+        self.assertEqual(
+            result3.returncode, 42, f"Third run should succeed with new exit code\nStderr: {result3.stderr}"
+        )
         self.assertIn("VERSION_2_MODIFIED", result3.stdout, "Should output new version text")
         self.assertIn("Cache miss", result3.stderr, "Should report cache miss after file change")
         self.assertIn("Hash mismatch", result3.stderr, "Should detect hash mismatch")

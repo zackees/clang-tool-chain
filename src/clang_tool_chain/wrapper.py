@@ -589,9 +589,9 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
 
     # Determine target triple and sysroot path
     if arch == "x86_64":
-        target = "x86_64-w64-mingw32"
+        target = "x86_64-w64-windows-gnu"  # Canonical MinGW triple
     elif arch == "arm64":
-        target = "aarch64-w64-mingw32"
+        target = "aarch64-w64-windows-gnu"  # Canonical MinGW triple
     else:
         raise ValueError(f"Unsupported architecture for MinGW: {arch}")
 
@@ -609,7 +609,10 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
     logger.info(f"Using GNU target: {target} with sysroot: {sysroot_path}")
 
     # Check if resource directory exists in the sysroot
-    # The archive should contain lib/clang/<version>/ with resource headers
+    # The MinGW sysroot archive contains lib/clang/<version>/include with
+    # compiler builtin headers (mm_malloc.h, stddef.h, etc.)
+    # The stripped clang binary distribution does NOT include these, so we
+    # must use the ones from the MinGW sysroot.
     resource_dir = sysroot_path / "lib" / "clang"
     resource_dir_arg = []
     if resource_dir.exists():
@@ -622,7 +625,7 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
             if resource_include.exists():
                 logger.info(f"Found clang resource directory at: {clang_version_dir}")
                 # Use -resource-dir to tell clang where to find its builtin headers
-                # This makes clang look in <resource-dir>/include/ for headers like stddef.h, mm_malloc.h
+                # This makes clang look in <resource-dir>/include/ for headers like mm_malloc.h, stddef.h, etc.
                 resource_dir_arg = [f"-resource-dir={clang_version_dir}"]
             else:
                 logger.warning(f"Resource include directory not found: {resource_include}")
@@ -631,22 +634,34 @@ def _get_gnu_target_args(platform_name: str, arch: str) -> list[str]:
     else:
         logger.warning(f"Resource directory not found: {resource_dir}")
 
+    # Add explicit include paths for C++ stdlib and system headers
+    # When -resource-dir is specified, clang doesn't automatically add the
+    # sysroot's include paths, so we need to add them explicitly.
+    include_args = [
+        f"-isystem{sysroot_path}/include/c++/v1",  # libc++ headers
+        f"-isystem{sysroot_path}/include",  # System C headers (from MinGW)
+    ]
+
     # Add -stdlib=libc++ to use the libc++ standard library included in the sysroot
     # Add -fuse-ld=lld to use LLVM's linker instead of system ld
     # Add -rtlib=compiler-rt to use LLVM's compiler-rt instead of libgcc
     # Add --unwindlib=libunwind to use LLVM's libunwind instead of libgcc_s
     # Add -static-libgcc -static-libstdc++ to link runtime libraries statically
     # This avoids DLL dependency issues at runtime
-    return [
-        f"--target={target}",
-        f"--sysroot={sysroot_path}",
-        "-stdlib=libc++",
-        "-rtlib=compiler-rt",
-        "-fuse-ld=lld",
-        "--unwindlib=libunwind",
-        "-static-libgcc",
-        "-static-libstdc++",
-    ] + resource_dir_arg
+    return (
+        [
+            f"--target={target}",
+            f"--sysroot={sysroot_path}",
+            "-stdlib=libc++",
+            "-rtlib=compiler-rt",
+            "-fuse-ld=lld",
+            "--unwindlib=libunwind",
+            "-static-libgcc",
+            "-static-libstdc++",
+        ]
+        + resource_dir_arg
+        + include_args
+    )
 
 
 def _should_use_msvc_abi(platform_name: str, args: list[str]) -> bool:
@@ -1189,10 +1204,7 @@ def build_run_main() -> NoReturn:
     platform_name, _ = get_platform_info()
 
     # Generate output filename: src.cpp -> src (or src.exe on Windows)
-    if platform_name == "win":
-        output_file = str(source_path.with_suffix(".exe"))
-    else:
-        output_file = str(source_path.with_suffix(""))
+    output_file = str(source_path.with_suffix(".exe")) if platform_name == "win" else str(source_path.with_suffix(""))
 
     output_path = Path(output_file)
     hash_file = source_path.with_suffix(".hash")
@@ -1217,19 +1229,19 @@ def build_run_main() -> NoReturn:
             try:
                 stored_hash = hash_file.read_text().strip()
                 if stored_hash == current_hash:
-                    print(f"Cache hit! Hash matches, skipping compilation.", file=sys.stderr)
+                    print("Cache hit! Hash matches, skipping compilation.", file=sys.stderr)
                     print(f"Using cached executable: {output_file}", file=sys.stderr)
                     should_compile = False
                 else:
-                    print(f"Cache miss: Hash mismatch, recompiling...", file=sys.stderr)
+                    print("Cache miss: Hash mismatch, recompiling...", file=sys.stderr)
             except Exception as e:
                 print(f"Warning: Could not read hash file: {e}", file=sys.stderr)
-                print(f"Recompiling...", file=sys.stderr)
+                print("Recompiling...", file=sys.stderr)
         else:
             if not output_path.exists():
-                print(f"Cache miss: Executable not found, compiling...", file=sys.stderr)
+                print("Cache miss: Executable not found, compiling...", file=sys.stderr)
             else:
-                print(f"Cache miss: No hash file found, compiling...", file=sys.stderr)
+                print("Cache miss: No hash file found, compiling...", file=sys.stderr)
 
     # Compile if needed
     if should_compile:

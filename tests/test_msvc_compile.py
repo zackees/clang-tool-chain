@@ -127,7 +127,7 @@ class TestMSVCCompilation(unittest.TestCase):
 
         # Should NOT contain GNU target
         self.assertNotIn(
-            "x86_64-w64-mingw32",
+            "x86_64-w64-windows-gnu",
             output,
             f"GNU target should NOT appear when using MSVC variant.\nFull output:\n{output}",
         )
@@ -665,7 +665,7 @@ int main() {
 
         # Use MSVC variant but provide GNU target explicitly
         result = subprocess.run(
-            ["clang-tool-chain-c-msvc", "-v", "--target=x86_64-w64-mingw32", "-c", str(test_file)],
+            ["clang-tool-chain-c-msvc", "-v", "--target=x86_64-w64-windows-gnu", "-c", str(test_file)],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -677,7 +677,7 @@ int main() {
 
         # Should see user's GNU target, not MSVC target
         self.assertIn(
-            "x86_64-w64-mingw32",
+            "x86_64-w64-windows-gnu",
             output,
             f"User's explicit target should be used.\nFull output:\n{output}",
         )

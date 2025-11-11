@@ -381,7 +381,7 @@ class TestMSVCABI(unittest.TestCase):
 
             # Should not contain GNU target
             self.assertNotIn(
-                "x86_64-w64-mingw32",
+                "x86_64-w64-windows-gnu",
                 output,
                 f"GNU target should NOT appear when using MSVC variant.\nFull output:\n{output}",
             )
@@ -398,7 +398,7 @@ class TestMSVCABI(unittest.TestCase):
                 [
                     "clang-tool-chain-c-msvc",
                     "-v",
-                    "--target=x86_64-w64-mingw32",
+                    "--target=x86_64-w64-windows-gnu",
                     "-c",
                     str(test_file),
                     "-o",
@@ -411,7 +411,7 @@ class TestMSVCABI(unittest.TestCase):
             # Should see user's GNU target, not MSVC target
             output = (result.stdout or "") + (result.stderr or "")
             self.assertIn(
-                "x86_64-w64-mingw32",
+                "x86_64-w64-windows-gnu",
                 output,
                 f"User's explicit target should be used.\nFull output:\n{output}",
             )
@@ -436,6 +436,8 @@ int main() {
                 ["clang-tool-chain-cpp-msvc", "-c", str(test_file), "-o", str(Path(temp_dir) / "test.o")],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             output = (result.stdout or "") + (result.stderr or "")
@@ -479,6 +481,8 @@ int main() {
                 ["clang-tool-chain-cpp-msvc", str(test_file), "-o", str(exe_file)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             output = (result.stdout or "") + (result.stderr or "")
@@ -501,7 +505,9 @@ int main() {
             self.assertTrue(exe_file.exists(), "Executable file should be created")
 
             # Try to run the executable
-            run_result = subprocess.run([str(exe_file)], capture_output=True, text=True)
+            run_result = subprocess.run(
+                [str(exe_file)], capture_output=True, text=True, encoding="utf-8", errors="replace"
+            )
             self.assertEqual(run_result.returncode, 0, "Executable should run successfully")
             self.assertIn("Hello MSVC", run_result.stdout, "Executable should produce expected output")
 
@@ -533,6 +539,8 @@ extern "C" int exported_function() {
                 ["clang-tool-chain-cpp", "-c", str(test_file), "-o", str(gnu_obj)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             # Compile with MSVC variant
@@ -541,6 +549,8 @@ extern "C" int exported_function() {
                 ["clang-tool-chain-cpp-msvc", "-c", str(test_file), "-o", str(msvc_obj)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             # Skip if MSVC compilation failed due to missing SDK
@@ -561,12 +571,16 @@ extern "C" int exported_function() {
                 ["clang-tool-chain-nm", str(gnu_obj)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             nm_msvc = subprocess.run(
                 ["clang-tool-chain-nm", str(msvc_obj)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             # Both should succeed
