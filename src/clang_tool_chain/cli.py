@@ -12,10 +12,9 @@ from typing import NoReturn
 from . import sccache_runner, wrapper
 
 try:
-    from .__version__ import __llvm_version__, __version__
+    from .__version__ import __version__
 except ImportError:
     __version__ = "unknown"
-    __llvm_version__ = "unknown"
 
 
 def cmd_info(args: argparse.Namespace) -> int:
@@ -177,9 +176,8 @@ def cmd_path(args: argparse.Namespace) -> int:
 
 
 def cmd_package_version(args: argparse.Namespace) -> int:
-    """Display the package version and target LLVM version."""
+    """Display the package version."""
     print(f"clang-tool-chain version: {__version__}")
-    print(f"Target LLVM version: {__llvm_version__}")
     print()
 
     if args.verbose:
@@ -188,7 +186,6 @@ def cmd_package_version(args: argparse.Namespace) -> int:
         print("=" * 60)
         print("  Package:       clang-tool-chain")
         print(f"  Version:       {__version__}")
-        print(f"  LLVM Version:  {__llvm_version__}")
         print()
 
         # Try to get actual clang version from installed binaries
