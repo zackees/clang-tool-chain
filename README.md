@@ -96,6 +96,8 @@ MSVC variants require Visual Studio or Windows SDK for system headers/libraries.
 |------|-------------------|---------------------|
 | **Compile C** | `clang-tool-chain-c main.c -o program` | `clang-tool-chain-c-msvc main.c -o program.exe` |
 | **Compile C++** | `clang-tool-chain-cpp main.cpp -o program` | `clang-tool-chain-cpp-msvc main.cpp -o program.exe` |
+| **Build & Run** | `clang-tool-chain-build-run main.cpp` | Same |
+| **Build & Run (Cached)** | `clang-tool-chain-build-run --cached main.cpp` | Same |
 | **Cached C** | `clang-tool-chain-sccache-c main.c -o program` | `clang-tool-chain-sccache-c-msvc main.c -o program.exe` |
 | **Cached C++** | `clang-tool-chain-sccache-cpp main.cpp -o program` | `clang-tool-chain-sccache-cpp-msvc main.cpp -o program.exe` |
 | **Link Objects** | `clang-tool-chain-ld obj1.o obj2.o -o program` | N/A (use compiler) |
@@ -191,7 +193,7 @@ Installing LLVM/Clang traditionally requires:
 - **Ultra-Optimized Archives** - 94.3% size reduction via binary stripping, deduplication, and zstd-22 compression
 - **Cross-Platform Support** - Windows x64, macOS x64/ARM64, Linux x64/ARM64
 - **Concurrent-Safe Installation** - File locking prevents race conditions in parallel builds
-- **Python Wrapper Commands** - 22 entry points for all essential LLVM tools
+- **Python Wrapper Commands** - 23 entry points for all essential LLVM tools
 - **Pre-Built Binaries** - Clang 21.1.5 (Linux/Windows), 19.1.6 (macOS)
 - **Essential Toolchain Utilities** - Compilers, linkers, binary utilities, and code formatters
 - **Automatic macOS SDK Detection** - Seamlessly finds system headers on macOS without configuration
@@ -262,19 +264,66 @@ clang-tool-chain-cpp -O3 -Wall -Wextra hello.cpp -o hello
 clang-tool-chain-cpp --version
 ```
 
-#### Using the Build Utility
+#### Using the Build Utilities
+
+**Basic Build Command**
 
 The `clang-tool-chain-build` command provides a simple way to compile projects:
 
 ```bash
 # Build a single C file
-clang-tool-chain-build hello.c
+clang-tool-chain-build hello.c hello
 
 # Build a C++ file with custom output name
-clang-tool-chain-build hello.cpp -o myprogram
+clang-tool-chain-build hello.cpp myprogram
 
 # Build with optimization
-clang-tool-chain-build -O2 hello.c
+clang-tool-chain-build hello.cpp myprogram -O2
+```
+
+**Build-and-Run Command**
+
+The `clang-tool-chain-build-run` command compiles and immediately executes your program:
+
+```bash
+# Compile and run a C++ program
+clang-tool-chain-build-run hello.cpp
+
+# With compiler flags
+clang-tool-chain-build-run hello.cpp -O2 -std=c++17
+
+# Pass arguments to the program
+clang-tool-chain-build-run hello.cpp -- arg1 arg2
+
+# Use caching for faster development iterations
+clang-tool-chain-build-run --cached hello.cpp
+
+# Combined: caching + compiler flags + program arguments
+clang-tool-chain-build-run --cached hello.cpp -O2 -- input.txt
+```
+
+**How it works:**
+- Takes a source file (e.g., `hello.cpp`)
+- Compiles to executable (e.g., `hello.exe` on Windows, `hello` on Unix)
+- Runs the executable immediately
+- With `--cached`: Skips compilation if source hasn't changed (SHA256 hash-based)
+
+**Shebang Support (Unix/Linux/macOS):**
+
+Make C++ files directly executable:
+
+```cpp
+#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#include <iostream>
+int main() {
+    std::cout << "Hello from executable C++!" << std::endl;
+    return 0;
+}
+```
+
+```bash
+chmod +x script.cpp
+./script.cpp  # Compiles on first run, cached on subsequent runs
 ```
 
 #### CMake Integration
@@ -417,6 +466,7 @@ clang-tool-chain-sccache --version
 | `clang-tool-chain-c-msvc` | `clang` | C compiler (MSVC ABI, Windows only) |
 | `clang-tool-chain-cpp-msvc` | `clang++` | C++ compiler (MSVC ABI, Windows only) |
 | `clang-tool-chain-build` | Build utility | Simple build tool for C/C++ |
+| `clang-tool-chain-build-run` | Build & Run utility | Compile and run in one step (with optional caching) |
 | `clang-tool-chain-sccache` | `sccache` | Direct sccache access (stats, management) |
 | `clang-tool-chain-sccache-c` | `sccache` + `clang` | C compiler with sccache caching |
 | `clang-tool-chain-sccache-cpp` | `sccache` + `clang++` | C++ compiler with sccache caching |
