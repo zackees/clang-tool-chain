@@ -1,0 +1,153 @@
+# Emscripten (WebAssembly Compilation)
+
+This package provides Emscripten integration for compiling C/C++ to WebAssembly (WASM). Emscripten is automatically downloaded and installed on first use, similar to the LLVM toolchain.
+
+## Key Features
+
+- Pre-built Emscripten SDK (~195 MB compressed, ~1.4 GB installed)
+- Automatic download and installation on first use
+- WebAssembly compilation (C/C++ → .wasm + .js + .html)
+- Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)
+- Manifest-based distribution with SHA256 verification
+- Compatible with Node.js for running WebAssembly output
+
+## Wrapper Commands
+
+```bash
+# Compile C to WebAssembly
+clang-tool-chain-emcc hello.c -o hello.html
+
+# Compile C++ to WebAssembly
+clang-tool-chain-empp hello.cpp -o hello.html
+
+# Compile to .wasm and .js (no HTML)
+clang-tool-chain-empp hello.cpp -o hello.js
+
+# With optimization
+clang-tool-chain-empp -O3 hello.cpp -o hello.html
+```
+
+## What's Included
+
+- Emscripten Python scripts (emcc, em++, emconfigure, emmake)
+- LLVM/Clang binaries with WebAssembly backend
+- Binaryen tools (wasm-opt, wasm-as, etc.)
+- System libraries (libc, libc++, libcxxabi)
+- **Node.js runtime** (bundled automatically, ~23-24 MB)
+
+## Requirements
+
+- **Node.js** is bundled automatically for running compiled WebAssembly programs
+- Falls back to system Node.js if available
+- No manual installation required (downloads on first use)
+- See [Node.js Integration](NODEJS.md) for details
+
+## Installation Paths
+
+- Installation directory: `~/.clang-tool-chain/emscripten/{platform}/{arch}/`
+- Success marker: `~/.clang-tool-chain/emscripten/{platform}/{arch}/done.txt`
+
+## Environment Variables
+
+The wrapper automatically sets required environment variables:
+- `EMSCRIPTEN` - Points to Emscripten installation directory
+- `EMSCRIPTEN_ROOT` - Same as above (for compatibility)
+
+## Example Usage
+
+```cpp
+// hello_world.cpp
+#include <iostream>
+
+int main() {
+    std::cout << "Hello, WebAssembly!" << std::endl;
+    return 0;
+}
+```
+
+```bash
+# Compile to WebAssembly
+clang-tool-chain-empp hello_world.cpp -o hello.html
+
+# Run with Node.js
+node hello.js
+
+# Or open hello.html in a browser
+```
+
+## Output Files
+
+- `hello.html` - HTML page that loads and runs the WASM module
+- `hello.js` - JavaScript glue code for WASM instantiation
+- `hello.wasm` - WebAssembly binary module
+
+## Architecture
+
+Emscripten integration follows the same three-layer architecture as LLVM/Clang:
+
+1. **CLI Layer**: Management commands via `clang-tool-chain` CLI
+2. **Wrapper Layer**: Entry points `emcc_main()` and `empp_main()` in `wrapper.py`
+   - Platform detection (win/linux/darwin)
+   - Node.js availability check
+   - Environment variable setup (EMSCRIPTEN, EMSCRIPTEN_ROOT)
+   - Executes Emscripten Python scripts via Python interpreter
+3. **Downloader Layer**: Automatic download from GitHub
+   - Fetches manifests: `downloads-bins/assets/emscripten/manifest.json`
+   - Downloads `.tar.zst` archives (~195 MB)
+   - Verifies SHA256 checksums
+   - Extracts to `~/.clang-tool-chain/emscripten/{platform}/{arch}/`
+   - File locking prevents concurrent downloads
+
+## Key Differences from LLVM Integration
+
+1. **Script-based, not binary-based**: Emscripten tools are Python scripts, not native executables
+2. **Executes via Python**: Wrapper runs `python emcc.py args...` instead of direct binary execution
+3. **Node.js dependency**: Bundled automatically (no manual installation)
+4. **Larger size**: ~195 MB compressed vs ~52-91 MB for LLVM (includes full SDK)
+
+## Emscripten Version
+
+- Current version: 4.0.15 (Linux x86_64)
+- Additional platforms (Windows, macOS) to be added in future releases
+
+## Testing
+
+```bash
+# Run Emscripten tests (requires Node.js)
+uv run pytest tests/test_emscripten.py -v
+
+# Test classes:
+# - TestEmscripten: Compilation and execution tests
+# - TestEmscriptenDownloader: Infrastructure tests
+```
+
+## Common Issues
+
+1. **Node.js download fails**: Bundled Node.js will download automatically on first use
+   ```bash
+   # If automatic download fails, install manually:
+   # Windows: https://nodejs.org/
+   # macOS: brew install node
+   # Linux: apt install nodejs (Debian/Ubuntu)
+
+   # Verify installation:
+   node --version
+
+   # Wrapper will fall back to system Node.js
+   ```
+
+2. **First compilation is slow**: Emscripten downloads system libraries on first use
+   - Subsequent compilations are faster (~2-10 seconds)
+   - Cache directory: `~/.emscripten_cache/`
+
+3. **Large output files**: WebAssembly output includes JS glue code
+   - Use `-O3` optimization flag to reduce size
+   - Use `--closure 1` for advanced JavaScript minification
+   - Consider `-s MODULARIZE=1` for better JS integration
+
+## Future Enhancements
+
+- Windows x86_64 archive (pending)
+- macOS x86_64 and ARM64 archives (pending)
+- Support for `emrun` wrapper command
+- Integration with CMake via emconfigure/emmake
