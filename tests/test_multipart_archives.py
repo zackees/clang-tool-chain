@@ -107,7 +107,7 @@ class TestPartConcatenation:
 class TestDownloadArchiveParts:
     """Tests for download_archive_parts function."""
 
-    @patch("clang_tool_chain.downloader.urlopen")
+    @patch("clang_tool_chain.archive.urlopen")
     def test_download_multipart_archive(self, mock_urlopen: Any, tmp_path: Path) -> None:
         """Test downloading and concatenating multi-part archive."""
         # Create test data
@@ -151,7 +151,7 @@ class TestDownloadArchiveParts:
         assert len(result_data) == len(full_data)
         assert hashlib.sha256(result_data).hexdigest() == full_sha256
 
-    @patch("clang_tool_chain.downloader.urlopen")
+    @patch("clang_tool_chain.archive.urlopen")
     def test_part_checksum_mismatch(self, mock_urlopen: Any, tmp_path: Path) -> None:
         """Test that part checksum mismatch raises error."""
         # Create test data
@@ -184,7 +184,7 @@ class TestDownloadArchiveParts:
 class TestDownloadArchive:
     """Tests for download_archive convenience function."""
 
-    @patch("clang_tool_chain.downloader.download_file")
+    @patch("clang_tool_chain.archive.download_file")
     def test_single_part_download(self, mock_download_file: Any, tmp_path: Path) -> None:
         """Test that single-part archives use download_file."""
         version_info = VersionInfo(
@@ -200,8 +200,8 @@ class TestDownloadArchive:
         # Verify download_file was called
         mock_download_file.assert_called_once_with("https://example.com/archive.tar.zst", dest_path, "abc123")
 
-    @patch("clang_tool_chain.downloader.download_archive_parts")
-    @patch("clang_tool_chain.downloader.shutil.move")
+    @patch("clang_tool_chain.archive.download_archive_parts")
+    @patch("clang_tool_chain.archive.shutil.move")
     def test_multipart_download(self, mock_move: Any, mock_download_parts: Any, tmp_path: Path) -> None:
         """Test that multi-part archives use download_archive_parts."""
         version_info = VersionInfo(

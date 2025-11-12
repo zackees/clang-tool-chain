@@ -157,7 +157,7 @@ class TestNodeJSDownloader:
         test_dir = tmp_path / "nodejs" / "linux" / "x86_64"
         test_dir.mkdir(parents=True)
 
-        with patch("clang_tool_chain.downloader.get_nodejs_install_dir", return_value=test_dir):
+        with patch("clang_tool_chain.installer.get_nodejs_install_dir", return_value=test_dir):
             result = downloader.is_nodejs_installed("linux", "x86_64")
             assert result is False
 
@@ -168,7 +168,7 @@ class TestNodeJSDownloader:
         test_dir.mkdir(parents=True)
         (test_dir / "done.txt").write_text("installed")
 
-        with patch("clang_tool_chain.downloader.get_nodejs_install_dir", return_value=test_dir):
+        with patch("clang_tool_chain.installer.get_nodejs_install_dir", return_value=test_dir):
             result = downloader.is_nodejs_installed("linux", "x86_64")
             assert result is True
 
@@ -182,7 +182,7 @@ class TestNodeJSDownloader:
         test_dir.mkdir(parents=True)
         (test_dir / "done.txt").write_text("installed")
 
-        with patch("clang_tool_chain.downloader.get_nodejs_install_dir", return_value=test_dir):
+        with patch("clang_tool_chain.installer.get_nodejs_install_dir", return_value=test_dir):
             start_time = time.time()
             result_dir = downloader.ensure_nodejs_available("linux", "x86_64")
             elapsed = time.time() - start_time
@@ -257,10 +257,10 @@ class TestNodeJSErrorHandling:
 
         # Mock to avoid actual download
         with (
-            patch("clang_tool_chain.downloader.get_nodejs_install_dir", return_value=test_dir),
-            patch("clang_tool_chain.downloader.is_nodejs_installed", return_value=False),
-            patch("clang_tool_chain.downloader.download_and_install_nodejs"),
-            patch("clang_tool_chain.downloader.fetch_nodejs_platform_manifest") as mock_fetch,
+            patch("clang_tool_chain.installer.get_nodejs_install_dir", return_value=test_dir),
+            patch("clang_tool_chain.installer.is_nodejs_installed", return_value=False),
+            patch("clang_tool_chain.installer.download_and_install_nodejs"),
+            patch("clang_tool_chain.manifest.fetch_nodejs_platform_manifest") as mock_fetch,
         ):
             # Mock manifest
             mock_fetch.return_value = {
@@ -272,7 +272,7 @@ class TestNodeJSErrorHandling:
             }
 
             # Skip actual download by mocking the download function
-            with patch("clang_tool_chain.downloader.download_archive"):
+            with patch("clang_tool_chain.archive.download_archive"):
                 # This will attempt to call download_and_install_nodejs
                 # We just verify directory creation happens
                 pass
@@ -374,7 +374,7 @@ class TestNodeJSWrapperIntegration:
         with (
             patch("clang_tool_chain.execution.emscripten.get_nodejs_install_dir_path") as mock_get_dir,
             patch("shutil.which", return_value=None),  # No system Node.js
-            patch("clang_tool_chain.downloader.ensure_nodejs_available") as mock_download,
+            patch("clang_tool_chain.installer.ensure_nodejs_available") as mock_download,
         ):
             # First call returns non-existent path, second call (after "download") returns real path
             mock_get_dir.return_value = install_dir
