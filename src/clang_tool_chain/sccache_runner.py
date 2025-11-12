@@ -5,7 +5,6 @@ This module provides fallback functionality to run sccache via iso-env
 when sccache is not found in the system PATH.
 """
 
-import os
 import shutil
 import subprocess
 import sys
@@ -30,7 +29,9 @@ def get_iso_env_cache_dir() -> Path:
         Path to the cache directory.
     """
     # Use the same directory as clang-tool-chain for consistency
-    base_dir = os.environ.get("CLANG_TOOL_CHAIN_DOWNLOAD_PATH")
+    from .settings_warnings import warn_download_path_override
+
+    base_dir = warn_download_path_override()
     cache_dir = Path(base_dir) / "sccache-env" if base_dir else Path.home() / ".clang-tool-chain" / "sccache-env"
 
     return cache_dir

@@ -160,7 +160,9 @@ def get_home_toolchain_dir() -> Path:
         Path to ~/.clang-tool-chain or the path specified by the environment variable
     """
     # Check for environment variable override
-    env_path = os.environ.get("CLANG_TOOL_CHAIN_DOWNLOAD_PATH")
+    from .settings_warnings import warn_download_path_override
+
+    env_path = warn_download_path_override()
     if env_path:
         return Path(env_path)
 
@@ -1309,7 +1311,9 @@ NODEJS_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool
 
 def get_emscripten_install_dir(platform: str, arch: str) -> Path:
     """Get the installation directory for Emscripten."""
-    base_dir = os.environ.get("CLANG_TOOL_CHAIN_DOWNLOAD_PATH")
+    from .settings_warnings import warn_download_path_override
+
+    base_dir = warn_download_path_override()
     if base_dir:
         return Path(base_dir) / "emscripten" / platform / arch
     return Path.home() / ".clang-tool-chain" / "emscripten" / platform / arch
@@ -1317,7 +1321,9 @@ def get_emscripten_install_dir(platform: str, arch: str) -> Path:
 
 def get_emscripten_lock_path(platform: str, arch: str) -> Path:
     """Get the lock file path for Emscripten installation."""
-    base_dir = os.environ.get("CLANG_TOOL_CHAIN_DOWNLOAD_PATH")
+    from .settings_warnings import warn_download_path_override
+
+    base_dir = warn_download_path_override()
     base = Path(base_dir) if base_dir else Path.home() / ".clang-tool-chain"
     return base / f"emscripten-{platform}-{arch}.lock"
 

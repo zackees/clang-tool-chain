@@ -481,7 +481,9 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
         True if lld should be forced, False otherwise
     """
     # Check if user wants to use system linker
-    if os.environ.get("CLANG_TOOL_CHAIN_USE_SYSTEM_LD") == "1":
+    from .settings_warnings import warn_use_system_ld
+
+    if warn_use_system_ld():
         logger.debug("CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1, skipping lld injection")
         return False
 
@@ -525,6 +527,79 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
     return True
 
 
+def _translate_linker_flags_for_macos_lld(args: list[str]) -> list[str]:
+    """
+    Translate GNU ld linker flags to ld64.lld equivalents for macOS.
+
+    When using lld on macOS (ld64.lld), certain GNU ld flags need to be
+    translated to their Mach-O equivalents:
+    - --no-undefined -> -undefined error
+    - --fatal-warnings -> -fatal_warnings
+    - More translations can be added as needed
+
+    This function processes both direct linker flags and flags passed via -Wl,
+
+    Args:
+        args: Original compiler arguments
+
+    Returns:
+        Modified arguments with translated linker flags
+    """
+    # Map of GNU ld flags to ld64.lld equivalents
+    flag_translations = {
+        "--no-undefined": "-undefined error",
+        "--fatal-warnings": "-fatal_warnings",
+        # Add more translations as needed
+    }
+
+    result = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+
+        # Handle -Wl, prefixed flags (comma-separated linker flags)
+        if arg.startswith("-Wl,"):
+            # Split by comma to get individual linker flags
+            linker_flags = arg[4:].split(",")
+            translated_flags = []
+
+            for flag in linker_flags:
+                # Check if this flag needs translation
+                if flag in flag_translations:
+                    # Translate the flag (may result in multiple flags)
+                    translated = flag_translations[flag]
+                    if " " in translated:
+                        # Multiple flags (e.g., "-undefined error")
+                        translated_flags.extend(translated.split())
+                    else:
+                        translated_flags.append(translated)
+                    logger.debug(f"Translated linker flag: {flag} -> {translated}")
+                else:
+                    translated_flags.append(flag)
+
+            # Rejoin with commas
+            if translated_flags:
+                result.append("-Wl," + ",".join(translated_flags))
+
+        # Handle standalone linker flags passed directly
+        elif arg in flag_translations:
+            translated = flag_translations[arg]
+            logger.debug(f"Translated linker flag: {arg} -> {translated}")
+            # Add via -Wl, to pass to linker
+            if " " in translated:
+                # Multiple flags
+                result.append("-Wl," + ",".join(translated.split()))
+            else:
+                result.append("-Wl," + translated)
+
+        else:
+            result.append(arg)
+
+        i += 1
+
+    return result
+
+
 def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     """
     Add -fuse-ld=lld flag for macOS and Linux if needed.
@@ -542,6 +617,8 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     - Compile-only operation (-c flag present)
     - Platform is Windows (already handled separately)
 
+    On macOS, this function also translates GNU ld flags to ld64.lld equivalents.
+
     Args:
         platform_name: Platform name ("win", "linux", "darwin")
         args: Original compiler arguments
@@ -553,6 +630,11 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
         return args
 
     logger.info(f"Forcing lld linker on {platform_name} for cross-platform consistency")
+
+    # On macOS, translate GNU ld flags to ld64.lld equivalents
+    if platform_name == "darwin":
+        args = _translate_linker_flags_for_macos_lld(args)
+
     return ["-fuse-ld=lld"] + args
 
 
@@ -589,7 +671,9 @@ def _add_macos_sysroot_if_needed(args: list[str]) -> list[str]:
         - Apple no longer ships headers in /usr/include since macOS 10.14 Mojave
     """
     # Check if user wants to disable automatic sysroot
-    if os.environ.get("CLANG_TOOL_CHAIN_NO_SYSROOT") == "1":
+    from .settings_warnings import warn_no_sysroot
+
+    if warn_no_sysroot():
         return args
 
     # Check if SDKROOT is already set (standard macOS environment variable)
