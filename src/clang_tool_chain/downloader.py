@@ -947,15 +947,31 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         # execute the binaries immediately after we release the lock and see done.txt
         import platform as plat
 
-        if plat.system() != "Windows" and hasattr(os, "sync"):
-            # On Unix systems, call sync() to flush all filesystem buffers
-            # This ensures that all extracted binaries are fully written to disk
-            # before we write done.txt and release the lock
-            # If sync fails, continue anyway - better to have a rare condition
-            # than to fail the installation entirely
-            with contextlib.suppress(Exception):
-                if hasattr(os, "sync"):
+        if plat.system() != "Windows":
+            # On Unix systems, use fsync() on the bin directory for synchronous flush
+            # This is especially critical on macOS APFS where os.sync() is non-blocking
+            # and extracted binaries may not be visible immediately after lock release
+            bin_dir = install_dir / "bin"
+            fsync_success = False
+
+            try:
+                # Try fsync on the bin directory (blocking until flushed to disk)
+                bin_dir_fd = os.open(str(bin_dir), os.O_RDONLY)
+                try:
+                    os.fsync(bin_dir_fd)
+                    fsync_success = True
+                    logger.info("Binaries synced to disk via fsync() on bin directory")
+                finally:
+                    os.close(bin_dir_fd)
+            except Exception as e:
+                # fsync on directories may not work on all filesystems
+                logger.warning(f"fsync() on bin directory failed: {e}, falling back to os.sync()")
+
+            # Fallback to os.sync() if fsync failed (best effort)
+            if not fsync_success and hasattr(os, "sync"):
+                with contextlib.suppress(Exception):
                     os.sync()  # type: ignore[attr-defined]
+                    logger.info("Fallback: called os.sync() for filesystem flush")
 
         # Verify MinGW sysroot exists on Windows (integrated in Clang archive since v2.0.0)
         # This ensures concurrent compiler processes won't fail when checking for MinGW headers
@@ -1044,6 +1060,38 @@ def ensure_toolchain(platform: str, arch: str) -> None:
         # Check again inside lock in case another process just finished installing
         if is_toolchain_installed(platform, arch):
             logger.info("Another process installed the toolchain while we waited")
+
+            # CRITICAL FIX for macOS APFS race condition:
+            # done.txt exists, but filesystem may not have synced yet (especially on macOS APFS)
+            # The other process may have written done.txt but binaries aren't visible yet
+            # Wait up to 2 seconds for the clang binary to become visible
+            install_dir = get_install_dir(platform, arch)
+            bin_dir = install_dir / "bin"
+            clang_binary = bin_dir / "clang.exe" if platform == "win" else bin_dir / "clang"
+
+            if not clang_binary.exists():
+                logger.warning("done.txt exists but clang binary not visible yet, waiting for filesystem sync...")
+                import time
+
+                for attempt in range(200):  # 200 * 0.01s = 2 seconds max
+                    if clang_binary.exists():
+                        elapsed = attempt * 0.01
+                        if elapsed > 0.1:  # Log if it took more than 100ms
+                            logger.warning(f"Clang binary became visible after {elapsed:.2f}s (filesystem sync delay)")
+                        else:
+                            logger.info(f"Clang binary verified after {elapsed:.3f}s")
+                        break
+                    time.sleep(0.01)
+                else:
+                    # Binary still not visible after 2 seconds - this is unexpected but proceed anyway
+                    # The subsequent find_tool_binary() call will give a better error message
+                    logger.error(
+                        f"Clang binary still not visible after 2s wait. "
+                        f"Expected: {clang_binary}. This may indicate a filesystem sync issue or corrupted installation."
+                    )
+            else:
+                logger.info("Clang binary verified immediately (no sync delay)")
+
             return
 
         # Download and install
