@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Windows GNU ABI**: MinGW headers and sysroot are now integrated into the main Clang archive
+  - Eliminates separate 91 MB MinGW download on first use
+  - Simplifies installation process - single archive download
+  - Reduces total download size from 145 MB to ~53 MB (integrated archive)
+  - MinGW headers in `<clang_root>/include/`
+  - Sysroot in `<clang_root>/x86_64-w64-mingw32/`
+  - Compiler-rt in `<clang_root>/lib/clang/<version>/`
+  - No API changes - existing code continues to work
+  - Automatic migration on next toolchain download
+  - Wrapper automatically adds explicit include paths for integrated headers
+  - Resource directory auto-detection for compiler intrinsics and runtime libraries
+
+### Removed
+- Separate MinGW sysroot download and installation logic
+- `ensure_mingw_sysroot_installed()` function (internal API, not user-facing)
+- `download_and_install_mingw()` function (internal API, not user-facing)
+- MinGW-specific manifest fetching functions (internal API, not user-facing)
+- `MINGW_MANIFEST_BASE_URL` constant (internal, not user-facing)
+- Approximately 320 lines of MinGW-specific download code
+
+### Fixed
+- Windows GNU ABI compilation now works correctly with integrated MinGW headers
+- Explicit include paths added for C++ standard library and MinGW headers
+- Resource directory auto-detection for compiler intrinsics (mm_malloc.h, etc.)
+- Resource directory correctly set for linking with libclang_rt.builtins.a
+- Manifest test now correctly handles deprecated versions when determining "latest"
+
+### Migration Notes
+- Existing installations will automatically download the new integrated archive on next use
+- Old cached MinGW archives in `~/.clang-tool-chain/mingw/` are no longer used (safe to delete)
+- Use `clang-tool-chain purge --yes` to remove old cache and download fresh integrated archive
+- No code changes required for users - wrappers automatically detect integrated headers
+
 ### Added
 - **Node.js Bundling for Emscripten**: Automatic download and installation of minimal Node.js runtime
   - No manual Node.js installation required for Emscripten users

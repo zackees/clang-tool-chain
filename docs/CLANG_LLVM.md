@@ -138,10 +138,16 @@ This package implements automatic GNU target selection for Windows (similar to [
 
 1. **Explicit `--target` flag**: User-provided target takes priority (no injection)
 2. **Windows platform detection**: Automatically uses `x86_64-w64-windows-gnu` target
-3. **MinGW sysroot download**: Downloads MinGW-w64 headers/libraries on first use
-4. **Automatic `--sysroot` injection**: Points to `~/.clang-tool-chain/mingw/win/x86_64/`
+3. **Integrated MinGW headers**: MinGW-w64 headers/libraries are included in the Clang archive (no separate download)
+4. **Automatic `--sysroot` injection**: Points to `<clang_root>/x86_64-w64-mingw32/`
 
 The wrapper automatically injects `--target=x86_64-w64-windows-gnu` and `--sysroot` when compiling on Windows, ensuring GNU-compatible standard library headers are found.
+
+**What's Included (v2.0.0+):**
+- MinGW-w64 headers in `<clang_root>/include/` (Windows API, C/C++ standard library)
+- Sysroot in `<clang_root>/x86_64-w64-mingw32/` (import libraries, runtime DLLs)
+- Compiler-rt in `<clang_root>/lib/clang/<version>/` (runtime libraries and intrinsics)
+- **No separate download required** - all components integrated into main Clang archive
 
 **Environment Variables:**
 ```bash
@@ -169,7 +175,7 @@ For Windows-native projects requiring MSVC compatibility:
 - Automatic GNU target injection is skipped when:
   - User explicitly provides `--target` in arguments
   - Using MSVC variant commands (`*-msvc`)
-  - MinGW sysroot download or installation fails (falls back to default)
+  - MinGW sysroot is not found in the Clang installation (corrupted install)
 
 ## Windows MSVC ABI (Opt-in, Windows-Specific)
 
@@ -211,7 +217,7 @@ clang-tool-chain-sccache-cpp-msvc main.cpp -o main.exe
 **When to Use GNU ABI (Default):**
 - **Cross-platform code**: Same ABI on Linux/macOS/Windows
 - **Strict C++11 mode**: MSVC headers require C++14 features
-- **No Windows SDK**: MinGW sysroot doesn't require VS installation
+- **No Windows SDK**: Integrated MinGW headers don't require VS installation
 - **Embedded/Arduino**: Matches GCC toolchain behavior
 
 **Windows SDK Requirements:**
@@ -243,7 +249,7 @@ When MSVC variants are used but SDK environment variables are not found, a helpf
 
 4. **Alternative: Use GNU ABI instead**
    - Use default `clang-tool-chain-c` and `clang-tool-chain-cpp` commands
-   - No SDK required (uses MinGW sysroot)
+   - No SDK required (uses integrated MinGW headers)
 
 **Target Override Behavior:**
 

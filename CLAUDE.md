@@ -16,22 +16,22 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 | Platform | Architecture | Clang/LLVM Version | Additional Components |
 |----------|-------------|-------------------|----------------------|
-| macOS    | x86_64      | 19.1.6            | -                    |
-| macOS    | arm64       | 19.1.6            | -                    |
-| Windows  | x86_64      | 21.1.5            | MinGW-w64 21.1.5 (GNU ABI) |
+| macOS    | x86_64      | 21.1.5            | -                    |
+| macOS    | arm64       | 21.1.5            | -                    |
+| Windows  | x86_64      | 21.1.5            | MinGW-w64 (integrated) |
 | Linux    | x86_64      | 21.1.5            | -                    |
 | Linux    | arm64       | 21.1.5            | -                    |
 
-*Version information as of November 9, 2025*
+*Version information as of November 11, 2025*
 
 **Key Features:**
-- Pre-built Clang/LLVM binaries (~200-400 MB per platform)
+- Pre-built Clang/LLVM binaries (~50-400 MB per platform)
 - Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)
 - Automatic toolchain download and installation on first use
 - Manifest-based distribution system with checksum verification
 - Python wrapper commands for all essential tools
 - Ultra-compressed archives using zstd level 22 (~94% size reduction)
-- Windows GNU ABI support with MinGW sysroot
+- **Windows GNU ABI support with integrated MinGW headers and sysroot** (no separate download)
 - Emscripten WebAssembly compilation
 - Bundled Node.js runtime
 

@@ -34,8 +34,6 @@ logger = logging.getLogger(__name__)
 # Base URL for manifest and downloads
 MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/clang"
 IWYU_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/iwyu"
-# MinGW sysroot manifests are also in the bins repository for consistency
-MINGW_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/mingw"
 
 # Generic type variable for JSON deserialization
 T = TypeVar("T")
@@ -953,11 +951,52 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
             # On Unix systems, call sync() to flush all filesystem buffers
             # This ensures that all extracted binaries are fully written to disk
             # before we write done.txt and release the lock
-            # If sync fails, continue anyway - better to have a rare race condition
+            # If sync fails, continue anyway - better to have a rare condition
             # than to fail the installation entirely
             with contextlib.suppress(Exception):
                 if hasattr(os, "sync"):
                     os.sync()  # type: ignore[attr-defined]
+
+        # Verify MinGW sysroot exists on Windows (integrated in Clang archive since v2.0.0)
+        # This ensures concurrent compiler processes won't fail when checking for MinGW headers
+        if platform == "win":
+            logger.info("Verifying MinGW sysroot integrity for Windows GNU ABI support")
+            sysroot_name = "x86_64-w64-mingw32" if arch == "x86_64" else "aarch64-w64-mingw32"
+            sysroot_path = install_dir / sysroot_name
+
+            if not sysroot_path.exists():
+                logger.error(f"MinGW sysroot not found after extraction: {sysroot_path}")
+                raise RuntimeError(
+                    f"MinGW sysroot verification failed: {sysroot_path} does not exist\n"
+                    f"The integrated MinGW headers were not properly extracted from the archive.\n"
+                    f"This indicates a corrupted download or extraction issue.\n"
+                    f"Installation directory: {install_dir}\n"
+                    f"Please try again or report at https://github.com/zackees/clang-tool-chain/issues"
+                )
+
+            # Verify essential sysroot components
+            sysroot_lib = sysroot_path / "lib"
+            if not sysroot_lib.exists():
+                logger.error(f"MinGW sysroot lib directory missing: {sysroot_lib}")
+                raise RuntimeError(
+                    f"MinGW sysroot lib directory not found: {sysroot_lib}\n"
+                    f"The sysroot structure is incomplete.\n"
+                    f"Installation directory: {install_dir}"
+                )
+
+            logger.info(f"MinGW sysroot verified at: {sysroot_path}")
+
+            # Also verify MinGW include directory (headers are at install_dir/include/)
+            mingw_include = install_dir / "include"
+            if not mingw_include.exists():
+                logger.error(f"MinGW include directory missing: {mingw_include}")
+                raise RuntimeError(
+                    f"MinGW include directory not found: {mingw_include}\n"
+                    f"The integrated MinGW headers are incomplete.\n"
+                    f"Installation directory: {install_dir}"
+                )
+
+            logger.info(f"MinGW headers verified at: {mingw_include}")
 
         # Write done.txt to mark successful installation
         # Ensure install_dir exists before writing done.txt
@@ -1207,327 +1246,6 @@ def ensure_iwyu(platform: str, arch: str) -> None:
         logger.info("Starting IWYU download and installation")
         download_and_install_iwyu(platform, arch)
         logger.info(f"IWYU installation complete for {platform}/{arch}")
-
-
-# ============================================================================
-# MinGW Sysroot Support (Windows GNU ABI)
-# ============================================================================
-
-
-def fetch_mingw_root_manifest() -> RootManifest:
-    """
-    Fetch the MinGW sysroot root manifest file.
-
-    Returns:
-        Root manifest as a RootManifest object
-    """
-    logger.info("Fetching MinGW sysroot root manifest")
-    url = f"{MINGW_MANIFEST_BASE_URL}/manifest.json"
-    data = _fetch_json_raw(url)
-    manifest = _parse_root_manifest(data)
-    logger.info(f"MinGW sysroot root manifest loaded with {len(manifest.platforms)} platforms")
-    return manifest
-
-
-def fetch_mingw_platform_manifest(platform: str, arch: str) -> Manifest:
-    """
-    Fetch the MinGW sysroot platform-specific manifest file.
-
-    Args:
-        platform: Platform name (e.g., "win")
-        arch: Architecture name (e.g., "x86_64", "arm64")
-
-    Returns:
-        Platform manifest as a Manifest object
-
-    Raises:
-        RuntimeError: If platform/arch combination is not found
-    """
-    logger.info(f"Fetching MinGW sysroot platform manifest for {platform}/{arch}")
-    root_manifest = fetch_mingw_root_manifest()
-
-    # Find the platform in the manifest
-    for plat_entry in root_manifest.platforms:
-        if plat_entry.platform == platform:
-            # Find the architecture
-            for arch_entry in plat_entry.architectures:
-                if arch_entry.arch == arch:
-                    manifest_path = arch_entry.manifest_path
-                    logger.info(f"Found MinGW sysroot manifest path: {manifest_path}")
-                    url = f"{MINGW_MANIFEST_BASE_URL}/{manifest_path}"
-                    data = _fetch_json_raw(url)
-                    manifest = _parse_manifest(data)
-                    logger.info(f"MinGW sysroot platform manifest loaded successfully for {platform}/{arch}")
-                    return manifest
-
-    logger.error(f"MinGW sysroot platform {platform}/{arch} not found in manifest")
-    raise RuntimeError(f"MinGW sysroot platform {platform}/{arch} not found in manifest")
-
-
-def get_mingw_install_dir(platform: str, arch: str) -> Path:
-    """
-    Get the installation directory for MinGW sysroot.
-
-    Args:
-        platform: Platform name (e.g., "win")
-        arch: Architecture name (e.g., "x86_64", "arm64")
-
-    Returns:
-        Path to the MinGW sysroot installation directory
-    """
-    toolchain_dir = get_home_toolchain_dir()
-    install_dir = toolchain_dir / "mingw" / platform / arch
-    return install_dir
-
-
-def get_mingw_lock_path(platform: str, arch: str) -> Path:
-    """
-    Get the lock file path for MinGW sysroot installation.
-
-    Args:
-        platform: Platform name (e.g., "win")
-        arch: Architecture name (e.g., "x86_64", "arm64")
-
-    Returns:
-        Path to the lock file
-    """
-    toolchain_dir = get_home_toolchain_dir()
-    toolchain_dir.mkdir(parents=True, exist_ok=True)
-    lock_path = toolchain_dir / f"mingw-{platform}-{arch}.lock"
-    return lock_path
-
-
-def is_mingw_installed(platform: str, arch: str) -> bool:
-    """
-    Check if MinGW sysroot is already installed.
-
-    Args:
-        platform: Platform name (e.g., "win")
-        arch: Architecture name (e.g., "x86_64", "arm64")
-
-    Returns:
-        True if installed, False otherwise
-    """
-    install_dir = get_mingw_install_dir(platform, arch)
-    done_file = install_dir / "done.txt"
-    return done_file.exists()
-
-
-# Alias for consistency with test naming
-is_mingw_sysroot_installed = is_mingw_installed
-
-
-def download_and_install_mingw(platform: str, arch: str) -> None:
-    """
-    Download and install MinGW sysroot for the given platform/arch.
-
-    Args:
-        platform: Platform name (e.g., "win")
-        arch: Architecture name (e.g., "x86_64", "arm64")
-    """
-    logger.info(f"Downloading and installing MinGW sysroot for {platform}/{arch}")
-
-    # Fetch the manifest to get download URL and checksum
-    manifest = fetch_mingw_platform_manifest(platform, arch)
-    version_info = manifest.versions[manifest.latest]
-
-    logger.info(f"MinGW sysroot version: {manifest.latest}")
-    logger.info(f"Download URL: {version_info.href}")
-
-    # Create temporary download directory
-    install_dir = get_mingw_install_dir(platform, arch)
-    logger.info(f"Installation directory: {install_dir}")
-
-    # Remove old installation if exists
-    if install_dir.exists():
-        logger.info("Removing old MinGW sysroot installation")
-        _robust_rmtree(install_dir)
-
-    # Create temp directory for download
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-        archive_file = temp_path / "mingw-sysroot.tar.zst"
-
-        # Download the archive (handles both single-file and multi-part)
-        download_archive(version_info, archive_file)
-
-        # Extract to installation directory
-        logger.info("Extracting MinGW sysroot archive")
-        extract_tarball(archive_file, install_dir)
-
-        # Fix permissions on Unix systems (not needed for Windows but included for consistency)
-        if os.name != "nt":
-            logger.info("Setting executable permissions on MinGW sysroot")
-            fix_file_permissions(install_dir)
-
-        # Copy clang resource headers (mm_malloc.h, intrinsics, etc.) from clang installation
-        # These are compiler builtin headers needed for compilation
-        logger.info("Copying clang resource headers to MinGW sysroot")
-        try:
-            # Get the clang binary directory
-            from . import wrapper
-
-            clang_bin_dir = wrapper.get_platform_binary_dir()
-            clang_root = clang_bin_dir.parent
-
-            # Find clang resource directory: <clang_root>/lib/clang/<version>/include/
-            clang_lib = clang_root / "lib" / "clang"
-            if clang_lib.exists():
-                # Find first version directory (should only be one)
-                version_dirs = [d for d in clang_lib.iterdir() if d.is_dir()]
-                if version_dirs:
-                    clang_version_dir = version_dirs[0]
-                    resource_include = clang_version_dir / "include"
-                    if resource_include.exists():
-                        # Copy to install_dir/lib/clang/<version>/include/
-                        dest_resource = install_dir / "lib" / "clang" / clang_version_dir.name / "include"
-                        dest_resource.parent.mkdir(parents=True, exist_ok=True)
-
-                        # Copy all .h files
-                        copied_count = 0
-                        for header_file in resource_include.glob("*.h"):
-                            dest_file = dest_resource / header_file.name
-                            shutil.copy2(header_file, dest_file)
-                            copied_count += 1
-
-                        logger.info(f"Copied {copied_count} resource headers from clang installation")
-                    else:
-                        logger.warning(f"Clang resource include directory not found: {resource_include}")
-                else:
-                    logger.warning(f"No version directories found in {clang_lib}")
-            else:
-                logger.warning(f"Clang lib directory not found: {clang_lib}")
-        except Exception as e:
-            logger.warning(f"Could not copy clang resource headers: {e}")
-            logger.warning("Compilation may fail for code using Intel intrinsics or SIMD instructions")
-
-        # Copy resource headers FROM MinGW sysroot TO clang installation
-        # This is needed because the clang binary distribution doesn't include these headers,
-        # but clang expects to find them relative to its binary location.
-        # NOTE: We cannot use -resource-dir flag because it causes clang 21.1.5 to hang on Windows.
-        logger.info("Copying clang resource headers from MinGW sysroot to clang installation")
-        try:
-            from . import wrapper
-
-            clang_bin_dir = wrapper.get_platform_binary_dir()
-            clang_root = clang_bin_dir.parent
-
-            # Source: MinGW sysroot's lib/clang/<version>/include/
-            mingw_clang_lib = install_dir / "lib" / "clang"
-            if mingw_clang_lib.exists():
-                version_dirs = [d for d in mingw_clang_lib.iterdir() if d.is_dir()]
-                if version_dirs:
-                    mingw_version_dir = version_dirs[0]
-                    source_include = mingw_version_dir / "include"
-                    if source_include.exists():
-                        # Destination: <clang_root>/lib/clang/<version>/include/
-                        dest_clang_lib = clang_root / "lib" / "clang" / mingw_version_dir.name / "include"
-                        dest_clang_lib.parent.mkdir(parents=True, exist_ok=True)
-
-                        # Copy all headers recursively
-                        copied_count = 0
-                        for header_file in source_include.rglob("*"):
-                            if header_file.is_file():
-                                rel_path = header_file.relative_to(source_include)
-                                dest_file = dest_clang_lib / rel_path
-                                dest_file.parent.mkdir(parents=True, exist_ok=True)
-                                shutil.copy2(header_file, dest_file)
-                                copied_count += 1
-
-                        logger.info(f"Copied {copied_count} resource headers to clang installation")
-
-                        # Also copy the lib files (libclang_rt.builtins.a, etc.)
-                        source_lib = mingw_version_dir / "lib"
-                        if source_lib.exists():
-                            dest_clang_lib_dir = clang_root / "lib" / "clang" / mingw_version_dir.name / "lib"
-                            dest_clang_lib_dir.mkdir(parents=True, exist_ok=True)
-
-                            lib_copied_count = 0
-                            for lib_file in source_lib.rglob("*"):
-                                if lib_file.is_file():
-                                    rel_path = lib_file.relative_to(source_lib)
-                                    dest_lib_file = dest_clang_lib_dir / rel_path
-                                    dest_lib_file.parent.mkdir(parents=True, exist_ok=True)
-                                    shutil.copy2(lib_file, dest_lib_file)
-                                    lib_copied_count += 1
-
-                            logger.info(f"Copied {lib_copied_count} library files to clang installation")
-                        else:
-                            logger.warning(f"MinGW resource lib not found: {source_lib}")
-                    else:
-                        logger.warning(f"MinGW resource include not found: {source_include}")
-                else:
-                    logger.warning(f"No version dirs in {mingw_clang_lib}")
-            else:
-                logger.warning(f"MinGW clang lib not found: {mingw_clang_lib}")
-        except Exception as e:
-            logger.warning(f"Could not copy resource headers to clang: {e}")
-            import traceback
-
-            logger.warning(traceback.format_exc())
-
-        # Mark installation as complete
-        # Ensure install_dir exists before writing done.txt
-        install_dir.mkdir(parents=True, exist_ok=True)
-        done_file = install_dir / "done.txt"
-        with open(done_file, "w") as f:
-            f.write(f"MinGW sysroot {manifest.latest} installed successfully\n")
-
-        logger.info(f"MinGW sysroot installation complete for {platform}/{arch}")
-
-
-# Alias for consistency with test naming
-download_and_install_mingw_sysroot = download_and_install_mingw
-
-
-def ensure_mingw_sysroot_installed(platform: str, arch: str) -> Path:
-    """
-    Ensure MinGW sysroot is installed for Windows GNU ABI support.
-
-    This function uses file locking to prevent concurrent downloads.
-    If the sysroot is not installed, it will be downloaded and installed.
-
-    Args:
-        platform: Platform name ("win")
-        arch: Architecture ("x86_64" or "arm64")
-
-    Returns:
-        Path to the installed MinGW sysroot directory
-
-    Raises:
-        ValueError: If platform is not Windows
-    """
-    if platform != "win":
-        raise ValueError(f"MinGW sysroot only needed on Windows, not {platform}")
-
-    logger.info(f"Ensuring MinGW sysroot is installed for {platform}/{arch}")
-
-    # Quick check without lock - if already installed, return immediately
-    if is_mingw_installed(platform, arch):
-        logger.info(f"MinGW sysroot already installed for {platform}/{arch}")
-        return get_mingw_install_dir(platform, arch)
-
-    # Need to download - acquire lock
-    logger.info(f"MinGW sysroot not installed, acquiring lock for {platform}/{arch}")
-    lock_path = get_mingw_lock_path(platform, arch)
-    logger.debug(f"Lock path: {lock_path}")
-    lock = fasteners.InterProcessLock(str(lock_path))
-
-    logger.info("Waiting to acquire MinGW sysroot installation lock...")
-    with lock:
-        logger.info("Lock acquired")
-
-        # Check again inside lock in case another process just finished installing
-        if is_mingw_installed(platform, arch):
-            logger.info("Another process installed MinGW sysroot while we waited")
-            return get_mingw_install_dir(platform, arch)
-
-        # Download and install
-        logger.info("Starting MinGW sysroot download and installation")
-        download_and_install_mingw(platform, arch)
-        logger.info(f"MinGW sysroot installation complete for {platform}/{arch}")
-
-    return get_mingw_install_dir(platform, arch)
 
 
 # ============================================================================

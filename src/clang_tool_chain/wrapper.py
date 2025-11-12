@@ -689,51 +689,44 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
 
     logger.info(f"Setting up GNU ABI for Windows {arch}")
 
-    # Ensure MinGW sysroot is installed
-    try:
-        sysroot_dir = downloader.ensure_mingw_sysroot_installed(platform_name, arch)
-        logger.debug(f"MinGW sysroot installed at: {sysroot_dir}")
-    except Exception as e:
-        logger.error(f"Failed to install MinGW sysroot: {e}")
-        raise RuntimeError(
-            f"Failed to install MinGW sysroot for Windows GNU ABI support\n"
-            f"Error: {e}\n"
-            f"\n"
-            f"This is required for GNU ABI support on Windows.\n"
-            f"If this persists, please report at:\n"
-            f"https://github.com/zackees/clang-tool-chain/issues"
-        ) from e
+    # MinGW sysroot is now integrated into the Clang installation (Windows GNU ABI)
+    # Get the clang installation root directory
+    # This call ensures the toolchain (including MinGW headers) is downloaded with proper locking
+    clang_bin_dir = get_platform_binary_dir()
+    clang_root = clang_bin_dir.parent
 
-    # Determine target triple and sysroot path
+    # Determine target triple and sysroot name based on architecture
     if arch == "x86_64":
         target = "x86_64-w64-windows-gnu"  # Canonical MinGW triple
+        sysroot_name = "x86_64-w64-mingw32"
     elif arch == "arm64":
         target = "aarch64-w64-windows-gnu"  # Canonical MinGW triple
+        sysroot_name = "aarch64-w64-mingw32"
     else:
         raise ValueError(f"Unsupported architecture for MinGW: {arch}")
+
+    # The sysroot is integrated into the clang installation directory
+    sysroot_path = clang_root / sysroot_name
+    if not sysroot_path.exists():
+        logger.error(f"MinGW sysroot not found at expected location: {sysroot_path}")
+        raise RuntimeError(
+            f"MinGW sysroot not found in Clang installation: {sysroot_path}\n"
+            f"This suggests an incomplete or corrupted installation.\n"
+            f"Try purging and reinstalling: clang-tool-chain purge --yes\n"
+            f"If this persists, please report at:\n"
+            f"https://github.com/zackees/clang-tool-chain/issues"
+        )
 
     # Check if user already specified --target
     args_str = " ".join(args)
     user_specified_target = "--target=" in args_str or "--target " in args_str
 
-    # The sysroot is the directory containing include/ and the target subdirectory
-    sysroot_path = sysroot_dir
-    if not sysroot_path.exists():
-        logger.error(f"MinGW sysroot not found at expected location: {sysroot_path}")
-        raise RuntimeError(
-            f"MinGW sysroot not found: {sysroot_path}\n"
-            f"The sysroot was downloaded but the expected directory is missing.\n"
-            f"Please report this issue at:\n"
-            f"https://github.com/zackees/clang-tool-chain/issues"
-        )
-
     logger.info(f"Using GNU target: {target} with sysroot: {sysroot_path}")
 
     # NOTE: The -resource-dir flag causes clang 21.1.5 on Windows to hang indefinitely.
-    # Instead, the downloader copies the clang resource headers (mm_malloc.h, stddef.h, etc.)
-    # from the MinGW sysroot to the clang binary's lib/clang/<version>/include directory.
-    # This allows clang to find them automatically without needing -resource-dir.
-    # See: downloader.py (copies headers from MinGW to clang installation)
+    # The integrated archive includes clang resource headers (mm_malloc.h, stddef.h, etc.)
+    # in lib/clang/<version>/include directory, which clang finds automatically.
+    # MinGW headers are in include/, and sysroot libraries are in <arch>-w64-mingw32/
 
     # Add -stdlib=libc++ to use the libc++ standard library included in the sysroot
     # Add -fuse-ld=lld to use LLVM's linker instead of system ld (link-time only)
@@ -759,13 +752,47 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
     # Always add sysroot and stdlib (needed for both compilation and linking)
     # Add -D_LIBCPP_HAS_THREAD_API_PTHREAD to ensure libc++ uses pthread threading
     # This is required for MinGW-w64 where winpthreads provides pthread compatibility
+    #
+    # NOTE: We add explicit -I paths for MinGW headers because they're in the parent directory
+    # (clang_root/include/) rather than inside the sysroot. The sysroot itself contains
+    # the target-specific libraries and binaries.
+    cxx_include_path = clang_root / "include" / "c++" / "v1"
+    mingw_include_path = clang_root / "include"
+
+    # Find the clang resource directory (lib/clang/<version>/include)
+    # This contains compiler intrinsic headers like mm_malloc.h, stddef.h, etc.
+    clang_lib_dir = clang_root / "lib" / "clang"
+    resource_include_path = None
+    if clang_lib_dir.exists():
+        # Find the version directory (e.g., "19", "21")
+        version_dirs = [d for d in clang_lib_dir.iterdir() if d.is_dir()]
+        if version_dirs:
+            # Use the first (and typically only) version directory
+            version_dir = version_dirs[0]
+            resource_include_path = version_dir / "include"
+            if not resource_include_path.exists():
+                resource_include_path = None
+
     gnu_args.extend(
         [
             f"--sysroot={sysroot_path}",
             "-stdlib=libc++",
             "-D_LIBCPP_HAS_THREAD_API_PTHREAD",
+            f"-I{cxx_include_path}",
+            f"-I{mingw_include_path}",
         ]
     )
+
+    # Add resource directory if found (needed for both headers and libraries)
+    # This sets the base directory for clang's resource files (includes and libs)
+    if resource_include_path:
+        gnu_args.append(f"-I{resource_include_path}")
+        logger.debug(f"Added clang resource include path: {resource_include_path}")
+        # Also set the resource-dir to point to the correct version directory
+        # This is critical for linking with libclang_rt.builtins.a and other runtime libs
+        resource_dir = resource_include_path.parent  # lib/clang/<version>/
+        gnu_args.append(f"-resource-dir={resource_dir}")
+        logger.debug(f"Set resource directory: {resource_dir}")
 
     # Only add link-time flags if not compiling only
     if not is_compile_only:

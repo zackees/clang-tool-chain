@@ -375,8 +375,16 @@ class TestManifestFiles(unittest.TestCase):
 
                                 path_str = f"{platform_dir.name}/{arch_dir.name}"
 
-                                # Get all version keys (excluding 'latest')
-                                version_keys = [k for k in data if k != "latest"]
+                                # Get all version keys (excluding 'latest' and deprecated versions)
+                                version_keys = []
+                                for k in data:
+                                    if k == "latest":
+                                        continue
+                                    # Skip deprecated versions
+                                    version_data = data[k]
+                                    if isinstance(version_data, dict) and version_data.get("deprecated", False):
+                                        continue
+                                    version_keys.append(k)
 
                                 # Skip if no versions exist
                                 if not version_keys:

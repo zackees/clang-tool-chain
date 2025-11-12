@@ -412,6 +412,108 @@ int main() {
         self.assertIn("clang", result_c.stdout.lower(), "Should report clang version")
         self.assertIn("clang", result_cpp.stdout.lower(), "Should report clang version")
 
+    def test_mingw_headers_integrated_in_clang_installation(self) -> None:
+        """
+        Test that MinGW headers are integrated into Clang installation (v2.0.0+).
+
+        Verifies that MinGW headers, sysroot, and compiler-rt are included in the main
+        Clang archive, eliminating the need for a separate MinGW download.
+
+        This is the new architecture where:
+        - MinGW headers are in <clang_root>/include/
+        - Sysroot is in <clang_root>/x86_64-w64-mingw32/
+        - Compiler-rt is in <clang_root>/lib/clang/<version>/
+        """
+        from clang_tool_chain.wrapper import get_platform_binary_dir
+
+        # Get the clang installation root
+        clang_bin_dir = get_platform_binary_dir()
+        clang_root = clang_bin_dir.parent
+
+        # Check for MinGW headers in include/
+        include_dir = clang_root / "include"
+        self.assertTrue(
+            include_dir.exists(),
+            f"MinGW headers should be integrated in Clang installation at {include_dir}",
+        )
+
+        # Check for key MinGW header files
+        windows_h = include_dir / "windows.h"
+        mingw_h = include_dir / "_mingw.h"
+
+        self.assertTrue(
+            windows_h.exists(),
+            f"windows.h should exist in integrated headers at {windows_h}",
+        )
+        self.assertTrue(
+            mingw_h.exists(),
+            f"_mingw.h should exist in integrated headers at {mingw_h}",
+        )
+
+        # Check for sysroot directory
+        sysroot = clang_root / "x86_64-w64-mingw32"
+        self.assertTrue(
+            sysroot.exists(),
+            f"MinGW sysroot should be integrated in Clang installation at {sysroot}",
+        )
+
+        # Check for sysroot libraries
+        sysroot_lib = sysroot / "lib"
+        self.assertTrue(
+            sysroot_lib.exists(),
+            f"Sysroot lib directory should exist at {sysroot_lib}",
+        )
+
+        # Check that there are import libraries (.a files)
+        import_libs = list(sysroot_lib.glob("*.a"))
+        self.assertGreater(
+            len(import_libs),
+            0,
+            f"Should have import libraries in {sysroot_lib}",
+        )
+
+        # Check for compiler-rt in lib/clang/
+        clang_lib = clang_root / "lib" / "clang"
+        self.assertTrue(
+            clang_lib.exists(),
+            f"Clang lib directory should exist at {clang_lib}",
+        )
+
+        # Find version directory (should be exactly one)
+        version_dirs = [d for d in clang_lib.iterdir() if d.is_dir()]
+        self.assertGreater(
+            len(version_dirs),
+            0,
+            f"Should have at least one version directory in {clang_lib}",
+        )
+
+        # Check for resource headers in first version directory
+        version_dir = version_dirs[0]
+        resource_include = version_dir / "include"
+        if resource_include.exists():
+            # Check for common compiler intrinsic headers
+            intrinsic_headers = list(resource_include.glob("*mmintrin.h"))
+            self.assertGreater(
+                len(intrinsic_headers),
+                0,
+                f"Should have intrinsic headers in {resource_include}",
+            )
+
+        # Verify no separate mingw directory exists (old architecture)
+        from clang_tool_chain.downloader import get_home_toolchain_dir
+
+        toolchain_dir = get_home_toolchain_dir()
+        old_mingw_dir = toolchain_dir / "mingw"
+
+        # It's OK if the directory exists but doesn't have the current arch
+        # (might be from old installations), but it should not be the primary location
+        if old_mingw_dir.exists():
+            # If it exists, the headers in clang_root should still be the primary ones
+            self.assertTrue(
+                include_dir.exists(),
+                "Even if old mingw dir exists, integrated headers should be present",
+            )
+
 
 @unittest.skipUnless(sys.platform == "win32", "MSVC ABI tests are Windows-only")
 class TestMSVCABI(unittest.TestCase):

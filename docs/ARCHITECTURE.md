@@ -97,7 +97,7 @@ For archives exceeding GitHub's 100 MB file size limit, the package implements t
    - Extracts `.tar.zst` archives using pyzstd decompression
    - Uses file locking (`fasteners.InterProcessLock`) to prevent concurrent downloads
    - Installation path: `~/.clang-tool-chain/clang/<platform>/<arch>/`
-   - MinGW sysroot path: `~/.clang-tool-chain/mingw/win/x86_64/` (Windows only)
+   - Windows GNU ABI: MinGW headers integrated in Clang archive (v2.0.0+, no separate download)
    - Marks successful installation with `done.txt` file
 
 ## Directory Structure
@@ -124,19 +124,15 @@ clang-tool-chain/
 │   └── assets/              # Published binary distributions
 │       ├── clang/           # Clang toolchain archives
 │       │   ├── manifest.json    # Root manifest (all platforms)
-│       │   ├── win/         # Windows archives and manifest
+│       │   ├── win/         # Windows archives (includes integrated MinGW headers)
 │       │   │   ├── x86_64/
 │       │   │   │   ├── manifest.json
-│       │   │   │   └── llvm-21.1.5-win-x86_64.tar.zst
+│       │   │   │   └── llvm-19.1.7-win-x86_64.tar.zst  # Includes MinGW headers/sysroot
 │       │   ├── linux/       # Linux archives
 │       │   └── darwin/      # macOS archives
-│       ├── mingw/           # MinGW-w64 sysroot archives (Windows GNU ABI)
-│       │   ├── manifest.json    # Root manifest
-│       │   ├── README.md    # MinGW sysroot documentation
-│       │   └── win/         # Windows MinGW sysroots
-│       │       └── x86_64/
-│       │           ├── manifest.json
-│       │           └── mingw-sysroot-21.1.5-win-x86_64.tar.zst
+│       ├── mingw/           # DEPRECATED: Separate MinGW archives (v1.x compatibility)
+│       │   ├── manifest.json    # Marked as deprecated
+│       │   └── win/         # Legacy MinGW sysroots (kept for backward compatibility)
 │       └── iwyu/            # Include What You Use archives
 ├── tests/                   # Unit and integration tests
 │   ├── test_cli.py          # CLI command tests
@@ -182,6 +178,51 @@ When a wrapper command is executed for the first time:
 7. Extract using pyzstd decompression + tarfile
 8. Write `done.txt` to mark completion
 9. Release lock and execute tool
+
+## Installation Directory Structure
+
+### Windows (with Integrated MinGW Headers, v2.0.0+)
+```
+~/.clang-tool-chain/
+├── llvm/
+│   └── win/
+│       └── x86_64/
+│           ├── bin/                      # Clang binaries
+│           │   ├── clang.exe
+│           │   ├── clang++.exe
+│           │   ├── lld.exe
+│           │   └── ...
+│           ├── include/                  # MinGW C/C++ headers (integrated)
+│           │   ├── windows.h
+│           │   ├── _mingw.h
+│           │   └── ...
+│           ├── x86_64-w64-mingw32/       # MinGW sysroot (integrated)
+│           │   ├── lib/                  # Import libraries (.a files)
+│           │   └── bin/                  # Runtime DLLs
+│           ├── lib/
+│           │   └── clang/
+│           │       └── 19/               # Clang version
+│           │           ├── include/      # Compiler intrinsics (integrated)
+│           │           │   ├── mmintrin.h
+│           │           │   ├── xmmintrin.h
+│           │           │   └── ...
+│           │           └── lib/          # compiler-rt libraries
+│           └── done.txt                  # Installation marker
+```
+
+**Note:** As of v2.0.0, MinGW headers are integrated into the Clang archive.
+Earlier versions downloaded MinGW separately to `~/.clang-tool-chain/mingw/`.
+
+### macOS / Linux
+```
+~/.clang-tool-chain/
+├── llvm/
+│   └── <platform>/
+│       └── <arch>/
+│           ├── bin/                      # Clang binaries
+│           ├── lib/                      # Standard libraries
+│           └── done.txt                  # Installation marker
+```
 
 ## Environment Variables
 
