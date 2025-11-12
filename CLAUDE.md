@@ -274,6 +274,148 @@ These functions are called by:
 - `execute_tool()` and `run_tool()` for direct compilation
 - `sccache_clang_main()` and `sccache_clang_cpp_main()` for sccache variants
 
+### Emscripten (WebAssembly Compilation)
+
+This package provides Emscripten integration for compiling C/C++ to WebAssembly (WASM). Emscripten is automatically downloaded and installed on first use, similar to the LLVM toolchain.
+
+**Key Features:**
+- Pre-built Emscripten SDK (~195 MB compressed, ~1.4 GB installed)
+- Automatic download and installation on first use
+- WebAssembly compilation (C/C++ → .wasm + .js + .html)
+- Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)
+- Manifest-based distribution with SHA256 verification
+- Compatible with Node.js for running WebAssembly output
+
+**Wrapper Commands:**
+```bash
+# Compile C to WebAssembly
+clang-tool-chain-emcc hello.c -o hello.html
+
+# Compile C++ to WebAssembly
+clang-tool-chain-empp hello.cpp -o hello.html
+
+# Compile to .wasm and .js (no HTML)
+clang-tool-chain-empp hello.cpp -o hello.js
+
+# With optimization
+clang-tool-chain-empp -O3 hello.cpp -o hello.html
+```
+
+**What's Included:**
+- Emscripten Python scripts (emcc, em++, emconfigure, emmake)
+- LLVM/Clang binaries with WebAssembly backend
+- Binaryen tools (wasm-opt, wasm-as, etc.)
+- System libraries (libc, libc++, libcxxabi)
+
+**Requirements:**
+- **Node.js** is required to run compiled WebAssembly programs
+- Install Node.js: https://nodejs.org/
+- The wrapper will detect Node.js automatically and provide helpful error messages if missing
+
+**Installation Paths:**
+- Installation directory: `~/.clang-tool-chain/emscripten/{platform}/{arch}/`
+- Success marker: `~/.clang-tool-chain/emscripten/{platform}/{arch}/done.txt`
+
+**Environment Variables:**
+The wrapper automatically sets required environment variables:
+- `EMSCRIPTEN` - Points to Emscripten installation directory
+- `EMSCRIPTEN_ROOT` - Same as above (for compatibility)
+
+**Example Usage:**
+
+```cpp
+// hello_world.cpp
+#include <iostream>
+
+int main() {
+    std::cout << "Hello, WebAssembly!" << std::endl;
+    return 0;
+}
+```
+
+```bash
+# Compile to WebAssembly
+clang-tool-chain-empp hello_world.cpp -o hello.html
+
+# Run with Node.js
+node hello.js
+
+# Or open hello.html in a browser
+```
+
+**Output Files:**
+- `hello.html` - HTML page that loads and runs the WASM module
+- `hello.js` - JavaScript glue code for WASM instantiation
+- `hello.wasm` - WebAssembly binary module
+
+**Architecture:**
+
+Emscripten integration follows the same three-layer architecture as LLVM/Clang:
+
+1. **CLI Layer**: Management commands via `clang-tool-chain` CLI
+2. **Wrapper Layer**: Entry points `emcc_main()` and `empp_main()` in `wrapper.py`
+   - Platform detection (win/linux/darwin)
+   - Node.js availability check
+   - Environment variable setup (EMSCRIPTEN, EMSCRIPTEN_ROOT)
+   - Executes Emscripten Python scripts via Python interpreter
+3. **Downloader Layer**: Automatic download from GitHub
+   - Fetches manifests: `downloads-bins/assets/emscripten/manifest.json`
+   - Downloads `.tar.zst` archives (~195 MB)
+   - Verifies SHA256 checksums
+   - Extracts to `~/.clang-tool-chain/emscripten/{platform}/{arch}/`
+   - File locking prevents concurrent downloads
+
+**Key Differences from LLVM Integration:**
+
+1. **Script-based, not binary-based**: Emscripten tools are Python scripts, not native executables
+2. **Executes via Python**: Wrapper runs `python emcc.py args...` instead of direct binary execution
+3. **External dependency**: Requires Node.js (not bundled)
+4. **Larger size**: ~195 MB compressed vs ~52-91 MB for LLVM (includes full SDK)
+
+**Emscripten Version:**
+- Current version: 4.0.15 (Linux x86_64)
+- Additional platforms (Windows, macOS) to be added in future releases
+
+**Testing:**
+
+```bash
+# Run Emscripten tests (requires Node.js)
+uv run pytest tests/test_emscripten.py -v
+
+# Test classes:
+# - TestEmscripten: Compilation and execution tests
+# - TestEmscriptenDownloader: Infrastructure tests
+```
+
+**Common Issues:**
+
+1. **Node.js not found**: Install Node.js and ensure it's in PATH
+   ```bash
+   # Check Node.js installation
+   node --version
+
+   # If not found, install:
+   # Windows: https://nodejs.org/
+   # macOS: brew install node
+   # Linux: apt install nodejs (Debian/Ubuntu)
+   ```
+
+2. **First compilation is slow**: Emscripten downloads system libraries on first use
+   - Subsequent compilations are faster (~2-10 seconds)
+   - Cache directory: `~/.emscripten_cache/`
+
+3. **Large output files**: WebAssembly output includes JS glue code
+   - Use `-O3` optimization flag to reduce size
+   - Use `--closure 1` for advanced JavaScript minification
+   - Consider `-s MODULARIZE=1` for better JS integration
+
+**Future Enhancements:**
+- Windows x86_64 archive (pending)
+- macOS x86_64 and ARM64 archives (pending)
+- Optional Node.js bundling for portable installations
+- Support for `emrun` wrapper command
+- Integration with CMake via emconfigure/emmake
+
 ### Testing
 ```bash
 # Quick diagnostic test of the toolchain installation
@@ -399,6 +541,68 @@ uv run python -m build
 - Toolchains are distributed as `.tar.zst` archives (~52 MB for Windows x64)
 - First tool execution triggers automatic download from GitHub and installation to `~/.clang-tool-chain/`
 - Binary repository: https://github.com/zackees/clang-tool-chain-bins
+
+**⚠️ Git LFS Cannot Be Used:**
+- GitHub's LFS requires authentication for downloads, breaking anonymous access
+- Files over 100 MB cannot be stored in regular Git repositories
+- **Solution**: Large archives (>100 MB) must be split into parts (<100 MB each)
+- Format: `archive-name.tar.zst.part1`, `archive-name.tar.zst.part2`, etc.
+- Downloader concatenates parts before extraction
+- Manifest specifies part count and individual checksums for verification
+
+**Multi-Part Archive Support:**
+
+For archives exceeding GitHub's 100 MB file size limit, the package implements transparent multi-part archive handling:
+
+**Key Features:**
+- Archives automatically split into <100 MB parts (default: 95 MB per part)
+- Transparent to end users - downloads and extraction happen automatically
+- SHA256 checksum verification for each part and final concatenated archive
+- Backward compatible - single-file archives continue to work without changes
+- No Git LFS required - parts stored directly in repository
+
+**Manifest Format:**
+```json
+{
+  "version": "4.0.15",
+  "href": "https://raw.githubusercontent.com/.../archive.tar.zst",
+  "sha256": "full-archive-checksum",
+  "parts": [
+    {
+      "href": "https://raw.githubusercontent.com/.../archive.tar.zst.part1",
+      "sha256": "part1-checksum"
+    },
+    {
+      "href": "https://raw.githubusercontent.com/.../archive.tar.zst.part2",
+      "sha256": "part2-checksum"
+    }
+  ]
+}
+```
+
+**Download Flow:**
+1. Downloader detects "parts" field in manifest
+2. Downloads each part with individual checksum verification
+3. Concatenates parts into single archive
+4. Verifies final archive checksum matches "sha256" field
+5. Extracts using standard `.tar.zst` extraction
+
+**Implementation:**
+- `downloader.py:is_multipart_archive()` - Detects multi-part archives
+- `downloader.py:download_archive_parts()` - Downloads and concatenates parts
+- `downloader.py:download_archive()` - Unified interface for both types
+- All download functions (clang, mingw, emscripten, iwyu) support both formats
+
+**Maintainer Tools:**
+- `downloads-bins/tools/split_archive.py` - Splits archives into parts
+- Generates SHA256 checksums for each part
+- Optionally updates manifest with part information
+- Usage: `python split_archive.py archive.tar.zst --part-size-mb 95`
+
+**Use Cases:**
+- Emscripten SDK (~195 MB) → 3 parts (~95 MB, ~95 MB, ~5 MB)
+- Future LLVM releases if they exceed 100 MB
+- Any toolchain archive that cannot be stored in regular Git
 
 **Three-Layer Architecture:**
 

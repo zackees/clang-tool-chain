@@ -795,6 +795,133 @@ def _get_msvc_target_args(platform_name: str, arch: str) -> list[str]:
     return [f"--target={target}"]
 
 
+def find_emscripten_tool(tool_name: str) -> Path:
+    """
+    Find an Emscripten tool binary.
+
+    Args:
+        tool_name: Name of the tool (e.g., "emcc", "em++")
+
+    Returns:
+        Path to the tool executable
+
+    Raises:
+        RuntimeError: If the tool cannot be found
+    """
+    platform_name, arch = get_platform_info()
+
+    # Ensure Emscripten is installed
+    from . import downloader
+
+    downloader.ensure_emscripten_available(platform_name, arch)
+
+    # Emscripten tools are Python scripts in the emscripten directory
+    install_dir = Path.home() / ".clang-tool-chain" / "emscripten" / platform_name / arch
+    emscripten_dir = install_dir / "emscripten"
+
+    if not emscripten_dir.exists():
+        raise RuntimeError(
+            f"Emscripten directory not found: {emscripten_dir}\n"
+            f"Installation may have failed or is incomplete.\n"
+            f"Try removing ~/.clang-tool-chain/emscripten and running again."
+        )
+
+    # Emscripten tools are typically .py files
+    tool_script = emscripten_dir / f"{tool_name}.py"
+    if not tool_script.exists():
+        # Try without .py extension (some versions may not have it)
+        tool_script = emscripten_dir / tool_name
+        if not tool_script.exists():
+            raise RuntimeError(
+                f"Emscripten tool not found: {tool_name}\n"
+                f"Expected location: {tool_script}\n"
+                f"Emscripten directory: {emscripten_dir}"
+            )
+
+    return tool_script
+
+
+def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
+    """
+    Execute an Emscripten tool with the given arguments.
+
+    Emscripten tools (emcc, em++) are Python scripts that require:
+    1. Python interpreter
+    2. Node.js runtime (for running WebAssembly)
+    3. Proper environment variables (EM_CONFIG, EMSCRIPTEN, etc.)
+
+    Args:
+        tool_name: Name of the tool to execute (e.g., "emcc", "em++")
+        args: Arguments to pass to the tool (defaults to sys.argv[1:])
+
+    Raises:
+        RuntimeError: If the tool cannot be found or executed
+    """
+    if args is None:
+        args = sys.argv[1:]
+
+    logger.info(f"Executing Emscripten tool: {tool_name} with {len(args)} arguments")
+    logger.debug(f"Arguments: {args}")
+
+    # Find tool script
+    try:
+        tool_script = find_emscripten_tool(tool_name)
+    except RuntimeError as e:
+        logger.error(f"Failed to find Emscripten tool: {e}")
+        print(f"\n{'='*60}", file=sys.stderr)
+        print("clang-tool-chain Emscripten Error", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(f"{e}", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
+        sys.exit(1)
+
+    # Check for Node.js (required for Emscripten)
+    node_path = shutil.which("node")
+    if node_path is None:
+        print("\n" + "=" * 60, file=sys.stderr)
+        print("Emscripten Error: Node.js Not Found", file=sys.stderr)
+        print("=" * 60, file=sys.stderr)
+        print("Emscripten requires Node.js to be installed and in PATH.", file=sys.stderr)
+        print("\nInstallation options:", file=sys.stderr)
+        print("  - Download from: https://nodejs.org/", file=sys.stderr)
+        print("  - Linux: apt install nodejs / yum install nodejs", file=sys.stderr)
+        print("  - macOS: brew install node", file=sys.stderr)
+        print("  - Windows: Install from https://nodejs.org/", file=sys.stderr)
+        print("\nAfter installation, ensure node is in your PATH.", file=sys.stderr)
+        print("Verify with: node --version", file=sys.stderr)
+        print("=" * 60 + "\n", file=sys.stderr)
+        sys.exit(1)
+
+    # Get platform info
+    platform_name, arch = get_platform_info()
+    install_dir = Path.home() / ".clang-tool-chain" / "emscripten" / platform_name / arch
+
+    # Set up Emscripten environment variables
+    env = os.environ.copy()
+    env["EMSCRIPTEN"] = str(install_dir / "emscripten")
+    env["EMSCRIPTEN_ROOT"] = str(install_dir / "emscripten")
+
+    # Build command: python tool_script.py args...
+    python_exe = sys.executable
+    cmd = [python_exe, str(tool_script)] + args
+
+    logger.info(f"Executing command: {python_exe} {tool_script} (with {len(args)} args)")
+    logger.debug(f"Environment: EMSCRIPTEN={env.get('EMSCRIPTEN')}")
+
+    # Execute
+    try:
+        result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        logger.error(f"Failed to execute Python: {python_exe}")
+        print(f"\nError: Python interpreter not found: {python_exe}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Failed to execute Emscripten tool: {e}")
+        print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = False) -> NoReturn:
     """
     Execute a tool with the given arguments and exit with its return code.
@@ -1085,6 +1212,16 @@ def clang_format_main() -> NoReturn:
 def clang_tidy_main() -> NoReturn:
     """Entry point for clang-tidy wrapper."""
     execute_tool("clang-tidy")
+
+
+def emcc_main() -> NoReturn:
+    """Entry point for emcc wrapper (Emscripten C compiler)."""
+    execute_emscripten_tool("emcc")
+
+
+def empp_main() -> NoReturn:
+    """Entry point for em++ wrapper (Emscripten C++ compiler)."""
+    execute_emscripten_tool("em++")
 
 
 def build_main() -> NoReturn:

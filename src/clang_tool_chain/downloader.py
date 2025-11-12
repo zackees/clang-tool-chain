@@ -6,6 +6,7 @@ from the manifest-based distribution system.
 """
 
 import contextlib
+import datetime
 import hashlib
 import json
 import logging
@@ -89,6 +90,7 @@ class VersionInfo:
     version: str
     href: str
     sha256: str
+    parts: list[dict[str, str]] | None = None  # Optional multi-part archive information
 
 
 @dataclass
@@ -136,12 +138,14 @@ def _parse_manifest(data: dict[str, Any]) -> Manifest:
         # Parse nested versions structure
         for key, value in data["versions"].items():
             if isinstance(value, dict) and "href" in value and "sha256" in value:
-                versions[key] = VersionInfo(version=key, href=value["href"], sha256=value["sha256"])
+                parts = value.get("parts", None)  # Optional multi-part archive info
+                versions[key] = VersionInfo(version=key, href=value["href"], sha256=value["sha256"], parts=parts)
     else:
         # Parse flat structure (all non-"latest" keys are version entries)
         for key, value in data.items():
             if key != "latest" and isinstance(value, dict) and "href" in value and "sha256" in value:
-                versions[key] = VersionInfo(version=key, href=value["href"], sha256=value["sha256"])
+                parts = value.get("parts", None)  # Optional multi-part archive info
+                versions[key] = VersionInfo(version=key, href=value["href"], sha256=value["sha256"], parts=parts)
 
     return Manifest(latest=latest, versions=versions)
 
@@ -400,6 +404,134 @@ def download_file(url: str, dest_path: Path, expected_sha256: str | None = None)
             if tmp_path.exists():
                 tmp_path.unlink()
         raise ToolchainInfrastructureError(f"Failed to download {url}: {e}") from e
+
+
+def is_multipart_archive(version_info: VersionInfo) -> bool:
+    """
+    Check if a version info specifies a multi-part archive.
+
+    Multi-part archives have a "parts" field with download URLs and checksums
+    for each part. This is used for archives >100 MB that can't be stored
+    directly in GitHub.
+
+    Args:
+        version_info: VersionInfo object from manifest
+
+    Returns:
+        True if this is a multi-part archive, False otherwise
+    """
+    # Check if the VersionInfo has been extended with a parts attribute
+    return hasattr(version_info, "parts") and isinstance(version_info.parts, list) and len(version_info.parts) > 0
+
+
+def download_archive_parts(version_info: VersionInfo, temp_dir: Path) -> Path:
+    """
+    Download and concatenate multi-part archive.
+
+    This function downloads each part separately, verifies its checksum,
+    concatenates all parts into a single archive file, and verifies the
+    final archive checksum.
+
+    Args:
+        version_info: VersionInfo with 'parts' field containing part URLs and checksums
+        temp_dir: Temporary directory for downloads
+
+    Returns:
+        Path to concatenated archive file
+
+    Raises:
+        ToolchainInfrastructureError: If download or checksum verification fails
+    """
+    if not hasattr(version_info, "parts") or not version_info.parts:
+        raise ToolchainInfrastructureError("Version info does not contain parts information")
+
+    parts = version_info.parts
+    output_path = temp_dir / "archive.tar.zst"
+
+    logger.info(f"Downloading multi-part archive ({len(parts)} parts)")
+
+    try:
+        with open(output_path, "wb") as outfile:
+            for i, part_info in enumerate(parts, 1):
+                part_url = part_info["href"]
+                part_sha256 = part_info["sha256"]
+
+                logger.info(f"Downloading part {i}/{len(parts)} from {part_url}")
+
+                # Download part to memory (parts should be <100 MB)
+                try:
+                    req = Request(part_url, headers={"User-Agent": "clang-tool-chain"})
+                    with urlopen(req, timeout=300) as response:
+                        content_length = response.getheader("Content-Length")
+                        if content_length:
+                            logger.info(f"Part {i} size: {int(content_length) / (1024*1024):.2f} MB")
+
+                        part_data = response.read()
+                        logger.info(f"Part {i} downloaded: {len(part_data) / (1024*1024):.2f} MB")
+
+                except Exception as e:
+                    raise ToolchainInfrastructureError(f"Failed to download part {i} from {part_url}: {e}") from e
+
+                # Verify part checksum
+                logger.info(f"Verifying checksum for part {i}")
+                actual_sha256 = hashlib.sha256(part_data).hexdigest()
+                if actual_sha256.lower() != part_sha256.lower():
+                    raise ToolchainInfrastructureError(
+                        f"Part {i} checksum mismatch: expected {part_sha256}, got {actual_sha256}"
+                    )
+                logger.info(f"Part {i} checksum verified")
+
+                # Append to output file
+                outfile.write(part_data)
+
+        # Verify final concatenated archive checksum
+        logger.info("Verifying final archive checksum")
+        if not verify_checksum(output_path, version_info.sha256):
+            raise ToolchainInfrastructureError(
+                f"Final archive checksum mismatch: expected {version_info.sha256}, "
+                f"got {hashlib.sha256(output_path.read_bytes()).hexdigest()}"
+            )
+
+        logger.info(f"Multi-part archive assembled successfully: {output_path.stat().st_size / (1024*1024):.2f} MB")
+        return output_path
+
+    except ToolchainInfrastructureError:
+        # Re-raise infrastructure errors as-is
+        if output_path.exists():
+            output_path.unlink()
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download multi-part archive: {e}")
+        if output_path.exists():
+            output_path.unlink()
+        raise ToolchainInfrastructureError(f"Failed to download multi-part archive: {e}") from e
+
+
+def download_archive(version_info: VersionInfo, dest_path: Path) -> None:
+    """
+    Download archive (single or multi-part) to destination path.
+
+    This is a convenience wrapper that automatically detects whether the
+    archive is single-file or multi-part, and handles download accordingly.
+
+    Args:
+        version_info: VersionInfo with download information
+        dest_path: Destination path for the final archive
+
+    Raises:
+        ToolchainInfrastructureError: If download or checksum verification fails
+    """
+    if is_multipart_archive(version_info):
+        # Multi-part archive - download parts and concatenate
+        logger.info("Detected multi-part archive")
+        with tempfile.TemporaryDirectory(prefix="multipart_download_") as temp_dir:
+            temp_path = Path(temp_dir)
+            archive_path = download_archive_parts(version_info, temp_path)
+            # Move to destination
+            shutil.move(str(archive_path), str(dest_path))
+    else:
+        # Single-file download
+        download_file(version_info.href, dest_path, version_info.sha256)
 
 
 def fix_file_permissions(install_dir: Path) -> None:
@@ -752,11 +884,17 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
     platform_manifest = fetch_platform_manifest(platform, arch)
 
     # Get latest version info
-    version, download_url, sha256 = get_latest_version_info(platform_manifest)
+    latest_version = platform_manifest.latest
+    if not latest_version:
+        raise RuntimeError("Manifest does not specify a 'latest' version")
+
+    version_info = platform_manifest.versions.get(latest_version)
+    if not version_info:
+        raise RuntimeError(f"Version {latest_version} not found in manifest")
 
     if verbose:
-        print(f"Latest version: {version}")
-        print(f"Download URL: {download_url}")
+        print(f"Latest version: {latest_version}")
+        print(f"Download URL: {version_info.href}")
 
     # Download archive to a temporary file
     # Use tempfile to avoid conflicts with test cleanup that removes temp directories
@@ -768,7 +906,7 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         if verbose:
             print(f"Downloading to {archive_path}...")
 
-        download_file(download_url, archive_path, sha256)
+        download_archive(version_info, archive_path)
 
         if verbose:
             print("Download complete. Verifying checksum...")
@@ -823,7 +961,7 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         # Ensure install_dir exists before writing done.txt
         install_dir.mkdir(parents=True, exist_ok=True)
         done_file = install_dir / "done.txt"
-        done_file.write_text(f"Installation completed successfully\nVersion: {version}\n")
+        done_file.write_text(f"Installation completed successfully\nVersion: {latest_version}\n")
 
     finally:
         # Clean up downloaded archive
@@ -1008,8 +1146,8 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
         temp_path = Path(temp_dir)
         archive_file = temp_path / "iwyu.tar.zst"
 
-        # Download the archive
-        download_file(version_info.href, archive_file, version_info.sha256)
+        # Download the archive (handles both single-file and multi-part)
+        download_archive(version_info, archive_file)
 
         # Extract to installation directory
         logger.info("Extracting IWYU archive")
@@ -1208,8 +1346,8 @@ def download_and_install_mingw(platform: str, arch: str) -> None:
         temp_path = Path(temp_dir)
         archive_file = temp_path / "mingw-sysroot.tar.zst"
 
-        # Download the archive
-        download_file(version_info.href, archive_file, version_info.sha256)
+        # Download the archive (handles both single-file and multi-part)
+        download_archive(version_info, archive_file)
 
         # Extract to installation directory
         logger.info("Extracting MinGW sysroot archive")
@@ -1323,3 +1461,203 @@ def ensure_mingw_sysroot_installed(platform: str, arch: str) -> Path:
         logger.info(f"MinGW sysroot installation complete for {platform}/{arch}")
 
     return get_mingw_install_dir(platform, arch)
+
+
+# ============================================================================
+# Emscripten Support (WebAssembly compilation)
+# ============================================================================
+
+# Emscripten manifest base URL
+EMSCRIPTEN_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/emscripten"
+
+
+def get_emscripten_install_dir(platform: str, arch: str) -> Path:
+    """Get the installation directory for Emscripten."""
+    base_dir = os.environ.get("CLANG_TOOL_CHAIN_DOWNLOAD_PATH")
+    if base_dir:
+        return Path(base_dir) / "emscripten" / platform / arch
+    return Path.home() / ".clang-tool-chain" / "emscripten" / platform / arch
+
+
+def get_emscripten_lock_path(platform: str, arch: str) -> Path:
+    """Get the lock file path for Emscripten installation."""
+    base_dir = os.environ.get("CLANG_TOOL_CHAIN_DOWNLOAD_PATH")
+    base = Path(base_dir) if base_dir else Path.home() / ".clang-tool-chain"
+    return base / f"emscripten-{platform}-{arch}.lock"
+
+
+def is_emscripten_installed(platform: str, arch: str) -> bool:
+    """Check if Emscripten is already installed."""
+    install_dir = get_emscripten_install_dir(platform, arch)
+    done_file = install_dir / "done.txt"
+    return done_file.exists()
+
+
+def fetch_emscripten_root_manifest() -> RootManifest:
+    """
+    Fetch the Emscripten root manifest file.
+
+    Returns:
+        Root manifest as a RootManifest object
+    """
+    logger.info("Fetching Emscripten root manifest")
+    url = f"{EMSCRIPTEN_MANIFEST_BASE_URL}/manifest.json"
+    data = _fetch_json_raw(url)
+    manifest = _parse_root_manifest(data)
+    logger.info(f"Emscripten root manifest loaded with {len(manifest.platforms)} platforms")
+    return manifest
+
+
+def fetch_emscripten_platform_manifest(platform: str, arch: str) -> Manifest:
+    """
+    Fetch the Emscripten platform-specific manifest file.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Platform manifest as a Manifest object
+
+    Raises:
+        RuntimeError: If platform/arch combination is not found
+    """
+    logger.info(f"Fetching Emscripten platform manifest for {platform}/{arch}")
+    root_manifest = fetch_emscripten_root_manifest()
+
+    # Find the platform in the manifest
+    for plat_entry in root_manifest.platforms:
+        if plat_entry.platform == platform:
+            # Find the architecture
+            for arch_entry in plat_entry.architectures:
+                if arch_entry.arch == arch:
+                    manifest_path = arch_entry.manifest_path
+                    logger.debug(f"Platform manifest path: {manifest_path}")
+                    manifest_url = f"{EMSCRIPTEN_MANIFEST_BASE_URL}/{manifest_path}"
+                    data = _fetch_json_raw(manifest_url)
+                    manifest = _parse_manifest(data)
+                    logger.info(f"Platform manifest loaded: latest version = {manifest.latest}")
+                    return manifest
+
+            # Architecture not found
+            available_arches = [a.arch for a in plat_entry.architectures]
+            raise RuntimeError(
+                f"Architecture '{arch}' not found for platform '{platform}'\n"
+                f"Available architectures: {', '.join(available_arches)}\n"
+                f"If you believe this should be supported, please report at:\n"
+                f"https://github.com/zackees/clang-tool-chain/issues"
+            )
+
+    # Platform not found
+    available_platforms = [p.platform for p in root_manifest.platforms]
+    raise RuntimeError(
+        f"Platform '{platform}' not found in Emscripten manifest\n"
+        f"Available platforms: {', '.join(available_platforms)}\n"
+        f"If you believe this should be supported, please report at:\n"
+        f"https://github.com/zackees/clang-tool-chain/issues"
+    )
+
+
+def download_and_install_emscripten(platform: str, arch: str) -> None:
+    """
+    Download and install Emscripten for the given platform/arch.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Raises:
+        RuntimeError: If download or installation fails
+    """
+    logger.info(f"Starting Emscripten download and installation for {platform}/{arch}")
+
+    try:
+        # Fetch manifest
+        manifest = fetch_emscripten_platform_manifest(platform, arch)
+        latest_version = manifest.latest
+        logger.info(f"Latest Emscripten version: {latest_version}")
+
+        if latest_version not in manifest.versions:
+            raise RuntimeError(f"Version {latest_version} not found in manifest")
+
+        version_info = manifest.versions[latest_version]
+        download_url = version_info.href
+        expected_checksum = version_info.sha256
+
+        logger.info(f"Download URL: {download_url}")
+        logger.info(f"Expected SHA256: {expected_checksum}")
+
+        # Create temp directory for download
+        with tempfile.TemporaryDirectory(prefix="emscripten_download_") as temp_dir:
+            temp_path = Path(temp_dir)
+            archive_path = temp_path / f"emscripten-{latest_version}-{platform}-{arch}.tar.zst"
+
+            logger.info(f"Downloading to: {archive_path}")
+
+            # Download (handles both single-file and multi-part)
+            download_archive(version_info, archive_path)
+            logger.info("Download and checksum verification successful")
+
+            # Extract
+            install_dir = get_emscripten_install_dir(platform, arch)
+            logger.info(f"Extracting to: {install_dir}")
+            install_dir.mkdir(parents=True, exist_ok=True)
+
+            extract_tarball(archive_path, install_dir)
+
+            # Fix permissions on Unix systems
+            if platform in ("linux", "darwin"):
+                logger.info("Fixing file permissions...")
+                fix_file_permissions(install_dir)
+
+            # Write done marker
+            done_file = install_dir / "done.txt"
+            with open(done_file, "w") as f:
+                f.write(f"Emscripten {latest_version} installed on {datetime.datetime.now()}\n")
+                f.write(f"Platform: {platform}\n")
+                f.write(f"Architecture: {arch}\n")
+
+            logger.info("Emscripten installation complete")
+
+    except Exception as e:
+        logger.error(f"Failed to download and install Emscripten: {e}")
+        raise RuntimeError(f"Failed to install Emscripten for {platform}/{arch}: {e}") from e
+
+
+def ensure_emscripten_available(platform: str, arch: str) -> None:
+    """
+    Ensure Emscripten is installed for the given platform/arch.
+
+    This function uses file locking to prevent concurrent downloads.
+    If Emscripten is not installed, it will be downloaded and installed.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+    """
+    logger.info(f"Ensuring Emscripten is installed for {platform}/{arch}")
+
+    # Quick check without lock - if already installed, return immediately
+    if is_emscripten_installed(platform, arch):
+        logger.info(f"Emscripten already installed for {platform}/{arch}")
+        return
+
+    # Need to download - acquire lock
+    logger.info(f"Emscripten not installed, acquiring lock for {platform}/{arch}")
+    lock_path = get_emscripten_lock_path(platform, arch)
+    logger.debug(f"Lock path: {lock_path}")
+    lock = fasteners.InterProcessLock(str(lock_path))
+
+    logger.info("Waiting to acquire Emscripten installation lock...")
+    with lock:
+        logger.info("Lock acquired")
+
+        # Check again inside lock in case another process just finished installing
+        if is_emscripten_installed(platform, arch):
+            logger.info("Another process installed Emscripten while we waited")
+            return
+
+        # Download and install
+        logger.info("Starting Emscripten download and installation")
+        download_and_install_emscripten(platform, arch)
+        logger.info(f"Emscripten installation complete for {platform}/{arch}")

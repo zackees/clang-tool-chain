@@ -190,6 +190,7 @@ Installing LLVM/Clang traditionally requires:
 
 - **Automatic Download on First Use** - Zero-configuration installation to `~/.clang-tool-chain/`
 - **Manifest-Based Distribution** - Version-controlled releases with SHA256 checksum verification
+- **Multi-Part Archive Support** - Transparent handling of large archives (>100 MB) split into parts
 - **Ultra-Optimized Archives** - 94.3% size reduction via binary stripping, deduplication, and zstd-22 compression
 - **Cross-Platform Support** - Windows x64, macOS x64/ARM64, Linux x64/ARM64
 - **Concurrent-Safe Installation** - File locking prevents race conditions in parallel builds
