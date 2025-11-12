@@ -1,0 +1,198 @@
+"""
+CLI entry point functions for clang-tool-chain commands.
+
+This module provides all the main() entry point functions that are registered
+as console scripts in pyproject.toml. These functions are thin wrappers that
+delegate to the execution modules.
+"""
+
+from typing import NoReturn
+
+# ============================================================================
+# Clang/Clang++ Entry Points
+# ============================================================================
+
+
+def clang_main() -> NoReturn:
+    """Entry point for clang wrapper (GNU ABI on Windows by default)."""
+    from ..execution.core import execute_tool
+
+    execute_tool("clang")
+
+
+def clang_cpp_main() -> NoReturn:
+    """Entry point for clang++ wrapper (GNU ABI on Windows by default)."""
+    from ..execution.core import execute_tool
+
+    execute_tool("clang++")
+
+
+def clang_msvc_main() -> NoReturn:
+    """Entry point for clang-tool-chain-c-msvc (MSVC ABI on Windows)."""
+    from ..execution.core import execute_tool
+
+    execute_tool("clang", use_msvc=True)
+
+
+def clang_cpp_msvc_main() -> NoReturn:
+    """Entry point for clang-tool-chain-cpp-msvc (MSVC ABI on Windows)."""
+    from ..execution.core import execute_tool
+
+    execute_tool("clang++", use_msvc=True)
+
+
+# ============================================================================
+# Linker Entry Points
+# ============================================================================
+
+
+def lld_main() -> NoReturn:
+    """Entry point for lld linker wrapper."""
+    from ..execution.core import execute_tool
+    from ..platform.detection import get_platform_info
+
+    platform_name, _ = get_platform_info()
+    if platform_name == "win":
+        execute_tool("lld-link")
+    else:
+        execute_tool("lld")
+
+
+# ============================================================================
+# LLVM Binary Utilities Entry Points
+# ============================================================================
+
+
+def llvm_ar_main() -> NoReturn:
+    """Entry point for llvm-ar wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-ar")
+
+
+def llvm_nm_main() -> NoReturn:
+    """Entry point for llvm-nm wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-nm")
+
+
+def llvm_objdump_main() -> NoReturn:
+    """Entry point for llvm-objdump wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-objdump")
+
+
+def llvm_objcopy_main() -> NoReturn:
+    """Entry point for llvm-objcopy wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-objcopy")
+
+
+def llvm_ranlib_main() -> NoReturn:
+    """Entry point for llvm-ranlib wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-ranlib")
+
+
+def llvm_strip_main() -> NoReturn:
+    """Entry point for llvm-strip wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-strip")
+
+
+def llvm_readelf_main() -> NoReturn:
+    """Entry point for llvm-readelf wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-readelf")
+
+
+def llvm_as_main() -> NoReturn:
+    """Entry point for llvm-as wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-as")
+
+
+def llvm_dis_main() -> NoReturn:
+    """Entry point for llvm-dis wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-dis")
+
+
+# ============================================================================
+# Clang Tools Entry Points
+# ============================================================================
+
+
+def clang_format_main() -> NoReturn:
+    """Entry point for clang-format wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("clang-format")
+
+
+def clang_tidy_main() -> NoReturn:
+    """Entry point for clang-tidy wrapper."""
+    from ..execution.core import execute_tool
+
+    execute_tool("clang-tidy")
+
+
+# ============================================================================
+# Emscripten Entry Points
+# ============================================================================
+
+
+def emcc_main() -> NoReturn:
+    """Entry point for emcc wrapper (Emscripten C compiler)."""
+    from ..execution.emscripten import execute_emscripten_tool
+
+    execute_emscripten_tool("emcc")
+
+
+def empp_main() -> NoReturn:
+    """Entry point for em++ wrapper (Emscripten C++ compiler)."""
+    from ..execution.emscripten import execute_emscripten_tool
+
+    execute_emscripten_tool("em++")
+
+
+# ============================================================================
+# IWYU (Include What You Use) Entry Points
+# ============================================================================
+
+
+def iwyu_main() -> NoReturn:
+    """Entry point for include-what-you-use wrapper."""
+    from ..execution.iwyu import execute_iwyu_tool
+
+    execute_iwyu_tool("include-what-you-use")
+
+
+def iwyu_tool_main() -> NoReturn:
+    """Entry point for iwyu_tool.py wrapper."""
+    from ..execution.iwyu import execute_iwyu_tool
+
+    execute_iwyu_tool("iwyu_tool.py")
+
+
+def fix_includes_main() -> NoReturn:
+    """Entry point for fix_includes.py wrapper."""
+    from ..execution.iwyu import execute_iwyu_tool
+
+    execute_iwyu_tool("fix_includes.py")
+
+
+# ============================================================================
+# Build Utilities Entry Points
+# ============================================================================
+
+# Note: build_main and build_run_main are imported from the execution.build module
+# They are more complex and have been moved to their own module for better organization

@@ -331,7 +331,7 @@ class TestNodeJSWrapperIntegration:
             bundled_node.chmod(0o755)
 
         with (
-            patch("clang_tool_chain.wrapper.get_nodejs_install_dir_path", return_value=bundled_dir.parent),
+            patch("clang_tool_chain.execution.emscripten.get_nodejs_install_dir_path", return_value=bundled_dir.parent),
             patch("shutil.which", return_value="/usr/bin/node"),  # System Node.js available
         ):
             # Should prefer bundled even though system is available
@@ -347,7 +347,7 @@ class TestNodeJSWrapperIntegration:
         nonexistent_dir = tmp_path / "nonexistent" / "nodejs" / "linux" / "x86_64"
 
         with (
-            patch("clang_tool_chain.wrapper.get_nodejs_install_dir_path", return_value=nonexistent_dir),
+            patch("clang_tool_chain.execution.emscripten.get_nodejs_install_dir_path", return_value=nonexistent_dir),
             patch("shutil.which", return_value="/usr/bin/node"),
         ):
             result = ensure_nodejs_available()
@@ -372,7 +372,7 @@ class TestNodeJSWrapperIntegration:
             bundled_node.chmod(0o755)
 
         with (
-            patch("clang_tool_chain.wrapper.get_nodejs_install_dir_path") as mock_get_dir,
+            patch("clang_tool_chain.execution.emscripten.get_nodejs_install_dir_path") as mock_get_dir,
             patch("shutil.which", return_value=None),  # No system Node.js
             patch("clang_tool_chain.downloader.ensure_nodejs_available") as mock_download,
         ):
