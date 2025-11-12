@@ -499,6 +499,28 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
         logger.debug("User specified -fuse-ld, skipping lld injection")
         return False
 
+    # Check for MSVC-style linker flags (incompatible with GNU lld)
+    # MSVC uses lld-link which expects /MACHINE:, /OUT:, /SUBSYSTEM:, etc.
+    # GNU lld expects --target=, -o, etc.
+    # They can appear as: -Wl,/MACHINE: or directly as /MACHINE:
+    msvc_linker_patterns = [
+        "-Wl,/MACHINE:",
+        "-Wl,/OUT:",
+        "-Wl,/SUBSYSTEM:",
+        "-Wl,/DEBUG",
+        "-Wl,/PDB:",
+        "-Wl,/NOLOGO",
+        "/MACHINE:",
+        "/OUT:",
+        "/SUBSYSTEM:",
+        "/DEBUG",
+        "/PDB:",
+        "/NOLOGO",
+    ]
+    if any(pattern in args_str for pattern in msvc_linker_patterns):
+        logger.info("MSVC-style linker flags detected, skipping lld injection (will use lld-link)")
+        return False
+
     # Force lld for consistent cross-platform linking
     return True
 
@@ -660,6 +682,27 @@ def _should_use_gnu_abi(platform_name: str, args: list[str]) -> bool:
             # MSVC or other target, don't use GNU ABI
             logger.debug("User specified non-GNU target, skipping GNU ABI injection")
             return False
+
+    # Check for MSVC-style linker flags - if present, don't inject GNU ABI
+    # These flags indicate the build system is expecting MSVC/lld-link behavior
+    # They can appear as: -Wl,/MACHINE: or directly as /MACHINE:
+    msvc_linker_patterns = [
+        "-Wl,/MACHINE:",
+        "-Wl,/OUT:",
+        "-Wl,/SUBSYSTEM:",
+        "-Wl,/DEBUG",
+        "-Wl,/PDB:",
+        "-Wl,/NOLOGO",
+        "/MACHINE:",
+        "/OUT:",
+        "/SUBSYSTEM:",
+        "/DEBUG",
+        "/PDB:",
+        "/NOLOGO",
+    ]
+    if any(pattern in args_str for pattern in msvc_linker_patterns):
+        logger.info("MSVC-style linker flags detected in args, skipping GNU ABI injection")
+        return False
 
     # Windows defaults to GNU ABI in v1.0.5+
     logger.debug("Windows detected without explicit target, will use GNU ABI")
