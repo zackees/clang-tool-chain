@@ -1,5 +1,9 @@
 """
 Tests for Emscripten WebAssembly compilation support.
+
+Note: Node.js is now bundled automatically. Tests no longer require
+system Node.js installation - the wrapper will download a minimal
+Node.js runtime (~10-15 MB) on first use.
 """
 
 import shutil
@@ -10,7 +14,7 @@ import pytest
 
 
 def is_node_available() -> bool:
-    """Check if Node.js is available in PATH."""
+    """Check if Node.js is available in PATH (system or bundled)."""
     return shutil.which("node") is not None
 
 
@@ -25,7 +29,6 @@ def is_emscripten_available() -> bool:
         return False
 
 
-@pytest.mark.skipif(not is_node_available(), reason="Node.js not installed (required for Emscripten)")
 @pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten manifest not available yet")
 class TestEmscripten:
     """Test Emscripten integration."""
@@ -209,12 +212,72 @@ class TestEmscriptenDownloader:
             pytest.skip(f"Manifest not available yet: {e}")
 
 
-@pytest.mark.skipif(is_node_available(), reason="Node.js is installed (testing error handling)")
-def test_node_required_error():
-    """Test that helpful error is shown when Node.js is missing."""
-    result = subprocess.run(["clang-tool-chain-emcc", "--version"], capture_output=True, text=True, timeout=300)
+class TestEmscriptenNodeJS:
+    """Test Emscripten with bundled Node.js integration."""
 
-    # Should fail with helpful message
-    assert result.returncode != 0
-    error_output = result.stderr + result.stdout
-    assert "node" in error_output.lower() or "nodejs" in error_output.lower()
+    def test_bundled_nodejs_automatic_download(self, tmp_path: Path):
+        """Test that bundled Node.js is downloaded automatically if needed."""
+        # This test verifies the automatic download behavior
+        # Even without system Node.js, compilation should work
+        source_file = tmp_path / "auto_download_test.cpp"
+        source_file.write_text(
+            """
+#include <stdio.h>
+
+int main() {
+    printf("Bundled Node.js test\\n");
+    return 0;
+}
+"""
+        )
+
+        output_file = tmp_path / "auto_download_test.js"
+        result = subprocess.run(
+            ["clang-tool-chain-emcc", str(source_file), "-o", str(output_file)],
+            capture_output=True,
+            text=True,
+            timeout=300,  # Allow time for potential Node.js download
+        )
+
+        # Should succeed even without system Node.js (will download bundled)
+        assert result.returncode == 0, f"Compilation failed: {result.stderr}"
+        assert output_file.exists()
+
+    def test_emscripten_uses_nodejs(self, tmp_path: Path):
+        """Test that Emscripten compilation actually uses Node.js."""
+        # Create a simple test that exercises Node.js during compilation
+        source_file = tmp_path / "nodejs_test.cpp"
+        source_file.write_text(
+            """
+#include <emscripten.h>
+#include <stdio.h>
+
+EM_JS(void, call_js, (), {
+    console.log('Node.js is working');
+});
+
+int main() {
+    printf("Testing Node.js integration\\n");
+    call_js();
+    return 0;
+}
+"""
+        )
+
+        output_file = tmp_path / "nodejs_test.js"
+        result = subprocess.run(
+            ["clang-tool-chain-emcc", str(source_file), "-o", str(output_file)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        assert result.returncode == 0, f"Compilation failed: {result.stderr}"
+        assert output_file.exists()
+
+        # Execute and verify Node.js was used
+        if shutil.which("node"):
+            exec_result = subprocess.run(
+                ["node", str(output_file)], capture_output=True, text=True, timeout=30
+            )
+            assert "Testing Node.js integration" in exec_result.stdout

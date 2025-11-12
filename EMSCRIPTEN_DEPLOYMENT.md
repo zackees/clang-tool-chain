@@ -6,7 +6,7 @@ This document provides step-by-step instructions for deploying the Emscripten in
 
 ## Summary
 
-The Emscripten integration infrastructure is **100% code-complete**. All Python code, wrappers, tests, and manifests are ready for deployment. The only remaining step is uploading the pre-built archives to the GitHub `clang-tool-chain-bins` repository.
+The Emscripten integration infrastructure is **100% code-complete**. All Python code, wrappers, tests, manifests, and **Node.js bundling** are ready for deployment. The only remaining step is uploading the pre-built archives to the GitHub `clang-tool-chain-bins` repository.
 
 ## What's Already Done ✅
 
@@ -41,6 +41,14 @@ The Emscripten integration infrastructure is **100% code-complete**. All Python 
    - `CLAUDE.md` - Complete Emscripten section with usage examples
    - `LOOP.md` - Detailed iteration summaries and design decisions
    - `.agent_task/ITERATION_*.md` - Comprehensive iteration documentation
+
+6. **Node.js Bundling Infrastructure** (`src/clang_tool_chain/downloader.py`, `wrapper.py`)
+   - `ensure_nodejs_available()` - Auto-download and installation (wrapper.py)
+   - `download_and_install_nodejs()` - Downloads from GitHub (downloader.py)
+   - `fetch_nodejs_root_manifest()` - Fetches root manifest
+   - `fetch_nodejs_platform_manifest()` - Fetches platform manifest
+   - Three-tier priority: bundled > system > auto-download
+   - Manifest URL pattern: `https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/nodejs/{platform}/{arch}/manifest.json`
 
 ### Archives Generated ✅
 
@@ -118,6 +126,45 @@ git commit -m "feat(emscripten): Add Emscripten 4.0.15 for Linux x86_64
 git push origin main
 ```
 
+### Step 1.5: Upload Node.js Archives to clang-tool-chain-bins Repository
+
+Navigate to the `downloads-bins` directory and commit the Node.js archives:
+
+```bash
+cd downloads-bins
+
+# Add Node.js manifests and archives
+git add assets/nodejs/manifest.json
+git add assets/nodejs/README.md
+git add assets/nodejs/win/x86_64/
+git add assets/nodejs/linux/x86_64/
+git add assets/nodejs/linux/arm64/
+git add assets/nodejs/darwin/x86_64/
+git add assets/nodejs/darwin/arm64/
+
+# Commit with descriptive message
+git commit -m "feat(nodejs): Add bundled Node.js LTS binaries
+
+- Node.js v22.11.0 LTS for all platforms
+- Minimal runtime: bin/node + lib/node_modules
+- Stripped of headers, docs, npm, corepack
+- Compressed with zstd level 22
+- Sizes: ~23-24 MB per platform (compressed)
+- Total download: ~117 MB (all platforms)
+
+Platforms:
+- Windows x86_64 (~23-24 MB)
+- Linux x86_64 (~23-24 MB)
+- Linux arm64 (~23-24 MB)
+- macOS x86_64 (~24-25 MB)
+- macOS arm64 (~23-24 MB)
+
+Generated via fetch_and_archive_nodejs.py"
+
+# Push to GitHub
+git push origin main
+```
+
 ### Step 2: Update Submodule Reference in Main Repository
 
 Return to the main repository and update the submodule reference:
@@ -162,12 +209,16 @@ git clone https://github.com/zackees/clang-tool-chain.git
 cd clang-tool-chain
 pip install -e .
 
-# Install Node.js (if not already installed)
-sudo apt update
-sudo apt install nodejs npm
+# Node.js installation (OPTIONAL - bundled automatically)
+# Only needed if you want to use system Node.js instead of bundled version
 
-# Verify Node.js installation
-node --version  # Should show v14+ or higher
+# sudo apt update
+# sudo apt install nodejs npm
+
+# Verify Node.js installation (if using system Node.js)
+# node --version  # Should show v18.x, v20.x, or v22.x (v22.x LTS recommended)
+
+# Note: If Node.js not installed, bundled version will download automatically
 
 # Test automatic download and compilation
 echo '#include <iostream>
@@ -176,7 +227,7 @@ int main() {
     return 0;
 }' > hello.cpp
 
-# First run triggers automatic download
+# First run triggers automatic download (Emscripten + Node.js)
 clang-tool-chain-empp hello.cpp -o hello.html
 
 # Should see download progress:
@@ -184,6 +235,16 @@ clang-tool-chain-empp hello.cpp -o hello.html
 # [===========================] 194.63 MB
 # Extracting archive...
 # Installation complete.
+#
+# Downloading Node.js Runtime
+# ============================================================
+# Node.js not found in system PATH.
+# Downloading minimal Node.js runtime (~23-24 MB)...
+# Platform: linux / Architecture: x86_64
+# This is a one-time download.
+# [===========================] 23.5 MB
+# Installation complete!
+#
 # Compiling hello.cpp...
 
 # Verify output files
@@ -291,12 +352,7 @@ python fetch_and_archive_emscripten_docker.py --platform darwin --arch arm64
 
 ### Optional Enhancements
 
-1. **Bundle Node.js** (adds ~40 MB per platform)
-   - Download Node.js binaries for each platform
-   - Include in Emscripten archive under `node/` directory
-   - Update wrapper to use bundled Node.js if system Node.js not found
-
-2. **Add emrun support**
+1. **Add emrun support**
    - Create `emrun_main()` entry point in wrapper.py
    - Add `clang-tool-chain-emrun` command to pyproject.toml
    - Test web server functionality
@@ -358,14 +414,22 @@ Before marking deployment complete, verify:
 2. Update manifest.json with correct checksum
 3. Commit and push updated manifest
 
-### Node.js Not Found Error
+### Node.js Download Fails
 
-**Problem:** `Node.js is required but not found in PATH`
+**Problem:** `Failed to download bundled Node.js runtime`
 
-**Cause:** Node.js not installed on test system
+**Cause:** Network error, manifest 404, or checksum mismatch
+
+**Expected Behavior:**
+Node.js should download automatically on first use. If automatic download fails, the wrapper falls back to system Node.js or provides installation instructions.
 
 **Solution:**
-1. Install Node.js:
+1. **Check internet connection** and retry:
+   ```bash
+   clang-tool-chain-empp hello.cpp -o hello.html
+   ```
+
+2. **Install Node.js manually** (fallback):
    ```bash
    # Ubuntu/Debian
    sudo apt install nodejs npm
@@ -376,10 +440,19 @@ Before marking deployment complete, verify:
    # Windows
    # Download from https://nodejs.org/
    ```
-2. Verify installation:
+
+3. **Verify Node.js is in PATH**:
    ```bash
-   node --version  # Should show v14+
+   node --version  # Should show v18.x, v20.x, or v22.x (v22.x LTS recommended)
    ```
+
+4. **Check manifest accessibility** (maintainer debugging):
+   ```bash
+   curl -I https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/nodejs/manifest.json
+   # Should return HTTP 200
+   ```
+
+**Note:** If system Node.js is installed, the wrapper will use it automatically (no download needed).
 
 ### Compilation Produces No Output
 

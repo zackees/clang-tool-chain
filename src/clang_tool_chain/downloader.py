@@ -1535,6 +1535,9 @@ def ensure_mingw_sysroot_installed(platform: str, arch: str) -> Path:
 # Emscripten manifest base URL
 EMSCRIPTEN_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/emscripten"
 
+# Node.js manifest base URL
+NODEJS_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/nodejs"
+
 
 def get_emscripten_install_dir(platform: str, arch: str) -> Path:
     """Get the installation directory for Emscripten."""
@@ -1726,3 +1729,279 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
         logger.info("Starting Emscripten download and installation")
         download_and_install_emscripten(platform, arch)
         logger.info(f"Emscripten installation complete for {platform}/{arch}")
+
+
+# ============================================================================
+# Node.js Support (Required for Emscripten)
+# ============================================================================
+
+
+def get_nodejs_install_dir(platform: str, arch: str) -> Path:
+    """
+    Get the installation directory for Node.js.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the Node.js installation directory
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    install_dir = toolchain_dir / "nodejs" / platform / arch
+    return install_dir
+
+
+def get_nodejs_lock_path(platform: str, arch: str) -> Path:
+    """
+    Get the lock file path for Node.js installation.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the lock file
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    toolchain_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = toolchain_dir / f"nodejs-{platform}-{arch}.lock"
+    return lock_path
+
+
+def is_nodejs_installed(platform: str, arch: str) -> bool:
+    """
+    Check if Node.js is already installed.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        True if installed, False otherwise
+    """
+    install_dir = get_nodejs_install_dir(platform, arch)
+    done_file = install_dir / "done.txt"
+    return done_file.exists()
+
+
+def fetch_nodejs_root_manifest() -> RootManifest:
+    """
+    Fetch the Node.js root manifest file.
+
+    Returns:
+        Root manifest as a RootManifest object
+
+    Raises:
+        ToolchainInfrastructureError: If fetching fails
+    """
+    logger.info("Fetching Node.js root manifest")
+    url = f"{NODEJS_MANIFEST_BASE_URL}/manifest.json"
+    data = _fetch_json_raw(url)
+    manifest = _parse_root_manifest(data)
+    logger.info(f"Node.js root manifest loaded with {len(manifest.platforms)} platforms")
+    return manifest
+
+
+def fetch_nodejs_platform_manifest(platform: str, arch: str) -> Manifest:
+    """
+    Fetch the Node.js platform-specific manifest file.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Platform manifest as a Manifest object
+
+    Raises:
+        RuntimeError: If platform/arch combination is not found
+        ToolchainInfrastructureError: If fetching fails
+    """
+    logger.info(f"Fetching Node.js platform manifest for {platform}/{arch}")
+    root_manifest = fetch_nodejs_root_manifest()
+
+    # Find the platform in the manifest
+    for plat_entry in root_manifest.platforms:
+        if plat_entry.platform == platform:
+            # Find the architecture
+            for arch_entry in plat_entry.architectures:
+                if arch_entry.arch == arch:
+                    manifest_path = arch_entry.manifest_path
+                    logger.debug(f"Platform manifest path: {manifest_path}")
+                    manifest_url = f"{NODEJS_MANIFEST_BASE_URL}/{manifest_path}"
+                    data = _fetch_json_raw(manifest_url)
+                    manifest = _parse_manifest(data)
+                    logger.info(f"Platform manifest loaded: latest version = {manifest.latest}")
+                    return manifest
+
+            # Architecture not found
+            available_arches = [a.arch for a in plat_entry.architectures]
+            raise RuntimeError(
+                f"Architecture '{arch}' not found for platform '{platform}'\n"
+                f"Available architectures: {', '.join(available_arches)}\n"
+                f"If you believe this should be supported, please report at:\n"
+                f"https://github.com/zackees/clang-tool-chain/issues"
+            )
+
+    # Platform not found
+    available_platforms = [p.platform for p in root_manifest.platforms]
+    raise RuntimeError(
+        f"Platform '{platform}' not found in Node.js manifest\n"
+        f"Available platforms: {', '.join(available_platforms)}\n"
+        f"If you believe this should be supported, please report at:\n"
+        f"https://github.com/zackees/clang-tool-chain/issues"
+    )
+
+
+def download_and_install_nodejs(platform: str, arch: str) -> None:
+    """
+    Download and install Node.js for the given platform/arch.
+
+    This downloads a minimal Node.js runtime (~10-15 MB compressed) that includes
+    only the node binary and essential libraries. The full Node.js distribution
+    is much larger (~28-49 MB), but we strip out headers, documentation, npm,
+    and other unnecessary files.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Raises:
+        RuntimeError: If download or installation fails
+        ToolchainInfrastructureError: If manifest or download URLs are broken
+    """
+    logger.info(f"Starting Node.js download and installation for {platform}/{arch}")
+
+    try:
+        # Fetch manifest
+        manifest = fetch_nodejs_platform_manifest(platform, arch)
+        latest_version = manifest.latest
+        logger.info(f"Latest Node.js version: {latest_version}")
+
+        if latest_version not in manifest.versions:
+            raise RuntimeError(f"Version {latest_version} not found in manifest")
+
+        version_info = manifest.versions[latest_version]
+        download_url = version_info.href
+        expected_checksum = version_info.sha256
+
+        logger.info(f"Download URL: {download_url}")
+        logger.info(f"Expected SHA256: {expected_checksum}")
+
+        # Create temp directory for download
+        with tempfile.TemporaryDirectory(prefix="nodejs_download_") as temp_dir:
+            temp_path = Path(temp_dir)
+            archive_path = temp_path / f"nodejs-{latest_version}-{platform}-{arch}.tar.zst"
+
+            logger.info(f"Downloading to: {archive_path}")
+
+            # Download (handles both single-file and multi-part)
+            download_archive(version_info, archive_path)
+            logger.info("Download and checksum verification successful")
+
+            # Extract
+            install_dir = get_nodejs_install_dir(platform, arch)
+            logger.info(f"Extracting to: {install_dir}")
+
+            # Remove old installation if it exists (BEFORE extraction)
+            if install_dir.exists():
+                logger.info("Removing old Node.js installation")
+                _robust_rmtree(install_dir)
+
+            # Ensure parent directory exists
+            install_dir.parent.mkdir(parents=True, exist_ok=True)
+
+            extract_tarball(archive_path, install_dir)
+
+            # Fix permissions on Unix systems
+            if platform in ("linux", "darwin"):
+                logger.info("Fixing file permissions...")
+                fix_file_permissions(install_dir)
+
+            # Verify node binary exists
+            node_binary = install_dir / "bin" / ("node.exe" if platform == "win" else "node")
+            if not node_binary.exists():
+                raise RuntimeError(
+                    f"Node.js binary not found after extraction: {node_binary}\n"
+                    f"Expected location: {node_binary}\n"
+                    f"Installation may be corrupted. Please try again."
+                )
+
+            logger.info(f"Node.js binary found: {node_binary}")
+
+            # Write done marker
+            done_file = install_dir / "done.txt"
+            with open(done_file, "w") as f:
+                f.write(f"Node.js {latest_version} installed on {datetime.datetime.now()}\n")
+                f.write(f"Platform: {platform}\n")
+                f.write(f"Architecture: {arch}\n")
+
+            logger.info("Node.js installation complete")
+
+    except ToolchainInfrastructureError:
+        # Re-raise infrastructure errors as-is
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download and install Node.js: {e}")
+        # Clean up failed installation
+        install_dir = get_nodejs_install_dir(platform, arch)
+        if install_dir.exists():
+            logger.info("Cleaning up failed Node.js installation")
+            _robust_rmtree(install_dir)
+        raise RuntimeError(f"Failed to install Node.js for {platform}/{arch}: {e}") from e
+
+
+def ensure_nodejs_available(platform: str, arch: str) -> Path:
+    """
+    Ensure Node.js is installed for the given platform/arch.
+
+    This function uses file locking to prevent concurrent downloads.
+    If Node.js is not installed, it will be downloaded and installed automatically.
+
+    The bundled Node.js is a minimal runtime (~10-15 MB compressed) that includes
+    only the node binary and essential libraries, without npm, headers, or docs.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the Node.js installation directory
+
+    Raises:
+        RuntimeError: If installation fails
+        ToolchainInfrastructureError: If download infrastructure is broken
+    """
+    logger.info(f"Ensuring Node.js is installed for {platform}/{arch}")
+
+    # Quick check without lock - if already installed, return immediately (fast path)
+    if is_nodejs_installed(platform, arch):
+        logger.info(f"Node.js already installed for {platform}/{arch}")
+        return get_nodejs_install_dir(platform, arch)
+
+    # Need to download - acquire lock
+    logger.info(f"Node.js not installed, acquiring lock for {platform}/{arch}")
+    lock_path = get_nodejs_lock_path(platform, arch)
+    logger.debug(f"Lock path: {lock_path}")
+    lock = fasteners.InterProcessLock(str(lock_path))
+
+    logger.info("Waiting to acquire Node.js installation lock...")
+    with lock:
+        logger.info("Lock acquired")
+
+        # Check again inside lock in case another process just finished installing
+        if is_nodejs_installed(platform, arch):
+            logger.info("Another process installed Node.js while we waited")
+            return get_nodejs_install_dir(platform, arch)
+
+        # Download and install
+        logger.info("Starting Node.js download and installation")
+        try:
+            download_and_install_nodejs(platform, arch)
+            logger.info(f"Node.js installation complete for {platform}/{arch}")
+        except Exception as e:
+            logger.error(f"Node.js installation failed: {e}")
+            raise
+
+    return get_nodejs_install_dir(platform, arch)
