@@ -463,6 +463,77 @@ def _print_macos_sdk_error(reason: str) -> None:
     print("=" * 70 + "\n", file=sys.stderr)
 
 
+def _should_force_lld(platform_name: str, args: list[str]) -> bool:
+    """
+    Determine if we should force the use of LLVM's lld linker.
+
+    This provides consistent cross-platform behavior by using LLVM's lld
+    on all platforms instead of platform-specific system linkers:
+    - macOS: lld instead of Apple's ld64
+    - Linux: lld instead of GNU ld
+    - Windows: Already uses lld via -fuse-ld=lld in GNU ABI setup
+
+    Args:
+        platform_name: Platform name ("win", "linux", "darwin")
+        args: Command-line arguments
+
+    Returns:
+        True if lld should be forced, False otherwise
+    """
+    # Check if user wants to use system linker
+    if os.environ.get("CLANG_TOOL_CHAIN_USE_SYSTEM_LD") == "1":
+        logger.debug("CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1, skipping lld injection")
+        return False
+
+    # Only apply to macOS and Linux (Windows already handled in GNU ABI setup)
+    if platform_name not in ("darwin", "linux"):
+        return False
+
+    # Check if this is a compile-only operation (no linking)
+    if "-c" in args:
+        return False
+
+    # Check if user already specified a linker
+    args_str = " ".join(args)
+    if "-fuse-ld=" in args_str:
+        logger.debug("User specified -fuse-ld, skipping lld injection")
+        return False
+
+    # Force lld for consistent cross-platform linking
+    return True
+
+
+def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
+    """
+    Add -fuse-ld=lld flag for macOS and Linux if needed.
+
+    This forces the use of LLVM's lld linker instead of platform-specific
+    system linkers (ld64 on macOS, GNU ld on Linux). This provides:
+    - Consistent cross-platform behavior
+    - Better support for GNU-style linker flags
+    - Faster linking performance
+    - Uniform toolchain across all platforms
+
+    The function is skipped when:
+    - User sets CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1
+    - User already specified -fuse-ld= in arguments
+    - Compile-only operation (-c flag present)
+    - Platform is Windows (already handled separately)
+
+    Args:
+        platform_name: Platform name ("win", "linux", "darwin")
+        args: Original compiler arguments
+
+    Returns:
+        Modified arguments with -fuse-ld=lld prepended if needed
+    """
+    if not _should_force_lld(platform_name, args):
+        return args
+
+    logger.info(f"Forcing lld linker on {platform_name} for cross-platform consistency")
+    return ["-fuse-ld=lld"] + args
+
+
 def _add_macos_sysroot_if_needed(args: list[str]) -> list[str]:
     """
     Add -isysroot flag for macOS if needed to find system headers.
@@ -1052,6 +1123,7 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
     Environment Variables:
         SDKROOT: Custom SDK path to use (macOS, standard macOS variable)
         CLANG_TOOL_CHAIN_NO_SYSROOT: Set to '1' to disable automatic -isysroot injection (macOS)
+        CLANG_TOOL_CHAIN_USE_SYSTEM_LD: Set to '1' to use system linker instead of lld (macOS/Linux)
     """
     if args is None:
         args = sys.argv[1:]
@@ -1075,6 +1147,10 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
     if platform_name == "darwin" and tool_name in ("clang", "clang++"):
         logger.debug("Checking if macOS sysroot needs to be added")
         args = _add_macos_sysroot_if_needed(args)
+
+    # Force lld linker on macOS and Linux for cross-platform consistency
+    if tool_name in ("clang", "clang++"):
+        args = _add_lld_linker_if_needed(platform_name, args)
 
     # Add Windows GNU ABI target automatically for clang/clang++ if not MSVC variant
     if not use_msvc and tool_name in ("clang", "clang++") and _should_use_gnu_abi(platform_name, args):
@@ -1192,6 +1268,7 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
     Environment Variables:
         SDKROOT: Custom SDK path to use (macOS, standard macOS variable)
         CLANG_TOOL_CHAIN_NO_SYSROOT: Set to '1' to disable automatic -isysroot injection (macOS)
+        CLANG_TOOL_CHAIN_USE_SYSTEM_LD: Set to '1' to use system linker instead of lld (macOS/Linux)
     """
     if args is None:
         args = sys.argv[1:]
@@ -1203,6 +1280,10 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
     if platform_name == "darwin" and tool_name in ("clang", "clang++"):
         logger.debug("Checking if macOS sysroot needs to be added")
         args = _add_macos_sysroot_if_needed(args)
+
+    # Force lld linker on macOS and Linux for cross-platform consistency
+    if tool_name in ("clang", "clang++"):
+        args = _add_lld_linker_if_needed(platform_name, args)
 
     # Add Windows GNU ABI target automatically for clang/clang++ if not MSVC variant
     if not use_msvc and tool_name in ("clang", "clang++") and _should_use_gnu_abi(platform_name, args):
@@ -1615,6 +1696,9 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
     if platform_name == "darwin":
         args = _add_macos_sysroot_if_needed(args)
 
+    # Force lld linker on macOS and Linux for cross-platform consistency
+    args = _add_lld_linker_if_needed(platform_name, args)
+
     # Add Windows GNU ABI target automatically (if not using MSVC variant)
     if not use_msvc and _should_use_gnu_abi(platform_name, args):
         try:
@@ -1692,6 +1776,9 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
     platform_name, arch = get_platform_info()
     if platform_name == "darwin":
         args = _add_macos_sysroot_if_needed(args)
+
+    # Force lld linker on macOS and Linux for cross-platform consistency
+    args = _add_lld_linker_if_needed(platform_name, args)
 
     # Add Windows GNU ABI target automatically (if not using MSVC variant)
     if not use_msvc and _should_use_gnu_abi(platform_name, args):

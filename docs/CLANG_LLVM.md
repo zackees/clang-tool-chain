@@ -47,6 +47,53 @@ clang-tool-chain-sccache --version        # Show sccache version
 - Requires sccache to be available in your PATH
 - If sccache is not found, the commands will fail with clear installation instructions
 
+## LLVM lld Linker (Automatic, macOS/Linux)
+
+Starting with v1.0.8+, clang-tool-chain automatically uses LLVM's `lld` linker on macOS and Linux for consistent cross-platform behavior. This replaces platform-specific system linkers:
+- **macOS**: `lld` instead of Apple's `ld64`
+- **Linux**: `lld` instead of GNU `ld`
+- **Windows**: Already uses `lld` via GNU ABI setup
+
+**Why lld is Default:**
+- **Cross-platform consistency**: Same linker behavior on all platforms
+- **Better GNU flag support**: Accepts GNU-style linker flags (like `--no-undefined`)
+- **Faster linking**: lld is often 2-3x faster than system linkers
+- **Uniform toolchain**: Complete LLVM stack (clang + lld) on all platforms
+
+**Automatic lld Injection:**
+
+The wrapper automatically adds `-fuse-ld=lld` when linking on macOS and Linux, unless:
+- User sets `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` (opt-out)
+- User already specified `-fuse-ld=` in arguments
+- Compile-only operation (`-c` flag present, no linking)
+
+**Environment Variables:**
+```bash
+# Use system linker instead of lld (opt-out)
+export CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1
+
+# Then compile normally - will use ld64 on macOS, GNU ld on Linux
+clang-tool-chain-cpp main.cpp -o main
+
+# Override for specific compilation
+CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1 clang-tool-chain-cpp main.cpp -o main
+```
+
+**When to Use System Linker:**
+- Debugging linker-specific issues (compare lld vs system linker behavior)
+- Platform-specific linker features not supported by lld
+- Compatibility testing with native toolchain
+
+**macOS Specifics:**
+- lld's Mach-O port (`ld64.lld`) is production-ready (used by Chromium)
+- System linker (ld64) doesn't support GNU flags like `--no-undefined`
+- Using lld improves cross-platform build system compatibility
+
+**Linux Specifics:**
+- lld's ELF support is mature and well-tested
+- Compatible with most GNU ld features
+- Significantly faster for large projects
+
 ## macOS SDK Detection (Automatic)
 
 On macOS, system headers (like `stdio.h` and `iostream`) are NOT located in `/usr/include`. Since macOS 10.14 Mojave, Apple only provides headers through SDK bundles in Xcode or Command Line Tools. Standalone clang binaries cannot automatically find these headers without help.
