@@ -4,7 +4,6 @@ Tests for the downloader module.
 
 import hashlib
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
