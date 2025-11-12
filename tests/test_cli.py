@@ -140,6 +140,63 @@ class TestCLICommands(unittest.TestCase):
             # Should map "cpp" to "clang++"
             mock_run.assert_called_once_with("clang++", ["--version"])
 
+    @patch("clang_tool_chain.downloader.get_home_toolchain_dir")
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_cmd_purge_no_directory(self, mock_stdout: StringIO, mock_get_dir: Mock) -> None:
+        """Test purge command when toolchain directory doesn't exist."""
+        fake_dir = Path("/fake/toolchain")
+        mock_get_dir.return_value = fake_dir
+
+        args = MagicMock()
+        args.yes = False
+
+        result = cli.cmd_purge(args)
+
+        self.assertEqual(result, 0)
+        output = mock_stdout.getvalue()
+        self.assertIn("No toolchain directory found", output)
+
+    @patch("clang_tool_chain.downloader._robust_rmtree")
+    @patch("clang_tool_chain.downloader.get_home_toolchain_dir")
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_cmd_purge_with_yes_flag(self, mock_stdout: StringIO, mock_get_dir: Mock, mock_rmtree: Mock) -> None:
+        """Test purge command with --yes flag (skip confirmation)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_dir = Path(tmpdir) / "toolchain"
+            fake_dir.mkdir()
+            (fake_dir / "test.txt").write_text("test")
+            mock_get_dir.return_value = fake_dir
+
+            args = MagicMock()
+            args.yes = True
+
+            result = cli.cmd_purge(args)
+
+            self.assertEqual(result, 0)
+            mock_rmtree.assert_called_once_with(fake_dir)
+            output = mock_stdout.getvalue()
+            self.assertIn("Successfully removed", output)
+
+    @patch("builtins.input", return_value="n")
+    @patch("clang_tool_chain.downloader.get_home_toolchain_dir")
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_cmd_purge_cancel(self, mock_stdout: StringIO, mock_get_dir: Mock, mock_input: Mock) -> None:
+        """Test purge command when user cancels."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_dir = Path(tmpdir) / "toolchain"
+            fake_dir.mkdir()
+            (fake_dir / "test.txt").write_text("test")
+            mock_get_dir.return_value = fake_dir
+
+            args = MagicMock()
+            args.yes = False
+
+            result = cli.cmd_purge(args)
+
+            self.assertEqual(result, 0)
+            output = mock_stdout.getvalue()
+            self.assertIn("Purge cancelled", output)
+
 
 class TestCLIMain(unittest.TestCase):
     """Test main CLI entry point."""

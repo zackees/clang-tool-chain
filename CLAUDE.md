@@ -416,6 +416,22 @@ uv run pytest tests/test_emscripten.py -v
 - Support for `emrun` wrapper command
 - Integration with CMake via emconfigure/emmake
 
+### Removing Toolchains
+```bash
+# Remove all downloaded toolchains and cached data
+clang-tool-chain purge          # Interactive confirmation
+clang-tool-chain purge --yes    # Skip confirmation (for scripts)
+
+# This removes ~/.clang-tool-chain/ directory which contains:
+# - LLVM/Clang binaries (~200-400 MB per platform)
+# - MinGW sysroot (~176 MB uncompressed, Windows only)
+# - Emscripten SDK (~1.4 GB uncompressed)
+# - IWYU binaries
+# - Lock files
+
+# Toolchains will be re-downloaded on next use
+```
+
 ### Testing
 ```bash
 # Quick diagnostic test of the toolchain installation
@@ -760,7 +776,7 @@ Hooks run automatically on `git commit` and will block commits if checks fail.
 The package provides these entry points (defined in `pyproject.toml`):
 
 **Management Commands:**
-- `clang-tool-chain` → `cli:main` - Main CLI
+- `clang-tool-chain` → `cli:main` - Main CLI (subcommands: info, version, list-tools, path, package-version, test, purge)
 - `clang-tool-chain-test` → `cli:test_main` - Diagnostic test suite (verifies installation)
 - `clang-tool-chain-fetch` → `fetch:main` - Fetch utility
 - `clang-tool-chain-paths` → `paths:main` - Path utility

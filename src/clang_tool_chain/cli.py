@@ -216,6 +216,56 @@ def cmd_package_version(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_purge(args: argparse.Namespace) -> int:
+    """Remove all downloaded toolchains and cached data."""
+    from . import downloader
+
+    toolchain_dir = downloader.get_home_toolchain_dir()
+
+    if not toolchain_dir.exists():
+        print(f"No toolchain directory found at: {toolchain_dir}")
+        print("Nothing to purge.")
+        return 0
+
+    # Show what will be removed
+    print("Clang Tool Chain - Purge")
+    print("=" * 60)
+    print()
+    print("This will remove all downloaded toolchains from:")
+    print(f"  {toolchain_dir}")
+    print()
+
+    # Calculate total size
+    try:
+        total_size = sum(f.stat().st_size for f in toolchain_dir.rglob("*") if f.is_file())
+        total_size_mb = total_size / (1024 * 1024)
+        print(f"Total size: {total_size_mb:.2f} MB")
+    except Exception:
+        print("Total size: (unable to calculate)")
+
+    print()
+
+    # Ask for confirmation unless --yes flag is provided
+    if not args.yes:
+        response = input("Are you sure you want to remove all toolchains? [y/N]: ")
+        if response.lower() not in ("y", "yes"):
+            print("Purge cancelled.")
+            return 0
+
+    # Remove the directory
+    print()
+    print("Removing toolchain directory...")
+    try:
+        downloader._robust_rmtree(toolchain_dir)
+        print("✓ Successfully removed all toolchains.")
+        print()
+        print("Toolchains will be re-downloaded on next use of clang-tool-chain commands.")
+        return 0
+    except Exception as e:
+        print(f"✗ Failed to remove toolchain directory: {e}")
+        return 1
+
+
 def cmd_test(args: argparse.Namespace) -> int:
     """Run diagnostic tests to verify the toolchain installation."""
     import tempfile
@@ -457,6 +507,19 @@ def main() -> int:
         help="Run diagnostic tests to verify the toolchain installation",
     )
     parser_test.set_defaults(func=cmd_test)
+
+    # purge command
+    parser_purge = subparsers.add_parser(
+        "purge",
+        help="Remove all downloaded toolchains and cached data",
+    )
+    parser_purge.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt and remove immediately",
+    )
+    parser_purge.set_defaults(func=cmd_purge)
 
     # Parse arguments
     args = parser.parse_args()
