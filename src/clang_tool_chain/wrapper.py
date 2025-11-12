@@ -945,8 +945,8 @@ def ensure_nodejs_available() -> Path:
 
         # Re-raise as RuntimeError for consistent error handling
         raise RuntimeError(
-            f"Failed to install bundled Node.js and no system Node.js found.\n"
-            f"Please install Node.js manually (see instructions above) or report this issue."
+            "Failed to install bundled Node.js and no system Node.js found.\n"
+            "Please install Node.js manually (see instructions above) or report this issue."
         ) from e
 
 

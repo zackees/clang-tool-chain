@@ -19,17 +19,28 @@ def is_node_available() -> bool:
 
 
 def is_emscripten_available() -> bool:
-    """Check if Emscripten manifest is available."""
+    """Check if Emscripten binaries are available for the current platform."""
     try:
-        from clang_tool_chain.downloader import fetch_emscripten_root_manifest
+        from clang_tool_chain.downloader import fetch_emscripten_platform_manifest
+        from clang_tool_chain.wrapper import get_platform_info
 
-        fetch_emscripten_root_manifest()
-        return True
+        # Get current platform/arch
+        current_platform, current_arch = get_platform_info()
+
+        # Try to fetch the platform-specific manifest
+        manifest = fetch_emscripten_platform_manifest(current_platform, current_arch)
+
+        # Check if there's a valid latest version (not "PENDING")
+        if not manifest.latest or manifest.latest == "PENDING":
+            return False
+
+        # Check if the latest version exists in versions dict
+        return manifest.latest in manifest.versions
     except Exception:
         return False
 
 
-@pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten manifest not available yet")
+@pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten binaries not available for this platform")
 class TestEmscripten:
     """Test Emscripten integration."""
 
@@ -212,6 +223,7 @@ class TestEmscriptenDownloader:
             pytest.skip(f"Manifest not available yet: {e}")
 
 
+@pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten binaries not available for this platform")
 class TestEmscriptenNodeJS:
     """Test Emscripten with bundled Node.js integration."""
 
@@ -277,7 +289,5 @@ int main() {
 
         # Execute and verify Node.js was used
         if shutil.which("node"):
-            exec_result = subprocess.run(
-                ["node", str(output_file)], capture_output=True, text=True, timeout=30
-            )
+            exec_result = subprocess.run(["node", str(output_file)], capture_output=True, text=True, timeout=30)
             assert "Testing Node.js integration" in exec_result.stdout

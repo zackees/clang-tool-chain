@@ -115,7 +115,9 @@ def _parse_root_manifest(data: dict[str, Any]) -> RootManifest:
     for platform_data in data.get("platforms", []):
         architectures = []
         for arch_data in platform_data.get("architectures", []):
-            architectures.append(ArchitectureEntry(arch=arch_data["arch"], manifest_path=arch_data["manifest_path"]))
+            # Support both "manifest_path" and "manifest_url" keys for backward compatibility
+            manifest_path = arch_data.get("manifest_path") or arch_data.get("manifest_url")
+            architectures.append(ArchitectureEntry(arch=arch_data["arch"], manifest_path=manifest_path))
         platforms.append(PlatformEntry(platform=platform_data["platform"], architectures=architectures))
     return RootManifest(platforms=platforms)
 
@@ -1601,7 +1603,11 @@ def fetch_emscripten_platform_manifest(platform: str, arch: str) -> Manifest:
                 if arch_entry.arch == arch:
                     manifest_path = arch_entry.manifest_path
                     logger.debug(f"Platform manifest path: {manifest_path}")
-                    manifest_url = f"{EMSCRIPTEN_MANIFEST_BASE_URL}/{manifest_path}"
+                    # Check if manifest_path is already an absolute URL
+                    if manifest_path.startswith(("http://", "https://")):
+                        manifest_url = manifest_path
+                    else:
+                        manifest_url = f"{EMSCRIPTEN_MANIFEST_BASE_URL}/{manifest_path}"
                     data = _fetch_json_raw(manifest_url)
                     manifest = _parse_manifest(data)
                     logger.info(f"Platform manifest loaded: latest version = {manifest.latest}")
@@ -1829,7 +1835,11 @@ def fetch_nodejs_platform_manifest(platform: str, arch: str) -> Manifest:
                 if arch_entry.arch == arch:
                     manifest_path = arch_entry.manifest_path
                     logger.debug(f"Platform manifest path: {manifest_path}")
-                    manifest_url = f"{NODEJS_MANIFEST_BASE_URL}/{manifest_path}"
+                    # Check if manifest_path is already an absolute URL
+                    if manifest_path.startswith(("http://", "https://")):
+                        manifest_url = manifest_path
+                    else:
+                        manifest_url = f"{NODEJS_MANIFEST_BASE_URL}/{manifest_path}"
                     data = _fetch_json_raw(manifest_url)
                     manifest = _parse_manifest(data)
                     logger.info(f"Platform manifest loaded: latest version = {manifest.latest}")

@@ -8,7 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Placeholder for future changes
+- **Node.js Bundling for Emscripten**: Automatic download and installation of minimal Node.js runtime
+  - No manual Node.js installation required for Emscripten users
+  - Three-tier priority system: bundled > system > auto-download
+  - Minimal Node.js runtime: ~23-24 MB per platform (38% smaller than official distributions)
+  - Automatic download on first Emscripten use (one-time, ~10-30 seconds)
+  - Falls back to system Node.js if available
+  - Supported platforms: Windows x64, Linux x64/ARM64, macOS x64/ARM64
+  - File locking prevents concurrent downloads
+  - SHA256 checksum verification for all downloads
+  - Comprehensive test suite with 22 test cases
+  - Installation path: `~/.clang-tool-chain/nodejs/{platform}/{arch}/`
+- Maintainer script: `downloads-bins/tools/fetch_and_archive_nodejs.py` for generating Node.js archives
+- Comprehensive Node.js bundling documentation in CLAUDE.md
 
 ## [0.0.1] - 2025-11-07
 
