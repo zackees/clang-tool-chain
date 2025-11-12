@@ -631,31 +631,11 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
 
     logger.info(f"Using GNU target: {target} with sysroot: {sysroot_path}")
 
-    # Check if resource directory exists in the sysroot
-    # The MinGW sysroot archive contains lib/clang/<version>/include with
-    # compiler builtin headers (mm_malloc.h, stddef.h, etc.)
-    # The stripped clang binary distribution does NOT include these, so we
-    # must use the ones from the MinGW sysroot.
-    resource_dir = sysroot_path / "lib" / "clang"
-    resource_dir_arg = []
-    if resource_dir.exists():
-        # Find the version directory (should be only one, e.g., "21")
-        version_dirs = [d for d in resource_dir.iterdir() if d.is_dir()]
-        if version_dirs:
-            # Use the first (and should be only) version directory
-            clang_version_dir = version_dirs[0]
-            resource_include = clang_version_dir / "include"
-            if resource_include.exists():
-                logger.info(f"Found clang resource directory at: {clang_version_dir}")
-                # Use -resource-dir to tell clang where to find its builtin headers
-                # This makes clang look in <resource-dir>/include/ for headers like mm_malloc.h, stddef.h, etc.
-                resource_dir_arg = [f"-resource-dir={clang_version_dir}"]
-            else:
-                logger.warning(f"Resource include directory not found: {resource_include}")
-        else:
-            logger.warning(f"No version directories found in: {resource_dir}")
-    else:
-        logger.warning(f"Resource directory not found: {resource_dir}")
+    # NOTE: The -resource-dir flag causes clang 21.1.5 on Windows to hang indefinitely.
+    # Instead, the downloader copies the clang resource headers (mm_malloc.h, stddef.h, etc.)
+    # from the MinGW sysroot to the clang binary's lib/clang/<version>/include directory.
+    # This allows clang to find them automatically without needing -resource-dir.
+    # See: downloader.py (copies headers from MinGW to clang installation)
 
     # Add -stdlib=libc++ to use the libc++ standard library included in the sysroot
     # Add -fuse-ld=lld to use LLVM's linker instead of system ld (link-time only)
@@ -705,7 +685,7 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
     else:
         logger.info("Skipping link-time flags (compile-only detected via -c)")
 
-    return gnu_args + resource_dir_arg
+    return gnu_args
 
 
 def _should_use_msvc_abi(platform_name: str, args: list[str]) -> bool:

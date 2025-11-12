@@ -1399,6 +1399,71 @@ def download_and_install_mingw(platform: str, arch: str) -> None:
             logger.warning(f"Could not copy clang resource headers: {e}")
             logger.warning("Compilation may fail for code using Intel intrinsics or SIMD instructions")
 
+        # Copy resource headers FROM MinGW sysroot TO clang installation
+        # This is needed because the clang binary distribution doesn't include these headers,
+        # but clang expects to find them relative to its binary location.
+        # NOTE: We cannot use -resource-dir flag because it causes clang 21.1.5 to hang on Windows.
+        logger.info("Copying clang resource headers from MinGW sysroot to clang installation")
+        try:
+            from . import wrapper
+
+            clang_bin_dir = wrapper.get_platform_binary_dir()
+            clang_root = clang_bin_dir.parent
+
+            # Source: MinGW sysroot's lib/clang/<version>/include/
+            mingw_clang_lib = install_dir / "lib" / "clang"
+            if mingw_clang_lib.exists():
+                version_dirs = [d for d in mingw_clang_lib.iterdir() if d.is_dir()]
+                if version_dirs:
+                    mingw_version_dir = version_dirs[0]
+                    source_include = mingw_version_dir / "include"
+                    if source_include.exists():
+                        # Destination: <clang_root>/lib/clang/<version>/include/
+                        dest_clang_lib = clang_root / "lib" / "clang" / mingw_version_dir.name / "include"
+                        dest_clang_lib.parent.mkdir(parents=True, exist_ok=True)
+
+                        # Copy all headers recursively
+                        copied_count = 0
+                        for header_file in source_include.rglob("*"):
+                            if header_file.is_file():
+                                rel_path = header_file.relative_to(source_include)
+                                dest_file = dest_clang_lib / rel_path
+                                dest_file.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(header_file, dest_file)
+                                copied_count += 1
+
+                        logger.info(f"Copied {copied_count} resource headers to clang installation")
+
+                        # Also copy the lib files (libclang_rt.builtins.a, etc.)
+                        source_lib = mingw_version_dir / "lib"
+                        if source_lib.exists():
+                            dest_clang_lib_dir = clang_root / "lib" / "clang" / mingw_version_dir.name / "lib"
+                            dest_clang_lib_dir.mkdir(parents=True, exist_ok=True)
+
+                            lib_copied_count = 0
+                            for lib_file in source_lib.rglob("*"):
+                                if lib_file.is_file():
+                                    rel_path = lib_file.relative_to(source_lib)
+                                    dest_lib_file = dest_clang_lib_dir / rel_path
+                                    dest_lib_file.parent.mkdir(parents=True, exist_ok=True)
+                                    shutil.copy2(lib_file, dest_lib_file)
+                                    lib_copied_count += 1
+
+                            logger.info(f"Copied {lib_copied_count} library files to clang installation")
+                        else:
+                            logger.warning(f"MinGW resource lib not found: {source_lib}")
+                    else:
+                        logger.warning(f"MinGW resource include not found: {source_include}")
+                else:
+                    logger.warning(f"No version dirs in {mingw_clang_lib}")
+            else:
+                logger.warning(f"MinGW clang lib not found: {mingw_clang_lib}")
+        except Exception as e:
+            logger.warning(f"Could not copy resource headers to clang: {e}")
+            import traceback
+
+            logger.warning(traceback.format_exc())
+
         # Mark installation as complete
         # Ensure install_dir exists before writing done.txt
         install_dir.mkdir(parents=True, exist_ok=True)
