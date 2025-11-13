@@ -4,15 +4,17 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/clang-tool-chain.svg)](https://pypi.org/project/clang-tool-chain/)
 [![Downloads](https://pepy.tech/badge/clang-tool-chain)](https://pepy.tech/project/clang-tool-chain)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Linting](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml)
+
 [![win-gnu](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win-gnu.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win-gnu.yml)
 [![win-msvc](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win-msvc.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win-msvc.yml)
 [![linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-x86.yml)
 [![linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-arm.yml)
 [![macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-x86.yml)
 [![macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-arm.yml)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+
 
 ---
 
