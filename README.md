@@ -14,6 +14,7 @@
 [![linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-arm.yml)
 [![macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-x86.yml)
 [![macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-arm.yml)
+[![emscripten-linux](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten.yml)
 
 
 ---
