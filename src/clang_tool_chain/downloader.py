@@ -15,9 +15,6 @@ This file serves as a compatibility layer that re-exports all public APIs
 to maintain backward compatibility with existing code.
 """
 
-import logging
-import sys
-
 # ============================================================================
 # Re-exports from manifest.py
 # ============================================================================
@@ -51,6 +48,11 @@ from .installer import (
     is_nodejs_installed,
     is_toolchain_installed,
 )
+
+# ============================================================================
+# Re-exports from logging_config.py
+# ============================================================================
+from .logging_config import configure_logging
 from .manifest import (
     EMSCRIPTEN_MANIFEST_BASE_URL,
     IWYU_MANIFEST_BASE_URL,
@@ -95,13 +97,8 @@ from .path_utils import (
 # ============================================================================
 from .permissions import _robust_rmtree, fix_file_permissions
 
-# Configure logging for GitHub Actions and general debugging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)],
-)
-logger = logging.getLogger(__name__)
+# Configure logging using centralized configuration
+logger = configure_logging(__name__)
 
 # ============================================================================
 # Public API

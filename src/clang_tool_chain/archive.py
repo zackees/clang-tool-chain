@@ -10,7 +10,6 @@ Handles downloading, checksum verification, and extraction of archives:
 """
 
 import hashlib
-import logging
 import shutil
 import subprocess
 import sys
@@ -21,16 +20,12 @@ from urllib.request import Request, urlopen
 
 import pyzstd
 
+from .logging_config import configure_logging
 from .manifest import ToolchainInfrastructureError, VersionInfo
 from .permissions import _robust_rmtree
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)],
-)
-logger = logging.getLogger(__name__)
+# Configure logging using centralized configuration
+logger = configure_logging(__name__)
 
 
 def verify_checksum(file_path: Path, expected_sha256: str) -> bool:

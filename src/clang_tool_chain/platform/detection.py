@@ -5,21 +5,15 @@ This module provides functions to detect the current platform and architecture,
 and to locate platform-specific binary directories.
 """
 
-import logging
 import platform
 import subprocess
-import sys
 from pathlib import Path
 
 from .. import downloader
+from ..logging_config import configure_logging
 
-# Configure logging for GitHub Actions and general debugging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)],
-)
-logger = logging.getLogger(__name__)
+# Configure logging using centralized configuration
+logger = configure_logging(__name__)
 
 
 def _get_toolchain_directory_listing(platform_name: str) -> str:

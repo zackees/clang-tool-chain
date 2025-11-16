@@ -5,21 +5,15 @@ This module provides functions for finding tool binaries, Node.js installation
 paths, and other path-related utilities for the Clang tool chain.
 """
 
-import logging
 import os
 import shutil
-import sys
 from pathlib import Path
 
+from ..logging_config import configure_logging
 from .detection import _get_toolchain_directory_listing, get_platform_binary_dir, get_platform_info
 
-# Configure logging for GitHub Actions and general debugging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)],
-)
-logger = logging.getLogger(__name__)
+# Configure logging using centralized configuration
+logger = configure_logging(__name__)
 
 
 def get_nodejs_install_dir_path(platform_name: str, arch: str) -> Path:

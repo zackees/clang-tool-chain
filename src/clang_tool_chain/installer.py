@@ -12,16 +12,15 @@ Handles high-level installation logic for all toolchain components:
 
 import contextlib
 import datetime
-import logging
 import os
 import shutil
-import sys
 import tempfile
 from pathlib import Path
 
 import fasteners
 
 from .archive import download_archive, extract_tarball
+from .logging_config import configure_logging
 from .manifest import (
     Manifest,
     fetch_emscripten_platform_manifest,
@@ -41,13 +40,8 @@ from .path_utils import (
 )
 from .permissions import _robust_rmtree, fix_file_permissions
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)],
-)
-logger = logging.getLogger(__name__)
+# Configure logging using centralized configuration
+logger = configure_logging(__name__)
 
 
 # ============================================================================

@@ -9,19 +9,14 @@ Handles parsing and fetching manifest files for all toolchain components:
 """
 
 import json
-import logging
-import sys
 from dataclasses import dataclass
 from typing import Any, TypeVar
 from urllib.request import Request, urlopen
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)],
-)
-logger = logging.getLogger(__name__)
+from .logging_config import configure_logging
+
+# Configure logging using centralized configuration
+logger = configure_logging(__name__)
 
 # Base URLs for manifests
 MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/clang"

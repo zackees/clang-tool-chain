@@ -8,21 +8,16 @@ Handles file permission management and robust filesystem operations:
 - Filesystem synchronization
 """
 
-import logging
 import os
 import platform
 import shutil
-import sys
 from pathlib import Path
 from typing import Any
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)],
-)
-logger = logging.getLogger(__name__)
+from .logging_config import configure_logging
+
+# Configure logging using centralized configuration
+logger = configure_logging(__name__)
 
 
 def _robust_rmtree(path: Path, max_retries: int = 3) -> None:  # pyright: ignore[reportUnusedFunction]

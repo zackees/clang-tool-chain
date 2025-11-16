@@ -12,7 +12,6 @@ The main functions are:
 - sccache_clang_cpp_main(): sccache wrapper for clang++ with GNU ABI
 """
 
-import logging
 import os
 import subprocess
 import sys
@@ -25,17 +24,13 @@ from ..abi import (
     _should_use_msvc_abi,
 )
 from ..linker import _add_lld_linker_if_needed
+from ..logging_config import configure_logging
 from ..platform.detection import get_platform_info
 from ..platform.paths import find_sccache_binary, find_tool_binary
 from ..sdk import _add_macos_sysroot_if_needed
 
-# Configure logging for GitHub Actions and general debugging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)],
-)
-logger = logging.getLogger(__name__)
+# Configure logging using centralized configuration
+logger = configure_logging(__name__)
 
 
 def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = False) -> NoReturn:
