@@ -1,32 +1,105 @@
 # Task: Build Emscripten Binaries for macOS
 
-**Status**: ✅ AUTOMATION READY - Workflow Created
-**Priority**: High
+**Status**: ✅ BUILD VERIFIED - Ready for Distribution
+**Priority**: Medium (Technical work complete, distribution remaining)
 **Created**: 2025-11-15
-**Last Updated**: 2025-11-15 (Iteration 2)
-**Estimated Time**: 30-60 minutes (automated via GitHub Actions)
+**Last Updated**: 2025-11-16 (Iteration 5 Complete)
+**Estimated Time**: 30-45 minutes remaining (distribution + documentation)
 
-## ✅ ITERATION 2 ACHIEVEMENTS
+## ✅ ITERATION 5 - Archive Structure Fixed and Verified
 
-**Blocker Resolved**: ✅ Created GitHub Actions workflow for automated macOS builds
+**Fix Applied**: ✅ (commit e1abced in downloads-bins, e4dba83 in main repo)
+- Modified `fetch_and_archive_emscripten.py` to create proper `upstream/` structure
+- `emscripten-version.txt` now copied to archive root
+- `.emscripten` config placed at archive root
+- All binaries organized under `upstream/` parent directory
+
+**Build Status**: ✅ SUCCESS - All Verification Passed!
+- **Workflow Run**: https://github.com/zackees/clang-tool-chain/actions/runs/19403166318
+- **Completed**: 2025-11-16 09:11:14 UTC
+- **Duration**: 16m57s (arm64: 9m30s, x86_64: 16m53s)
+- **Verification**: Both architectures passed all checks
+
+**Archive Status**:
+- ✅ darwin-arm64: 160 MB, Emscripten 4.0.19, structure verified
+- ✅ darwin-x86_64: 166 MB, Emscripten 4.0.19, structure verified
+- ✅ Artifacts uploaded to GitHub Actions
+
+**Next Steps for Iteration 6 (or manual completion)**:
+1. ⏳ Download artifacts from GitHub Actions
+2. ⏳ Upload to downloads-bins repository via Git LFS
+3. ⏳ Update root manifest.json with darwin entries
+4. ⏳ Test installation from main repository
+5. ⏳ Update documentation (CLAUDE.md, docs/EMSCRIPTEN.md)
+6. ⏳ Create DONE.md when all steps complete
+
+## ⚠️ ITERATION 4 - Archive Structure Issue Identified
+
+**Build Status**: ✅ Builds succeed, ❌ Verification fails
+- **Workflow Run**: https://github.com/zackees/clang-tool-chain/actions/runs/19402862232
+- **Completed**: 2025-11-16 08:45 UTC
+- **Archives Created**: 166MB x86_64, 160MB arm64 (Emscripten 4.0.19)
+- **Problem**: Archive internal structure is incorrect
+
+**Workflow Path Bug Fixed**: ✅ (commit c71cfee)
+- Workflow was looking in wrong directory for archives
+- Fixed paths to point to `downloads-bins/assets/emscripten/darwin/{arch}/`
+
+**Archive Structure Bug Found**: ⚠️ **CRITICAL BLOCKER**
+- `emscripten-version.txt` is nested in `emscripten/` subdirectory
+- Should be at archive root level
+- Missing `upstream/` parent directory
+- Current structure: `bin/`, `emscripten/`, `lib/` at root
+- Expected structure: `emscripten-version.txt`, `.emscripten`, `upstream/bin/`, `upstream/emscripten/`, `upstream/lib/`
+
+**Root Cause**: `downloads-bins/tools/fetch_and_archive_emscripten.py`
+- Staging directory organization is incorrect
+- Need to create `upstream/` parent directory
+- Need to copy `emscripten-version.txt` to root before archiving
+
+**Next Steps for Iteration 5**:
+1. ⏳ **FIX** `downloads-bins/tools/fetch_and_archive_emscripten.py`:
+   - Create `upstream/` directory in staging
+   - Move `bin/`, `emscripten/`, `lib/` inside `upstream/`
+   - Copy `emscripten-version.txt` from `upstream/emscripten/` to staging root
+   - Ensure `.emscripten` is a file at root, not a directory
+2. ⏳ Commit and push fix to downloads-bins
+3. ⏳ Update submodule in main repo
+4. ⏳ Trigger new workflow run (build cycle: ~20 minutes)
+5. ⏳ Verify extraction shows correct structure (**key milestone**)
+6. ⏳ Download artifacts from GitHub Actions
+7. ⏳ Upload to downloads-bins via Git LFS
+8. ⏳ Update root manifest.json
+9. ⏳ Test installation from main repository
+10. ⏳ Create DONE.md when complete
+
+**See**:
+- `.agent_task/ITERATION_4.md` for **detailed analysis** of archive structure issue
+- `.agent_task/ITERATION_3.md` for emsdk execution bug fix
+- `.agent_task/ITERATION_2.md` for workflow creation details
+
+## ✅ ITERATION 3 - emsdk Execution Bug Fixed
+
+**Bug Fixed**: ✅ emsdk execution error resolved (commit 123d31f)
+- Fixed FileNotFoundError on macOS when trying to run `./emsdk` directly
+- Changed to universal `python3 emsdk.py` approach for all platforms
+- More reliable cross-platform behavior
+- Builds now run successfully
+
+**First Workflow Run**: 19402611176 (Failed due to workflow path issue)
+
+## Previous Iterations Summary
+
+### ✅ ITERATION 2 - Automation Created
+- Created GitHub Actions workflow for automated macOS builds
 - File: `.github/workflows/build-emscripten-macos.yml`
-- Supports both darwin-x86_64 (Intel Mac) and darwin-arm64 (Apple Silicon)
-- Uses macos-13 and macos-latest runners
+- Supports both darwin-x86_64 and darwin-arm64
 - Includes automated verification of critical files
-- Ready to execute - just trigger the workflow
 
-**Bug Fix Deployed**: ✅ URL fix pushed to remote (commit 573976a)
+### ✅ ITERATION 1 - Analysis & URL Fix
+- URL fix pushed to remote (commit 573976a)
 - downloads-bins repository updated with correct media.githubusercontent.com URL
-- All future builds will use proper LFS URL format
-
-**Next Step**: Trigger workflow via GitHub Actions UI or CLI
-- Go to: https://github.com/zackees/clang-tool-chain/actions
-- Select "Build Emscripten macOS Archives"
-- Click "Run workflow"
-- Wait 30-60 minutes for completion
-- Download artifacts and upload to downloads-bins
-
-**See**: `.agent_task/ITERATION_2.md` for complete implementation details
+- Analyzed requirements and documented build process
 
 ## Executive Summary
 
