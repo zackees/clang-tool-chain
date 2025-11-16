@@ -36,7 +36,7 @@ jobs:
       - name: Display build results
         run: |
           echo "=== Build Complete ==="
-          cd downloads-bins/tools
+          cd downloads-bins/assets/emscripten/darwin/x86_64
           ls -lh emscripten-*-darwin-x86_64.tar.zst* 2>/dev/null || echo "Archive not found"
           echo ""
           echo "=== Checksums ==="
@@ -47,7 +47,7 @@ jobs:
 
       - name: Verify critical files in archive
         run: |
-          cd downloads-bins/tools
+          cd downloads-bins/assets/emscripten/darwin/x86_64
           mkdir -p test_extract
           cd test_extract
           tar --use-compress-program=unzstd -xf ../emscripten-*-darwin-x86_64.tar.zst
@@ -66,17 +66,6 @@ jobs:
             echo "✗ upstream/emscripten directory MISSING"
             exit 1
           fi
-
-      - name: Move artifacts to proper location
-        run: |
-          cd downloads-bins/tools
-          VERSION=$(ls emscripten-*-darwin-x86_64.tar.zst | sed 's/emscripten-\(.*\)-darwin-x86_64.tar.zst/\1/')
-          echo "Detected version: $VERSION"
-          mkdir -p ../assets/emscripten/darwin/x86_64
-          cp emscripten-*-darwin-x86_64.tar.zst* ../assets/emscripten/darwin/x86_64/
-          cp manifest.json ../assets/emscripten/darwin/x86_64/manifest.json
-          echo "Files copied to assets directory"
-          ls -lh ../assets/emscripten/darwin/x86_64/
 
       - name: Upload macOS x86_64 archive
         uses: actions/upload-artifact@v4
@@ -111,7 +100,7 @@ jobs:
       - name: Display build results
         run: |
           echo "=== Build Complete ==="
-          cd downloads-bins/tools
+          cd downloads-bins/assets/emscripten/darwin/arm64
           ls -lh emscripten-*-darwin-arm64.tar.zst* 2>/dev/null || echo "Archive not found"
           echo ""
           echo "=== Checksums ==="
@@ -122,7 +111,7 @@ jobs:
 
       - name: Verify critical files in archive
         run: |
-          cd downloads-bins/tools
+          cd downloads-bins/assets/emscripten/darwin/arm64
           mkdir -p test_extract
           cd test_extract
           tar --use-compress-program=unzstd -xf ../emscripten-*-darwin-arm64.tar.zst
@@ -141,17 +130,6 @@ jobs:
             echo "✗ upstream/emscripten directory MISSING"
             exit 1
           fi
-
-      - name: Move artifacts to proper location
-        run: |
-          cd downloads-bins/tools
-          VERSION=$(ls emscripten-*-darwin-arm64.tar.zst | sed 's/emscripten-\(.*\)-darwin-arm64.tar.zst/\1/')
-          echo "Detected version: $VERSION"
-          mkdir -p ../assets/emscripten/darwin/arm64
-          cp emscripten-*-darwin-arm64.tar.zst* ../assets/emscripten/darwin/arm64/
-          cp manifest.json ../assets/emscripten/darwin/arm64/manifest.json
-          echo "Files copied to assets directory"
-          ls -lh ../assets/emscripten/darwin/arm64/
 
       - name: Upload macOS ARM64 archive
         uses: actions/upload-artifact@v4
