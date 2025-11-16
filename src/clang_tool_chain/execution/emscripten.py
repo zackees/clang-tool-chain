@@ -306,6 +306,7 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
     env = os.environ.copy()
     env["EMSCRIPTEN"] = str(install_dir / "emscripten")
     env["EMSCRIPTEN_ROOT"] = str(install_dir / "emscripten")
+    env["EM_CONFIG"] = str(install_dir / ".emscripten")
 
     # Add Node.js bin directory to PATH (ensures Emscripten finds the right node)
     node_bin_dir = node_path.parent
@@ -318,6 +319,7 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
 
     logger.info(f"Executing command: {python_exe} {tool_script} (with {len(args)} args)")
     logger.debug(f"Environment: EMSCRIPTEN={env.get('EMSCRIPTEN')}")
+    logger.debug(f"Environment: EM_CONFIG={env.get('EM_CONFIG')}")
 
     # Execute
     try:

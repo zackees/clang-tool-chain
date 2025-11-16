@@ -31,6 +31,7 @@ Clang Tools:
 
 Emscripten (WebAssembly):
     - emcc_main: Emscripten C compiler
+    - emar_main: Emscripten archiver
     - empp_main: Emscripten C++ compiler
 
 IWYU (Include What You Use):
@@ -53,6 +54,7 @@ from .entry_points import (
     clang_main,
     clang_msvc_main,
     clang_tidy_main,
+    emar_main,
     emcc_main,
     empp_main,
     fix_includes_main,
@@ -93,6 +95,7 @@ __all__ = [
     "clang_tidy_main",
     # Emscripten
     "emcc_main",
+    "emar_main",
     "empp_main",
     # IWYU
     "iwyu_main",

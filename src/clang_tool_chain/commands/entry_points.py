@@ -164,6 +164,13 @@ def empp_main() -> NoReturn:
     execute_emscripten_tool("em++")
 
 
+def emar_main() -> NoReturn:
+    """Entry point for emar wrapper (Emscripten archiver)."""
+    from ..execution.emscripten import execute_emscripten_tool
+
+    execute_emscripten_tool("emar")
+
+
 # ============================================================================
 # IWYU (Include What You Use) Entry Points
 # ============================================================================

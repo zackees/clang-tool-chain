@@ -100,6 +100,7 @@ clang-tool-chain-fix-includes = "clang_tool_chain.wrapper:fix_includes_main"
 # Emscripten (WebAssembly compilation)
 clang-tool-chain-emcc = "clang_tool_chain.wrapper:emcc_main"
 clang-tool-chain-empp = "clang_tool_chain.wrapper:empp_main"
+clang-tool-chain-emar = "clang_tool_chain.wrapper:emar_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clang_tool_chain"]
