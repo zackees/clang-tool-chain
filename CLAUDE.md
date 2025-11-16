@@ -24,6 +24,18 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 *Version information as of November 11, 2025*
 
+### Emscripten WebAssembly Support
+
+| Platform | Architecture | Emscripten Version | Status |
+|----------|-------------|-------------------|--------|
+| macOS    | x86_64      | 4.0.19            | ✅ Available |
+| macOS    | arm64       | 4.0.19            | ✅ Available |
+| Windows  | x86_64      | 4.0.19            | ✅ Available |
+| Linux    | x86_64      | 4.0.15            | ✅ Available |
+| Linux    | arm64       | -                 | ⏳ Pending |
+
+*Emscripten support added November 2025*
+
 **Key Features:**
 - Pre-built Clang/LLVM binaries (~50-400 MB per platform)
 - Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)

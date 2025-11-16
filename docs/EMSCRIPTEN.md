@@ -4,12 +4,24 @@ This package provides Emscripten integration for compiling C/C++ to WebAssembly 
 
 ## Key Features
 
-- Pre-built Emscripten SDK (~195 MB compressed, ~1.4 GB installed)
+- Pre-built Emscripten SDK (~160-195 MB compressed, ~1.4 GB installed)
 - Automatic download and installation on first use
 - WebAssembly compilation (C/C++ → .wasm + .js + .html)
 - Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)
 - Manifest-based distribution with SHA256 verification
 - Compatible with Node.js for running WebAssembly output
+
+## Platform Support
+
+| Platform | Architecture | Emscripten Version | Archive Size | Status |
+|----------|-------------|-------------------|--------------|--------|
+| macOS    | x86_64      | 4.0.19            | 166 MB       | ✅ Available |
+| macOS    | arm64       | 4.0.19            | 160 MB       | ✅ Available |
+| Windows  | x86_64      | 4.0.19            | 153 MB       | ✅ Available |
+| Linux    | x86_64      | 4.0.15            | 195 MB       | ✅ Available |
+| Linux    | arm64       | -                 | -            | ⏳ Pending |
+
+*macOS support added November 16, 2025*
 
 ## Wrapper Commands
 
