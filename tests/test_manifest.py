@@ -12,14 +12,23 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+# Check if downloads directory exists to determine if tests should run
+_DOWNLOADS_DIR = Path(__file__).parent.parent / "downloads-bins" / "assets" / "clang"
+_SKIP_REASON = (
+    "downloads-bins/assets/clang directory not found. "
+    "These tests are for maintainers who have prepared binary distributions. "
+    "For development, these tests can be safely skipped."
+)
 
+
+@unittest.skipUnless(_DOWNLOADS_DIR.exists(), _SKIP_REASON)
 class TestManifestFiles(unittest.TestCase):
     """Test manifest.json files in downloads subdirectories."""
 
     @classmethod
     def setUpClass(cls):
         """Set up test class with downloads directory path."""
-        cls.downloads_dir = Path(__file__).parent.parent / "downloads-bins" / "assets" / "clang"
+        cls.downloads_dir = _DOWNLOADS_DIR
         cls.required_version_fields = ["href", "sha256"]
         cls.valid_platforms = ["win", "linux", "darwin"]
         cls.valid_architectures = ["x86_64", "arm64", "mingw-x86_64"]  # mingw-x86_64 is a special sysroot reference
