@@ -291,3 +291,83 @@ int main() {
         if shutil.which("node"):
             exec_result = subprocess.run(["node", str(output_file)], capture_output=True, text=True, timeout=30)
             assert "Testing Node.js integration" in exec_result.stdout
+
+
+def is_sccache_available() -> bool:
+    """Check if sccache is available in PATH."""
+    return shutil.which("sccache") is not None
+
+
+@pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten binaries not available for this platform")
+@pytest.mark.skipif(not is_sccache_available(), reason="sccache not available in PATH")
+class TestEmscriptenSccache:
+    """Test Emscripten + sccache integration."""
+
+    def test_sccache_emcc_command_exists(self):
+        """Test that clang-tool-chain-sccache-emcc command is available."""
+        result = subprocess.run(
+            ["clang-tool-chain-sccache-emcc", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=300,  # First run may download toolchain
+        )
+        assert result.returncode == 0, f"sccache-emcc failed: {result.stderr}"
+        assert "emcc" in result.stdout or "Emscripten" in result.stdout
+
+    def test_sccache_empp_command_exists(self):
+        """Test that clang-tool-chain-sccache-empp command is available."""
+        result = subprocess.run(
+            ["clang-tool-chain-sccache-empp", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert result.returncode == 0, f"sccache-em++ failed: {result.stderr}"
+        assert "emcc" in result.stdout or "em++" in result.stdout or "Emscripten" in result.stdout
+
+    def test_compile_with_sccache(self, tmp_path: Path):
+        """Test compiling C++ to WebAssembly with sccache caching."""
+        # Create test source file
+        source_file = tmp_path / "hello_sccache.cpp"
+        source_file.write_text(
+            """
+#include <iostream>
+
+int main() {
+    std::cout << "Hello from sccache + Emscripten!" << std::endl;
+    return 0;
+}
+"""
+        )
+
+        # Compile to WebAssembly with sccache
+        output_file = tmp_path / "hello_sccache.js"
+        result = subprocess.run(
+            ["clang-tool-chain-sccache-empp", str(source_file), "-o", str(output_file)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        assert result.returncode == 0, f"Compilation with sccache failed: {result.stderr}"
+
+        # Check output files exist
+        assert output_file.exists(), "JavaScript file not created"
+        wasm_file = tmp_path / "hello_sccache.wasm"
+        assert wasm_file.exists(), "WebAssembly file not created"
+
+        # Verify wasm file is valid binary
+        wasm_data = wasm_file.read_bytes()
+        assert wasm_data[:4] == b"\x00asm", "Invalid WebAssembly magic number"
+
+        # Compile again to test cache hit (should be much faster)
+        output_file2 = tmp_path / "hello_sccache2.js"
+        result2 = subprocess.run(
+            ["clang-tool-chain-sccache-empp", str(source_file), "-o", str(output_file2)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        assert result2.returncode == 0, f"Second compilation with sccache failed: {result2.stderr}"
+        assert output_file2.exists(), "Second JavaScript file not created"

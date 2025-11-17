@@ -70,6 +70,8 @@ from .entry_points import (
     llvm_ranlib_main,
     llvm_readelf_main,
     llvm_strip_main,
+    sccache_emcc_main,
+    sccache_empp_main,
 )
 
 __all__ = [
@@ -97,6 +99,9 @@ __all__ = [
     "emcc_main",
     "emar_main",
     "empp_main",
+    # sccache wrappers
+    "sccache_emcc_main",
+    "sccache_empp_main",
     # IWYU
     "iwyu_main",
     "iwyu_tool_main",

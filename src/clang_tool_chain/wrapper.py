@@ -84,6 +84,8 @@ from .commands import (
     llvm_ranlib_main,
     llvm_readelf_main,
     llvm_strip_main,
+    sccache_emcc_main,
+    sccache_empp_main,
 )
 
 # ============================================================================
@@ -226,4 +228,6 @@ __all__ = [
     "iwyu_main",
     "iwyu_tool_main",
     "fix_includes_main",
+    "sccache_emcc_main",
+    "sccache_empp_main",
 ]

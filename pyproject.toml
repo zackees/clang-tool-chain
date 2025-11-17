@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clang-tool-chain"
-version = "1.0.13"
+version = "1.0.14"
 description = "Clang Tool Chain - C/C++ compilation toolchain utilities"
 readme = "README.md"
 license = "Apache-2.0"
@@ -101,6 +101,9 @@ clang-tool-chain-fix-includes = "clang_tool_chain.wrapper:fix_includes_main"
 clang-tool-chain-emcc = "clang_tool_chain.wrapper:emcc_main"
 clang-tool-chain-empp = "clang_tool_chain.wrapper:empp_main"
 clang-tool-chain-emar = "clang_tool_chain.wrapper:emar_main"
+# Emscripten + sccache (WebAssembly compilation with caching)
+clang-tool-chain-sccache-emcc = "clang_tool_chain.wrapper:sccache_emcc_main"
+clang-tool-chain-sccache-empp = "clang_tool_chain.wrapper:sccache_empp_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clang_tool_chain"]

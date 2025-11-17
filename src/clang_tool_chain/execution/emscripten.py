@@ -333,3 +333,121 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
         logger.error(f"Failed to execute Emscripten tool: {e}")
         print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None = None) -> NoReturn:
+    """
+    Execute an Emscripten tool with sccache compiler caching.
+
+    This function wraps Emscripten tools (emcc, em++) with sccache for faster compilation
+    by caching intermediate compilation results. It uses Emscripten's built-in support
+    for compiler wrappers via the EM_COMPILER_WRAPPER environment variable.
+
+    Requirements:
+    - sccache must be installed and available in PATH
+    - All standard Emscripten requirements (Python, Node.js, etc.)
+
+    The function automatically:
+    1. Finds sccache binary in system PATH
+    2. Configures Emscripten to use sccache via EM_COMPILER_WRAPPER
+    3. Skips sanity checks (which don't work with compiler wrappers)
+    4. Maintains all standard Emscripten environment setup
+
+    Args:
+        tool_name: Name of the tool to execute (e.g., "emcc", "em++")
+        args: Arguments to pass to the tool (defaults to sys.argv[1:])
+
+    Raises:
+        RuntimeError: If sccache, the tool, or Node.js cannot be found
+
+    Example:
+        # Compile with sccache caching
+        execute_emscripten_tool_with_sccache("emcc", ["-o", "output.wasm", "input.c"])
+    """
+    if args is None:
+        args = sys.argv[1:]
+
+    logger.info(f"Executing Emscripten tool with sccache: {tool_name} with {len(args)} arguments")
+    logger.debug(f"Arguments: {args}")
+
+    # Find sccache binary
+    from ..platform.paths import find_sccache_binary
+
+    try:
+        sccache_path = find_sccache_binary()
+        logger.info(f"Found sccache at: {sccache_path}")
+    except RuntimeError as e:
+        logger.error(f"Failed to find sccache: {e}")
+        print(f"\n{'='*60}", file=sys.stderr)
+        print("clang-tool-chain sccache Error", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(f"{e}", file=sys.stderr)
+        print("\nTo install sccache:", file=sys.stderr)
+        print("  - cargo install sccache", file=sys.stderr)
+        print("  - Or download from: https://github.com/mozilla/sccache/releases", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
+        sys.exit(1)
+
+    # Find tool script
+    try:
+        tool_script = find_emscripten_tool(tool_name)
+    except RuntimeError as e:
+        logger.error(f"Failed to find Emscripten tool: {e}")
+        print(f"\n{'='*60}", file=sys.stderr)
+        print("clang-tool-chain Emscripten Error", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(f"{e}", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
+        sys.exit(1)
+
+    # Ensure Node.js is available (bundled or system)
+    try:
+        node_path = ensure_nodejs_available()
+        logger.debug(f"Node.js path: {node_path}")
+    except RuntimeError as e:
+        logger.error(f"Failed to ensure Node.js availability: {e}")
+        # Error message already printed by ensure_nodejs_available()
+        sys.exit(1)
+
+    # Get platform info
+    platform_name, arch = get_platform_info()
+    install_dir = Path.home() / ".clang-tool-chain" / "emscripten" / platform_name / arch
+
+    # Set up Emscripten environment variables
+    env = os.environ.copy()
+    env["EMSCRIPTEN"] = str(install_dir / "emscripten")
+    env["EMSCRIPTEN_ROOT"] = str(install_dir / "emscripten")
+    env["EM_CONFIG"] = str(install_dir / ".emscripten")
+
+    # Configure sccache integration via Emscripten's compiler wrapper mechanism
+    env["EM_COMPILER_WRAPPER"] = str(sccache_path)
+    env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
+    logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
+    logger.debug("EMCC_SKIP_SANITY_CHECK=1")
+
+    # Add Node.js bin directory to PATH
+    node_bin_dir = node_path.parent
+    env["PATH"] = f"{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
+    logger.debug(f"Added to PATH: {node_bin_dir}")
+
+    # Build command: python tool_script.py args...
+    python_exe = sys.executable
+    cmd = [python_exe, str(tool_script)] + args
+
+    logger.info(f"Executing command: {python_exe} {tool_script} (with {len(args)} args, sccache enabled)")
+    logger.debug(f"Environment: EMSCRIPTEN={env.get('EMSCRIPTEN')}")
+    logger.debug(f"Environment: EM_CONFIG={env.get('EM_CONFIG')}")
+    logger.debug(f"Environment: EM_COMPILER_WRAPPER={env.get('EM_COMPILER_WRAPPER')}")
+
+    # Execute
+    try:
+        result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        logger.error(f"Failed to execute Python: {python_exe}")
+        print(f"\nError: Python interpreter not found: {python_exe}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Failed to execute Emscripten tool: {e}")
+        print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
+        sys.exit(1)

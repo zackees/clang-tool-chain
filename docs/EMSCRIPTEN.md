@@ -25,6 +25,50 @@ This package provides Emscripten integration for compiling C/C++ to WebAssembly 
 
 ## Wrapper Commands
 
+## sccache Integration (Compiler Caching)
+
+sccache provides compilation caching for faster rebuilds. The package includes special wrappers that integrate sccache with Emscripten using the `EM_COMPILER_WRAPPER` environment variable.
+
+**Requirements:**
+- sccache must be installed separately (not bundled)
+- Install via: `cargo install sccache` or from https://github.com/mozilla/sccache/releases
+
+**Commands:**
+```bash
+# Compile C to WebAssembly with sccache caching
+clang-tool-chain-sccache-emcc hello.c -o hello.html
+
+# Compile C++ to WebAssembly with sccache caching
+clang-tool-chain-sccache-empp hello.cpp -o hello.html
+
+# View sccache statistics
+sccache --show-stats
+```
+
+**How it works:**
+- Sets `EM_COMPILER_WRAPPER=sccache` to wrap Emscripten's internal Clang calls
+- Sets `EMCC_SKIP_SANITY_CHECK=1` (sanity checks don't work with compiler wrappers)
+- Maintains all standard Emscripten environment configuration
+- Caches compilation results for faster subsequent builds
+
+**Performance benefits:**
+- First build: Same as regular emcc/em++ (cache miss)
+- Subsequent builds: 10-100x faster (cache hit)
+- Shared cache across different projects using same compilation flags
+
+**Example workflow:**
+```bash
+# First build (cache miss, ~10 seconds)
+clang-tool-chain-sccache-emcc -O3 hello.c -o hello.html
+
+# Modify unrelated file and rebuild (cache hit, <1 second)
+clang-tool-chain-sccache-emcc -O3 hello.c -o hello.html
+
+# Check cache statistics
+sccache --show-stats
+```
+
+
 ```bash
 # Compile C to WebAssembly
 clang-tool-chain-emcc hello.c -o hello.html

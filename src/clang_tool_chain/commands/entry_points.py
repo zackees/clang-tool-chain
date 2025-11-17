@@ -203,3 +203,21 @@ def fix_includes_main() -> NoReturn:
 
 # Note: build_main and build_run_main are imported from the execution.build module
 # They are more complex and have been moved to their own module for better organization
+
+# ============================================================================
+# Emscripten + sccache Entry Points
+# ============================================================================
+
+
+def sccache_emcc_main() -> NoReturn:
+    """Entry point for emcc with sccache wrapper (Emscripten C compiler + caching)."""
+    from ..execution.emscripten import execute_emscripten_tool_with_sccache
+
+    execute_emscripten_tool_with_sccache("emcc")
+
+
+def sccache_empp_main() -> NoReturn:
+    """Entry point for em++ with sccache wrapper (Emscripten C++ compiler + caching)."""
+    from ..execution.emscripten import execute_emscripten_tool_with_sccache
+
+    execute_emscripten_tool_with_sccache("em++")
