@@ -148,6 +148,7 @@ def get_emscripten_lock_path(platform: str, arch: str) -> Path:
 
     base_dir = warn_download_path_override()
     base = Path(base_dir) if base_dir else Path.home() / ".clang-tool-chain"
+    base.mkdir(parents=True, exist_ok=True)  # Ensure directory exists for lock file
     return base / f"emscripten-{platform}-{arch}.lock"
 
 

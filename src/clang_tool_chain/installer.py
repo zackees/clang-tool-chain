@@ -428,22 +428,45 @@ def ensure_iwyu(platform: str, arch: str) -> None:
 # ============================================================================
 
 
-def create_emscripten_config(install_dir: Path, platform: str) -> None:
+def create_emscripten_config(install_dir: Path, platform: str, arch: str) -> None:
     """
     Create .emscripten config file if it doesn't exist.
 
     The config file contains paths to LLVM, Binaryen, and Node.js tools
     that Emscripten needs to compile WebAssembly code.
 
+    IMPORTANT: This function expects that link_clang_binaries_to_emscripten()
+    has already been called. It will not call it itself to avoid circular dependencies.
+
     Args:
         install_dir: Emscripten installation directory
         platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
     """
     config_path = install_dir / ".emscripten"
 
-    # Always create/update the config file to ensure it has the correct paths
-    # for our archive structure (the bundled config may have different paths)
-    logger.info(f"Creating .emscripten config file at {config_path}")
+    # Verify the Emscripten bin directory exists
+    # NOTE: We don't create it or link binaries here to avoid circular dependency
+    # with link_clang_binaries_to_emscripten(). The caller is responsible for
+    # ensuring binaries are linked before calling this function.
+    emscripten_bin = install_dir / "bin"
+    exe_ext = ".exe" if platform == "win" else ""
+    clang_binary = emscripten_bin / f"clang{exe_ext}"
+
+    if not clang_binary.exists():
+        # This indicates a programming error - the caller should have linked binaries first
+        logger.error(
+            f"Cannot create .emscripten config: clang binary not found at {clang_binary}\n"
+            f"This is a programming error. link_clang_binaries_to_emscripten() must be called "
+            f"BEFORE create_emscripten_config().\n"
+            f"Emscripten bin directory: {emscripten_bin}"
+        )
+        raise RuntimeError(
+            f"Cannot create .emscripten config: clang binary not found at {clang_binary}\n"
+            f"The LLVM toolchain must be installed and linked before creating the config file.\n"
+            f"This indicates a programming error in the installation sequence.\n"
+            f"Please report this at https://github.com/zackees/clang-tool-chain/issues"
+        )
 
     # Set up paths relative to install_dir
     # Emscripten expects Unix-style paths even on Windows
@@ -478,11 +501,42 @@ NODE_JS = '{node_js}'
 # PORTS = os.path.join(CACHE, 'ports')
 """
 
-    # Write config file
-    with open(config_path, "w", encoding="utf-8") as f:
-        f.write(config_content)
+    # Check if config file already exists and has the correct content
+    # This prevents race conditions where one process overwrites the config
+    # while another process is reading it during compilation
+    if config_path.exists():
+        try:
+            existing_content = config_path.read_text(encoding="utf-8")
+            if existing_content == config_content:
+                logger.debug(".emscripten config file already exists with correct content")
+                return
+            else:
+                logger.info("Updating .emscripten config file with new paths")
+        except Exception as e:
+            logger.warning(f"Failed to read existing config file: {e}, will recreate")
 
-    logger.info(f"Created .emscripten config file with LLVM_ROOT={llvm_root}")
+    # Write config file (only if it doesn't exist or needs updating)
+    logger.info(f"Creating .emscripten config file at {config_path}")
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(config_content)
+        logger.info(f"Successfully created .emscripten config file with LLVM_ROOT={llvm_root}")
+
+        # Verify the file was actually written
+        if not config_path.exists():
+            raise RuntimeError(f"Config file was not created: {config_path}")
+
+        # Verify the content is correct
+        verify_content = config_path.read_text(encoding="utf-8")
+        if verify_content != config_content:
+            raise RuntimeError("Config file content mismatch after writing")
+
+    except Exception as e:
+        logger.error(f"Failed to create .emscripten config file: {e}")
+        raise RuntimeError(
+            f"Failed to create Emscripten config file at {config_path}: {e}\n"
+            f"This may indicate a permissions issue or disk space problem."
+        ) from e
 
 
 def link_clang_binaries_to_emscripten(platform: str, arch: str) -> None:
@@ -503,12 +557,17 @@ def link_clang_binaries_to_emscripten(platform: str, arch: str) -> None:
     clang_install_dir = get_install_dir(platform, arch)
     clang_bin = clang_install_dir / "bin"
 
-    # Ensure Clang/LLVM is installed
+    # Ensure Clang/LLVM is installed - this is REQUIRED for Emscripten to work
     if not clang_bin.exists():
-        logger.warning(
-            f"Clang/LLVM toolchain not found at {clang_bin}. " f"Emscripten may not work correctly without it."
-        )
-        return
+        logger.info(f"Clang/LLVM toolchain not found at {clang_bin}. Installing main LLVM toolchain...")
+        # Ensure the main LLVM toolchain is installed
+        ensure_toolchain(platform, arch)
+        # Verify installation succeeded
+        if not clang_bin.exists():
+            raise RuntimeError(
+                f"Failed to install Clang/LLVM toolchain. Expected binaries at {clang_bin}.\n"
+                f"Emscripten requires the main LLVM toolchain to be installed."
+            )
 
     # Ensure emscripten bin directory exists
     emscripten_bin.mkdir(parents=True, exist_ok=True)
@@ -517,27 +576,36 @@ def link_clang_binaries_to_emscripten(platform: str, arch: str) -> None:
     exe_ext = ".exe" if platform == "win" else ""
 
     # List of binaries to link
-    binaries_to_link = [
-        f"clang{exe_ext}",
-        f"clang++{exe_ext}",
-        f"wasm-ld{exe_ext}",
+    # Critical binaries are required for Emscripten to function
+    critical_binaries = [f"clang{exe_ext}", f"clang++{exe_ext}", f"wasm-ld{exe_ext}"]
+    optional_binaries = [
         f"llvm-ar{exe_ext}",
         f"llvm-nm{exe_ext}",
         f"llvm-objcopy{exe_ext}",
         f"llvm-ranlib{exe_ext}",
         f"llvm-strip{exe_ext}",
     ]
+    binaries_to_link = critical_binaries + optional_binaries
 
     for binary in binaries_to_link:
         source = clang_bin / binary
         target = emscripten_bin / binary
 
-        # Skip if source doesn't exist
+        # Check if source exists - fail for critical binaries, skip for optional
         if not source.exists():
-            logger.debug(f"Source binary not found: {source}, skipping")
-            continue
+            if binary in critical_binaries:
+                raise RuntimeError(
+                    f"Critical binary not found in LLVM toolchain: {binary}\n"
+                    f"Expected location: {source}\n"
+                    f"LLVM toolchain directory: {clang_bin}\n"
+                    f"This binary is required for Emscripten to function.\n"
+                    f"Try removing ~/.clang-tool-chain and reinstalling."
+                )
+            else:
+                logger.debug(f"Optional binary not found: {source}, skipping")
+                continue
 
-        # Skip if target already exists and is correct
+        # Check if target already exists and is correct
         if target.exists():
             # On Unix, check if it's already a symlink to the right place
             if platform in ("linux", "darwin"):
@@ -548,9 +616,15 @@ def link_clang_binaries_to_emscripten(platform: str, arch: str) -> None:
                     # Remove incorrect symlink/file
                     target.unlink()
             else:
-                # On Windows, just skip if file exists (copying is expensive)
-                logger.debug(f"Binary already exists: {target}")
-                continue
+                # On Windows, check if the file size matches (simple verification)
+                # If sizes don't match, it's a different binary (e.g., from Emscripten archive)
+                if target.stat().st_size == source.stat().st_size:
+                    logger.debug(f"Binary already correct: {target}")
+                    continue
+                else:
+                    # Remove and replace with correct binary from LLVM toolchain
+                    logger.info(f"Replacing existing binary {target} with LLVM toolchain version")
+                    target.unlink()
 
         # Create symlink (Unix) or copy (Windows)
         try:
@@ -630,7 +704,7 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
             link_clang_binaries_to_emscripten(platform, arch)
 
             # Create .emscripten config file if it doesn't exist
-            create_emscripten_config(install_dir, platform)
+            create_emscripten_config(install_dir, platform, arch)
 
             # Write done marker
             done_file = install_dir / "done.txt"
@@ -659,18 +733,28 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
     """
     logger.info(f"Ensuring Emscripten is installed for {platform}/{arch}")
 
-    # Quick check without lock - if already installed, ensure config exists and return
-    if is_emscripten_installed(platform, arch):
-        logger.info(f"Emscripten already installed for {platform}/{arch}")
-        # Ensure .emscripten config file exists (for existing installations)
-        install_dir = get_emscripten_install_dir(platform, arch)
-        create_emscripten_config(install_dir, platform)
-        # Ensure clang binaries are linked (may be missing if LLVM installed after Emscripten)
-        link_clang_binaries_to_emscripten(platform, arch)
+    # Get paths for checks
+    install_dir = get_emscripten_install_dir(platform, arch)
+    config_path = install_dir / ".emscripten"
+    bin_dir = install_dir / "bin"
+    exe_ext = ".exe" if platform == "win" else ""
+    clang_binary = bin_dir / f"clang{exe_ext}"
+    wasm_opt_binary = bin_dir / f"wasm-opt{exe_ext}"
+
+    # Quick check without lock - if fully set up, return immediately
+    # This avoids lock contention for the common case where everything is ready
+    # Check all critical files to ensure complete installation
+    if (
+        is_emscripten_installed(platform, arch)
+        and config_path.exists()
+        and clang_binary.exists()
+        and wasm_opt_binary.exists()
+    ):
+        logger.info(f"Emscripten already installed and configured for {platform}/{arch}")
         return
 
-    # Need to download - acquire lock
-    logger.info(f"Emscripten not installed, acquiring lock for {platform}/{arch}")
+    # Need to install or configure - acquire lock for thread-safe setup
+    logger.info(f"Emscripten needs setup, acquiring lock for {platform}/{arch}")
     lock_path = get_emscripten_lock_path(platform, arch)
     logger.debug(f"Lock path: {lock_path}")
     lock = fasteners.InterProcessLock(str(lock_path))
@@ -679,15 +763,84 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
     with lock:
         logger.info("Lock acquired")
 
-        # Check again inside lock in case another process just finished installing
-        if is_emscripten_installed(platform, arch):
-            logger.info("Another process installed Emscripten while we waited")
+        # Re-check inside lock (another process might have completed setup)
+        if (
+            is_emscripten_installed(platform, arch)
+            and config_path.exists()
+            and clang_binary.exists()
+            and wasm_opt_binary.exists()
+        ):
+            logger.info("Another process completed Emscripten setup while we waited")
             return
 
-        # Download and install
-        logger.info("Starting Emscripten download and installation")
-        download_and_install_emscripten(platform, arch)
-        logger.info(f"Emscripten installation complete for {platform}/{arch}")
+        # Check if installation is corrupted (done.txt exists but critical files missing)
+        # This can happen if a previous installation was interrupted or if the archive was incomplete
+        done_file = install_dir / "done.txt"
+        if done_file.exists():
+            # Verify critical Emscripten components (not just clang binaries which are linked separately)
+            emscripten_dir = install_dir / "emscripten"
+            critical_emscripten_files = [
+                (wasm_opt_binary, "wasm-opt (Binaryen tool)"),
+                (emscripten_dir / "emcc.py", "emcc.py (Emscripten compiler)"),
+            ]
+
+            missing_components = []
+            for file_path, description in critical_emscripten_files:
+                if not file_path.exists():
+                    missing_components.append(f"  - {description}: {file_path}")
+
+            if missing_components:
+                missing_list = "\n".join(missing_components)
+                logger.warning(
+                    f"Emscripten installation is corrupted. done.txt exists but critical components are missing:\n"
+                    f"{missing_list}\n"
+                    f"Removing installation and re-downloading..."
+                )
+                # Remove corrupted installation
+                _robust_rmtree(install_dir)
+                logger.info("Corrupted Emscripten installation removed")
+
+        # Install Emscripten if not installed or was just removed due to corruption
+        if not is_emscripten_installed(platform, arch):
+            logger.info("Starting Emscripten download and installation")
+            download_and_install_emscripten(platform, arch)
+        else:
+            logger.info("Emscripten installed but needs configuration")
+
+        # Always ensure config and binaries are set up (idempotent operations)
+        # This handles cases where LLVM was installed after Emscripten
+        logger.info("Ensuring Emscripten configuration and binary links")
+        link_clang_binaries_to_emscripten(platform, arch)
+        create_emscripten_config(install_dir, platform, arch)
+
+        # Final verification - ensure all critical components are present
+        logger.info("Verifying Emscripten installation")
+        exe_ext = ".exe" if platform == "win" else ""
+        critical_files = [
+            (config_path, "Emscripten config file"),
+            (clang_binary, "clang compiler"),
+            (bin_dir / f"clang++{exe_ext}", "clang++ compiler"),
+            (bin_dir / f"wasm-ld{exe_ext}", "wasm-ld linker"),
+            (bin_dir / f"wasm-opt{exe_ext}", "wasm-opt (Binaryen)"),
+        ]
+
+        missing_files = []
+        for file_path, description in critical_files:
+            if not file_path.exists():
+                missing_files.append(f"  - {description}: {file_path}")
+
+        if missing_files:
+            missing_list = "\n".join(missing_files)
+            raise RuntimeError(
+                f"Emscripten installation verification failed. Missing critical files:\n"
+                f"{missing_list}\n\n"
+                f"Installation directory: {install_dir}\n"
+                f"This indicates an incomplete installation. Try:\n"
+                f"  1. clang-tool-chain purge --yes\n"
+                f"  2. Re-run your command to trigger a fresh installation"
+            )
+
+        logger.info(f"Emscripten setup complete and verified for {platform}/{arch}")
 
 
 # ============================================================================
