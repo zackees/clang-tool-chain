@@ -36,62 +36,31 @@ clang-tool-chain-c hello.c -o hello
 clang-tool-chain-test  # Runs 7 diagnostic tests
 ```
 
-**That's it!** The LLVM toolchain (~52-91 MB) downloads automatically on first use. No manual setup required.
+**That's it!** The LLVM toolchain (~71-91 MB) downloads automatically on first use. No manual setup required.
 
 > **Note:** This package currently uses:
-> - **LLVM 21.1.5** for Windows and Linux
-> - **LLVM 19.1.6** for macOS (21.1.5 coming soon)
+> - **LLVM 21.1.5** for Windows, Linux (x86_64/ARM64)
+> - **LLVM 19.1.7** for macOS (x86_64/ARM64)
 >
-> See [Platform Support Matrix](#-platform-support-matrix) for details.
+> See [Platform Support Matrix](#platform-support-matrix) for details.
 
 ### ⚠️ Windows Users: GNU ABI by Default
 
-This matches the behavior of [zig cc](https://ziglang.org/learn/overview/#cross-compiling-is-a-first-class-use-case) and ensures consistent C++ ABI across all platforms.
+Windows commands use **GNU ABI** (`x86_64-w64-mingw32` target) for cross-platform consistency, matching [zig cc](https://ziglang.org/learn/overview/#cross-compiling-is-a-first-class-use-case) behavior.
 
-**What this means:**
-- ✅ **C++11 strict mode works** - No C++14 extensions in standard library headers
-- ✅ **Cross-platform consistency** - Same ABI on Windows/Linux/macOS
-- ✅ **Arduino/embedded compatibility** - Matches GCC/GNU toolchain behavior
-- ⚠️ **Cannot link with MSVC libraries** - Different C++ ABI (use MSVC variant if needed)
-
-**Default behavior (GNU ABI):**
+**Default commands (GNU ABI):**
 ```bash
-clang-tool-chain-c main.c -o program       # Uses x86_64-w64-mingw32 target
-clang-tool-chain-cpp main.cpp -o program   # Uses GNU ABI, libc++ stdlib
+clang-tool-chain-c main.c -o program       # GNU ABI, no Visual Studio required
+clang-tool-chain-cpp main.cpp -o program   # Downloads ~90 MB on first use
 ```
 
-**For MSVC ABI (Windows-specific projects):**
+**MSVC ABI variants (Windows-specific projects):**
 ```bash
-clang-tool-chain-c-msvc main.c -o program.exe     # Uses x86_64-pc-windows-msvc
-clang-tool-chain-cpp-msvc main.cpp -o program.exe # Uses MSVC ABI, MSVC stdlib
-
-# With sccache for compilation caching
-clang-tool-chain-sccache-c-msvc main.c -o program.exe
-clang-tool-chain-sccache-cpp-msvc main.cpp -o program.exe
+clang-tool-chain-c-msvc main.c -o program.exe     # Requires Visual Studio/Windows SDK
+clang-tool-chain-cpp-msvc main.cpp -o program.exe # Downloads ~71 MB on first use
 ```
 
-**Download sizes:**
-- **First run (GNU target):** ~100-120 MB (includes MinGW-w64 sysroot)
-- **MSVC variant:** ~50 MB (uses Visual Studio SDK if available)
-
-**Windows SDK Requirements:**
-
-MSVC variants require Visual Studio or Windows SDK for system headers/libraries. The package automatically:
-- ✅ Detects SDK via environment variables (WindowsSdkDir, VCToolsInstallDir, etc.)
-- ⚠️ Shows helpful setup instructions if SDK not found
-- 🔧 Suggests alternatives (Visual Studio Dev Prompt, vcvarsall.bat, or GNU ABI)
-
-**When to use MSVC variant:**
-- Linking with MSVC-compiled libraries (DLLs with C++ APIs)
-- Windows-specific projects requiring Visual Studio integration
-- COM/WinRT/Windows Runtime components
-- Using Windows SDK features not available in MinGW
-
-**When to use GNU ABI (default):**
-- Cross-platform projects (same ABI on all platforms)
-- Strict C++11 mode (MSVC requires C++14 extensions)
-- No Windows SDK installation required
-- Arduino/embedded projects (matches GCC)
+**Which to use?** See [Windows Target Selection](#windows-target-selection) for detailed comparison and requirements.
 
 ### 📋 Command Quick Reference
 
@@ -109,7 +78,7 @@ MSVC variants require Visual Studio or Windows SDK for system headers/libraries.
 | **Check Installation** | `clang-tool-chain info` | Same |
 | **Verify Setup** | `clang-tool-chain-test` | Same |
 
-**Note:** MSVC variants (`*-msvc`) are Windows-only and require Visual Studio or Windows SDK. Automatic SDK detection with helpful error messages included.
+**Note:** MSVC variants require Windows SDK. See [Windows Target Selection](#windows-target-selection) for details.
 
 ---
 
@@ -137,8 +106,6 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 uv pip install -e ".[dev]"
 ```
 
-**Note:** Binaries download automatically on first use. No manual setup required!
-
 **macOS Users:** Requires Xcode Command Line Tools for system headers. Run `xcode-select --install` if not already installed.
 
 ---
@@ -147,7 +114,7 @@ uv pip install -e ".[dev]"
 
 ### The Problem
 
-Installing LLVM/Clang traditionally requires:
+Installing Clang/LLVM traditionally requires:
 - Large downloads (1-3 GB installer/archive)
 - System-wide installation with admin privileges
 - Manual PATH configuration
@@ -160,7 +127,7 @@ Installing LLVM/Clang traditionally requires:
 
 | Feature | clang-tool-chain | Full LLVM Install | System Compiler | zig cc |
 |---------|------------------|-------------------|-----------------|--------|
-| **Size** | 52-91 MB | 1-3 GB | Varies | ~80 MB |
+| **Size** | 71-91 MB | 1-3 GB | Varies | ~80 MB |
 | **Setup Time** | < 30 seconds | 5-15 minutes | Varies | < 30 seconds |
 | **Admin Required** | ❌ No | ✅ Yes (usually) | ✅ Yes | ❌ No |
 | **Auto Download** | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
@@ -195,10 +162,10 @@ Installing LLVM/Clang traditionally requires:
 - **Manifest-Based Distribution** - Version-controlled releases with SHA256 checksum verification
 - **Multi-Part Archive Support** - Transparent handling of large archives (>100 MB) split into parts
 - **Ultra-Optimized Archives** - 94.3% size reduction via binary stripping, deduplication, and zstd-22 compression
-- **Cross-Platform Support** - Windows x64, macOS x64/ARM64, Linux x64/ARM64
+- **Cross-Platform Support** - Windows x86_64, macOS x86_64/ARM64, Linux x86_64/ARM64
 - **Concurrent-Safe Installation** - File locking prevents race conditions in parallel builds
-- **Python Wrapper Commands** - 23 entry points for all essential LLVM tools
-- **Pre-Built Binaries** - Clang 21.1.5 (Linux/Windows), 19.1.6 (macOS)
+- **Python Wrapper Commands** - 35 entry points for all essential LLVM tools
+- **Pre-Built Binaries** - Clang 21.1.5 (Windows, Linux) and Clang 19.1.7 (macOS)
 - **Essential Toolchain Utilities** - Compilers, linkers, binary utilities, and code formatters
 - **Automatic macOS SDK Detection** - Seamlessly finds system headers on macOS without configuration
 
@@ -232,6 +199,18 @@ clang-tool-chain path clang
 
 # Show package and LLVM versions
 clang-tool-chain package-version
+
+# Remove all downloaded toolchains and cached data
+clang-tool-chain purge          # Interactive confirmation
+clang-tool-chain purge --yes    # Skip confirmation (for scripts)
+```
+
+**About `purge` command:**
+- Removes `~/.clang-tool-chain/` directory containing all toolchains
+- Frees up ~200-400 MB per platform (Clang/LLVM binaries)
+- Also removes MinGW sysroot (~176 MB, Windows), Emscripten SDK (~1.4 GB), Node.js runtime (~90-100 MB)
+- Toolchains will be re-downloaded automatically on next use
+- Use `--yes` flag to skip confirmation prompt (useful for CI/CD scripts)
 ```
 
 ### Wrapper Commands
@@ -438,6 +417,14 @@ pip install clang-tool-chain[sccache]
 clang-tool-chain-sccache-c main.c -o main
 clang-tool-chain-sccache-cpp main.cpp -o main
 
+# Windows MSVC variants with sccache
+clang-tool-chain-sccache-c-msvc main.c -o main.exe
+clang-tool-chain-sccache-cpp-msvc main.cpp -o main.exe
+
+# Emscripten (WebAssembly) with sccache
+clang-tool-chain-sccache-emcc main.c -o main.js
+clang-tool-chain-sccache-empp main.cpp -o main.js
+
 # Query cache statistics
 clang-tool-chain-sccache --show-stats
 
@@ -456,15 +443,88 @@ clang-tool-chain-sccache --version
 - Requires `sccache` binary in PATH
 - Works with distributed caching backends (optional)
 
+#### IWYU (Include What You Use)
+
+Analyze and optimize C/C++ #include directives:
+
+```bash
+# Analyze includes in a source file
+clang-tool-chain-iwyu myfile.cpp -- -std=c++17
+
+# With additional compiler flags
+clang-tool-chain-iwyu myfile.cpp -- -I./include -DDEBUG
+
+# Run IWYU tool (Python wrapper)
+clang-tool-chain-iwyu-tool -p build/
+
+# Automatically fix includes based on IWYU output
+clang-tool-chain-iwyu myfile.cpp -- -std=c++17 | clang-tool-chain-fix-includes
+
+# Or save recommendations to file first
+clang-tool-chain-iwyu myfile.cpp -- -std=c++17 > iwyu.out
+clang-tool-chain-fix-includes < iwyu.out
+```
+
+**What it does:**
+- Detects unnecessary #include directives
+- Suggests missing #include directives
+- Recommends forward declarations instead of full includes
+- Helps reduce compilation times and header dependencies
+
+**How it works:**
+- IWYU analyzes what symbols are actually used in your code
+- Compares against what headers are included
+- Generates recommendations for includes to add/remove
+- `fix-includes` can automatically apply the changes
+
+#### Emscripten (WebAssembly Compilation)
+
+Compile C/C++ to WebAssembly using Emscripten:
+
+```bash
+# Compile C to WebAssembly
+clang-tool-chain-emcc hello.c -o hello.js
+
+# Compile C++ to WebAssembly
+clang-tool-chain-empp hello.cpp -o hello.js
+
+# With optimization
+clang-tool-chain-emcc -O3 main.c -o main.js
+
+# Create WebAssembly library
+clang-tool-chain-emcc -c lib.c -o lib.o
+clang-tool-chain-emar rcs libmylib.a lib.o
+
+# Run the compiled WebAssembly (requires Node.js)
+node hello.js
+
+# With sccache for faster rebuilds
+clang-tool-chain-sccache-emcc main.c -o main.js
+clang-tool-chain-sccache-empp main.cpp -o main.js
+```
+
+**Platform Support:**
+- Windows x86_64: Emscripten 4.0.19
+- macOS x86_64/ARM64: Emscripten 4.0.19
+- Linux x86_64: Emscripten 4.0.15
+- Linux ARM64: Coming soon
+
+**What it includes:**
+- Emscripten compiler toolchain
+- Bundled Node.js runtime for running WebAssembly
+- Full emscripten SDK integration
+- sccache support for compilation caching
+
+**Learn more:** See [docs/EMSCRIPTEN.md](docs/EMSCRIPTEN.md) for detailed Emscripten documentation and [docs/NODEJS.md](docs/NODEJS.md) for Node.js integration details.
+
 ### All Available Commands
 
 | Command | Tool | Description |
 |---------|------|-------------|
-| `clang-tool-chain` | CLI | Main management interface |
+| `clang-tool-chain` | CLI | Main management interface (subcommands: info, version, list-tools, path, package-version, test, purge) |
 | `clang-tool-chain-test` | Diagnostic | Run 7 diagnostic tests to verify installation |
 | `clang-tool-chain-fetch` | Fetch utility | Manual download utility for pre-fetching binaries |
 | `clang-tool-chain-paths` | Path utility | Get installation paths in JSON format |
-| `clang-tool-chain-fetch-archive` | Archive utility | Maintainer tool for creating optimized archives |
 | `clang-tool-chain-c` | `clang` | C compiler (GNU ABI on Windows) |
 | `clang-tool-chain-cpp` | `clang++` | C++ compiler (GNU ABI on Windows) |
 | `clang-tool-chain-c-msvc` | `clang` | C compiler (MSVC ABI, Windows only) |
@@ -472,8 +532,10 @@ clang-tool-chain-sccache --version
 | `clang-tool-chain-build` | Build utility | Simple build tool for C/C++ |
 | `clang-tool-chain-build-run` | Build & Run utility | Compile and run in one step (with optional caching) |
 | `clang-tool-chain-sccache` | `sccache` | Direct sccache access (stats, management) |
-| `clang-tool-chain-sccache-c` | `sccache` + `clang` | C compiler with sccache caching |
-| `clang-tool-chain-sccache-cpp` | `sccache` + `clang++` | C++ compiler with sccache caching |
+| `clang-tool-chain-sccache-c` | `sccache` + `clang` | C compiler with sccache caching (GNU ABI) |
+| `clang-tool-chain-sccache-cpp` | `sccache` + `clang++` | C++ compiler with sccache caching (GNU ABI) |
+| `clang-tool-chain-sccache-c-msvc` | `sccache` + `clang` | C compiler with sccache caching (MSVC ABI, Windows only) |
+| `clang-tool-chain-sccache-cpp-msvc` | `sccache` + `clang++` | C++ compiler with sccache caching (MSVC ABI, Windows only) |
 | `clang-tool-chain-ld` | `lld` / `lld-link` | LLVM linker |
 | `clang-tool-chain-ar` | `llvm-ar` | Archive/library creator |
 | `clang-tool-chain-nm` | `llvm-nm` | Symbol table viewer |
@@ -486,6 +548,14 @@ clang-tool-chain-sccache --version
 | `clang-tool-chain-dis` | `llvm-dis` | LLVM disassembler |
 | `clang-tool-chain-format` | `clang-format` | Code formatter |
 | `clang-tool-chain-tidy` | `clang-tidy` | Static analyzer/linter |
+| `clang-tool-chain-iwyu` | `include-what-you-use` | Include analyzer - finds unnecessary includes |
+| `clang-tool-chain-iwyu-tool` | `iwyu_tool.py` | IWYU batch runner for projects |
+| `clang-tool-chain-fix-includes` | `fix_includes.py` | Automatically fix includes based on IWYU output |
+| `clang-tool-chain-emcc` | `emcc` | Emscripten C compiler (WebAssembly) |
+| `clang-tool-chain-empp` | `em++` | Emscripten C++ compiler (WebAssembly) |
+| `clang-tool-chain-emar` | `emar` | Emscripten archiver (WebAssembly) |
+| `clang-tool-chain-sccache-emcc` | `sccache` + `emcc` | Emscripten C compiler with sccache caching |
+| `clang-tool-chain-sccache-empp` | `sccache` + `em++` | Emscripten C++ compiler with sccache caching |
 
 ---
 
@@ -633,7 +703,7 @@ jobs:
       - name: Compile project
         run: |
           clang-tool-chain-c src/main.c -o program
-          ./program  # Binaries download automatically on first use!
+          ./program
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
@@ -656,7 +726,7 @@ build:
   stage: build
   script:
     - pip install clang-tool-chain
-    - clang-tool-chain-c src/main.c -o program  # Auto-downloads on first use
+    - clang-tool-chain-c src/main.c -o program
     - clang-tool-chain-strip program
   artifacts:
     paths:
@@ -677,7 +747,7 @@ FROM python:3.11-slim
 # Install clang-tool-chain
 RUN pip install clang-tool-chain
 
-# Pre-download binaries (optional - they auto-download on first use)
+# Pre-download binaries (optional)
 RUN clang-tool-chain info || true
 
 # Copy source code
@@ -728,17 +798,17 @@ steps:
 
 | Platform | Architecture | LLVM Version | Archive Size | Installed Size | Status |
 |----------|--------------|--------------|--------------|----------------|--------|
-| Windows  | x86_64       | 21.1.5       | ~100 MB*     | ~350 MB        | ✅ Stable |
-| Linux    | x86_64       | 21.1.5       | ~88 MB       | ~350 MB        | ✅ Stable |
+| Windows  | x86_64       | 21.1.5       | ~71 MB*      | ~350 MB        | ✅ Stable |
+| Linux    | x86_64       | 21.1.5       | ~87 MB       | ~350 MB        | ✅ Stable |
 | Linux    | ARM64        | 21.1.5       | ~91 MB       | ~340 MB        | ✅ Stable |
-| macOS    | x86_64       | 19.1.6       | ~75 MB       | ~300 MB        | ✅ Stable |
-| macOS    | ARM64        | 19.1.6       | ~71 MB       | ~285 MB        | ✅ Stable |
+| macOS    | x86_64       | 19.1.7       | ~77 MB       | ~300 MB        | ✅ Stable |
+| macOS    | ARM64        | 19.1.7       | ~71 MB       | ~285 MB        | ✅ Stable |
 
 \* **Windows Downloads:**
-  - **GNU target (default):** ~100 MB (LLVM + MinGW-w64 sysroot)
-  - **MSVC target (opt-in):** ~50 MB (LLVM only, requires Visual Studio SDK)
+  - **GNU target (default):** ~90 MB (71 MB LLVM + 19 MB MinGW-w64 sysroot)
+  - **MSVC target (opt-in):** ~71 MB (LLVM only, requires Visual Studio SDK)
 
-**Note:** macOS uses LLVM 19.1.6 due to availability of pre-built binaries. LLVM 21.1.5 support coming soon.
+**Note:** macOS currently uses LLVM 19.1.7.
 
 ### Requirements
 
@@ -746,9 +816,9 @@ steps:
 - **Disk Space**: ~100 MB for archive + ~200-350 MB installed
 - **Internet**: Required for initial download (works offline after installation)
 - **Operating System**:
-  - Windows 10+ (x64)
-  - macOS 11+ (x64 or ARM64/Apple Silicon) - **Requires Xcode Command Line Tools**: `xcode-select --install`
-  - Linux with glibc 2.27+ (x64 or ARM64)
+  - Windows 10+ (x86_64)
+  - macOS 11+ (x86_64 or ARM64/Apple Silicon) - **Requires Xcode Command Line Tools**: `xcode-select --install`
+  - Linux with glibc 2.27+ (x86_64 or ARM64)
 
 ---
 
@@ -776,7 +846,7 @@ steps:
 
 ### macOS SDK Detection (Automatic)
 
-macOS users no longer need to manually configure SDK paths! The toolchain automatically detects your Xcode Command Line Tools SDK using `xcrun`.
+macOS users don't need to configure SDK paths - the toolchain automatically detects your Xcode Command Line Tools SDK using `xcrun`.
 
 **Requirements:**
 ```bash
@@ -784,31 +854,20 @@ xcode-select --install  # One-time setup
 ```
 
 **How it works:**
-- Automatically injects `-isysroot` when compiling on macOS
+- Automatically injects `-isysroot` flag when compiling on macOS
 - Detects SDK via `xcrun --show-sdk-path`
-- Respects `SDKROOT` environment variable if set
-- Uses explicit `-isysroot` flag if provided by user
-- Disabled with `CLANG_TOOL_CHAIN_NO_SYSROOT=1`
+- Respects `SDKROOT` environment variable or explicit `-isysroot` flags
 
-**Advanced Configuration:**
+**Custom configuration:**
 ```bash
-# Use custom SDK path (standard macOS variable)
-export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+# Use custom SDK path
+export SDKROOT=/path/to/sdk
 
-# Disable automatic SDK detection (not recommended)
+# Disable automatic detection (not recommended)
 export CLANG_TOOL_CHAIN_NO_SYSROOT=1
-
-# Explicit SDK path (takes priority)
-clang-tool-chain-c -isysroot /path/to/sdk hello.c -o hello
 ```
 
-**Automatic injection is skipped when:**
-- User explicitly provides `-isysroot` in arguments
-- `SDKROOT` environment variable is set
-- Freestanding compilation flags are used (`-nostdinc`, `-nostdinc++`, `-nostdlib`, `-ffreestanding`)
-- `CLANG_TOOL_CHAIN_NO_SYSROOT=1` is set
-
-No configuration needed - just compile!
+For troubleshooting SDK issues, see [macOS: stdio.h or iostream Not Found](#macos-stdioh-or-iostream-not-found).
 
 ---
 
@@ -820,13 +879,7 @@ clang-tool-chain uses unmodified LLVM binaries - expect **identical performance*
 
 ### Download Benchmarks (First Use)
 
-| Connection | Archive Size | Download Time |
-|------------|--------------|---------------|
-| Fiber (100 Mbps) | 52 MB | ~5 seconds |
-| Cable (20 Mbps) | 52 MB | ~25 seconds |
-| DSL (5 Mbps) | 52 MB | ~90 seconds |
-
-Subsequent compilations are **instant** (no download).
+Archives (71-91 MB) download in **~5 seconds on fiber (100 Mbps)** or **~25 seconds on cable (20 Mbps)**. Subsequent compilations are instant (no download).
 
 ---
 
@@ -1105,7 +1158,7 @@ Pin specific LLVM versions in `requirements.txt`:
 
 ```txt
 # requirements.txt
-clang-tool-chain==1.0.1  # Pins package version (currently uses LLVM 21.1.5/19.1.6)
+clang-tool-chain==1.0.14  # Pins package version (currently uses LLVM 21.1.5)
 ```
 
 **Future:** The package will support multiple LLVM versions via manifest updates.
@@ -1142,7 +1195,7 @@ clang-tool-chain-c world.c -o world  # Process 2
 On first use, `clang-tool-chain` automatically:
 1. Detects your platform and architecture
 2. Fetches the manifest for your platform
-3. Downloads the appropriate archive (~52-91 MB)
+3. Downloads the appropriate archive (~71-91 MB)
 4. Verifies the SHA256 checksum
 5. Extracts to `~/.clang-tool-chain/clang/{platform}/{arch}/`
 6. Executes your command
@@ -1174,7 +1227,7 @@ Not currently. Each `clang-tool-chain` package version maps to specific LLVM ver
 # Environment 1: LLVM 21.1.5
 python -m venv env1
 source env1/bin/activate
-pip install clang-tool-chain==1.0.1
+pip install clang-tool-chain==1.0.14
 
 # Environment 2: Future LLVM version
 python -m venv env2
@@ -1189,41 +1242,29 @@ Every archive download is verified against SHA256 checksums stored in the platfo
 - Man-in-the-middle attacks
 - File tampering
 
-### Why does macOS use LLVM 19.1.6 instead of 21.1.5?
+### Does macOS support LLVM 21.1.5?
 
-LLVM 21.1.5 pre-built binaries for macOS were not available at the time of initial release. We're working on building and distributing LLVM 21.1.5 for macOS. Track progress in the repository issues.
+No. macOS currently uses LLVM 19.1.7 for both x86_64 and ARM64 architectures, which is the latest stable version optimized for macOS platforms.
 
 ### Can I contribute new platforms or architectures?
 
-Yes! See the [Maintainer Tools](#-maintainer-tools) section for how to create optimized archives. Pull requests welcome!
+Yes! See the [Maintainer Tools](#maintainer-tools) section for how to create optimized archives. Pull requests welcome!
 
 ### Does this work in Docker containers?
 
-Absolutely! See the [CI/CD Integration](#-cicd-integration) section for Docker examples. The automatic download works seamlessly in containers.
+Absolutely! See the [CI/CD Integration](#cicd-integration) section for Docker examples. The automatic download works seamlessly in containers.
 
 ### How much disk space do I need?
 
-- **Download:** ~52-91 MB (archive)
+- **Download:** ~71-91 MB (archive)
 - **Installed:** ~200-350 MB (extracted binaries)
-- **Total:** ~252-441 MB per platform
+- **Total:** ~271-441 MB per platform
 
 The archive is deleted after extraction, so you only need space for the installed binaries.
 
 ### Can I use this with CMake?
 
-Yes! Set the compiler in your `CMakeLists.txt` or via environment variables:
-
-```bash
-# Option 1: Environment variables
-export CC=clang-tool-chain-c
-export CXX=clang-tool-chain-cpp
-cmake -B build
-
-# Option 2: CMake command line
-cmake -B build \
-    -DCMAKE_C_COMPILER=clang-tool-chain-c \
-    -DCMAKE_CXX_COMPILER=clang-tool-chain-cpp
-```
+Yes! See [CMake Integration](#cmake-integration) section for full examples.
 
 ### What about Windows paths with spaces?
 
@@ -1264,9 +1305,9 @@ ls ~/.clang-tool-chain/
 **Error:** `Unsupported platform`
 
 **Solution:** Ensure you're on a supported platform:
-- Windows 10+ (x64)
-- Linux x64 or ARM64 (glibc 2.27+)
-- macOS 11+ (x64 or ARM64)
+- Windows 10+ (x86_64)
+- Linux x86_64 or ARM64 (glibc 2.27+)
+- macOS 11+ (x86_64 or ARM64)
 
 32-bit systems are **not supported**.
 
@@ -1675,7 +1716,7 @@ xz level 9:    Size: 89 MB,  Time: 67.3s
 - Original: ~850 MB
 - After optimization: **88 MB archive**
 
-**macOS ARM64 (LLVM 19.1.6):**
+**macOS ARM64 (LLVM 19.1.7):**
 - Original: ~750 MB
 - After optimization: **71 MB archive**
 
@@ -1719,7 +1760,7 @@ After creating archives, update the manifest files:
 
 This package is distributed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details.
 
-The bundled LLVM/Clang binaries are licensed under the **Apache License 2.0 with LLVM Exception**. See [LLVM License](https://llvm.org/LICENSE.txt) for details.
+The bundled Clang/LLVM binaries are licensed under the **Apache License 2.0 with LLVM Exception**. See [LLVM License](https://llvm.org/LICENSE.txt) for details.
 
 ---
 
@@ -1746,10 +1787,10 @@ The bundled LLVM/Clang binaries are licensed under the **Apache License 2.0 with
 - ✅ Manifest-based distribution with SHA256 verification
 - ✅ Binary optimization pipeline (stripping, deduplication, compression)
 - ✅ CLI management commands (`info`, `version`, `list-tools`, `path`)
-- ✅ Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)
+- ✅ Cross-platform support (Windows x86_64, macOS x86_64/ARM64, Linux x86_64/ARM64)
 - ✅ File locking for concurrent-safe downloads
 - ✅ Ultra-compressed archives (zstd level 22, 94.3% size reduction)
-- ✅ LLVM 21.1.5 for Windows/Linux, 19.1.6 for macOS
+- ✅ LLVM 21.1.5 for Windows and Linux; LLVM 19.1.7 for macOS
 - ✅ Comprehensive test suite with CI/CD integration
 
 ---

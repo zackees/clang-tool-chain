@@ -16,8 +16,8 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 | Platform | Architecture | Clang/LLVM Version | Additional Components |
 |----------|-------------|-------------------|----------------------|
-| macOS    | x86_64      | 21.1.5            | -                    |
-| macOS    | arm64       | 21.1.5            | -                    |
+| macOS    | x86_64      | 19.1.7            | -                    |
+| macOS    | arm64       | 19.1.7            | -                    |
 | Windows  | x86_64      | 21.1.5            | MinGW-w64 (integrated) |
 | Linux    | x86_64      | 21.1.5            | -                    |
 | Linux    | arm64       | 21.1.5            | -                    |
