@@ -16,10 +16,59 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import NoReturn
 
 logger = logging.getLogger(__name__)
+
+
+def _wait_for_config_file_readable(config_path: Path, timeout_seconds: float = 2.0) -> bool:
+    """
+    Wait for Emscripten config file to become readable.
+
+    This handles race conditions in parallel test execution on Windows where the config
+    file may exist but not be immediately readable by all processes due to filesystem sync delays.
+
+    Args:
+        config_path: Path to the .emscripten config file
+        timeout_seconds: Maximum time to wait
+
+    Returns:
+        True if file is readable within timeout, False otherwise
+    """
+    if not config_path.exists():
+        logger.warning(f"Config file not visible yet: {config_path}, waiting...")
+        max_attempts = int(timeout_seconds / 0.01)
+        for attempt in range(max_attempts):
+            if config_path.exists():
+                elapsed = attempt * 0.01
+                if elapsed > 0.1:
+                    logger.info(f"Config file became visible after {elapsed:.2f}s (filesystem sync delay)")
+                break
+            time.sleep(0.01)
+        else:
+            return False
+
+    # File exists, verify it's readable
+    try:
+        with open(config_path, "rb") as f:
+            f.read(1)  # Read one byte to verify
+        logger.debug(f"Config file verified as readable: {config_path}")
+        return True
+    except (OSError, PermissionError) as e:
+        logger.warning(f"Config file exists but not readable yet: {e}. Retrying...")
+        max_attempts = int(timeout_seconds / 0.01)
+        for attempt in range(max_attempts):
+            try:
+                with open(config_path, "rb") as f:
+                    f.read(1)
+                elapsed = attempt * 0.01
+                logger.info(f"Config file became readable after {elapsed:.3f}s")
+                return True
+            except (OSError, PermissionError):
+                time.sleep(0.01)
+        return False
 
 
 def get_platform_info() -> tuple[str, str]:
@@ -302,11 +351,30 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
     platform_name, arch = get_platform_info()
     install_dir = Path.home() / ".clang-tool-chain" / "emscripten" / platform_name / arch
 
+    # CRITICAL: Verify .emscripten config file is readable before executing
+    # This prevents race conditions in parallel test execution on Windows
+    # where the config file may exist but not be readable by all processes yet
+    config_path = install_dir / ".emscripten"
+
+    if not _wait_for_config_file_readable(config_path, timeout_seconds=5.0):
+        logger.error(f"Emscripten config file not readable: {config_path}")
+        print(f"\n{'='*60}", file=sys.stderr)
+        print("clang-tool-chain Emscripten Configuration Error", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(f"Config file not found or not readable: {config_path}", file=sys.stderr)
+        print("This may indicate a filesystem sync delay or corrupted installation.", file=sys.stderr)
+        print("\nTry one of the following:", file=sys.stderr)
+        print("  1. Wait a few seconds and try again", file=sys.stderr)
+        print("  2. Run: clang-tool-chain purge (removes installation)", file=sys.stderr)
+        print("  3. Report this issue if it persists", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
+        sys.exit(1)
+
     # Set up Emscripten environment variables
     env = os.environ.copy()
     env["EMSCRIPTEN"] = str(install_dir / "emscripten")
     env["EMSCRIPTEN_ROOT"] = str(install_dir / "emscripten")
-    env["EM_CONFIG"] = str(install_dir / ".emscripten")
+    env["EM_CONFIG"] = str(config_path)
 
     # Add Node.js bin directory to PATH (ensures Emscripten finds the right node)
     node_bin_dir = node_path.parent
@@ -413,11 +481,30 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
     platform_name, arch = get_platform_info()
     install_dir = Path.home() / ".clang-tool-chain" / "emscripten" / platform_name / arch
 
+    # CRITICAL: Verify .emscripten config file is readable before executing
+    # This prevents race conditions in parallel test execution on Windows
+    # where the config file may exist but not be readable by all processes yet
+    config_path = install_dir / ".emscripten"
+
+    if not _wait_for_config_file_readable(config_path, timeout_seconds=5.0):
+        logger.error(f"Emscripten config file not readable: {config_path}")
+        print(f"\n{'='*60}", file=sys.stderr)
+        print("clang-tool-chain Emscripten Configuration Error", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(f"Config file not found or not readable: {config_path}", file=sys.stderr)
+        print("This may indicate a filesystem sync delay or corrupted installation.", file=sys.stderr)
+        print("\nTry one of the following:", file=sys.stderr)
+        print("  1. Wait a few seconds and try again", file=sys.stderr)
+        print("  2. Run: clang-tool-chain purge (removes installation)", file=sys.stderr)
+        print("  3. Report this issue if it persists", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
+        sys.exit(1)
+
     # Set up Emscripten environment variables
     env = os.environ.copy()
     env["EMSCRIPTEN"] = str(install_dir / "emscripten")
     env["EMSCRIPTEN_ROOT"] = str(install_dir / "emscripten")
-    env["EM_CONFIG"] = str(install_dir / ".emscripten")
+    env["EM_CONFIG"] = str(config_path)
 
     # Configure sccache integration via Emscripten's compiler wrapper mechanism
     env["EM_COMPILER_WRAPPER"] = str(sccache_path)

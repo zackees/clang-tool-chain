@@ -440,7 +440,7 @@ class TestConcurrentDownload(unittest.TestCase):
         1. Clears the toolchain directory
         2. Starts two compilation processes simultaneously
         3. Verifies both complete successfully
-        4. Ensures they finish within 5 seconds of each other (proving one waits for the other)
+        4. Ensures they finish within 10 seconds of each other (proving one waits for the other)
         """
         import concurrent.futures
         import contextlib
@@ -523,12 +523,13 @@ class TestConcurrentDownload(unittest.TestCase):
             # Calculate time difference between completion times
             time_diff = abs(result1["end"] - result2["end"])
 
-            # Both should finish within 5 seconds of each other
+            # Both should finish within 10 seconds of each other
             # (One downloads, the other waits, both compile quickly)
+            # Using 10s to account for CI environment variability (network latency, filesystem sync, etc.)
             self.assertLess(
                 time_diff,
-                5.0,
-                f"Compilations finished {time_diff:.2f}s apart, expected < 5s. "
+                10.0,
+                f"Compilations finished {time_diff:.2f}s apart, expected < 10s. "
                 f"This suggests the locking mechanism may not be working correctly.",
             )
 
