@@ -45,6 +45,68 @@ logger = configure_logging(__name__)
 
 
 # ============================================================================
+# Helper Functions
+# ============================================================================
+
+
+def _verify_file_readable(file_path: Path, description: str, timeout_seconds: float = 2.0) -> bool:
+    """
+    Verify that a file exists and is readable, with retry logic for filesystem sync delays.
+
+    This is critical on Windows and macOS where filesystem operations may not be immediately
+    visible to other processes due to caching, buffering, or APFS sync delays.
+
+    Args:
+        file_path: Path to the file to verify
+        description: Human-readable description for logging
+        timeout_seconds: Maximum time to wait for file to become readable
+
+    Returns:
+        True if file is readable within timeout, False otherwise
+    """
+    import time
+
+    if not file_path.exists():
+        logger.warning(f"{description} not visible yet at {file_path}, waiting for filesystem sync...")
+        max_attempts = int(timeout_seconds / 0.01)
+        for attempt in range(max_attempts):
+            if file_path.exists():
+                elapsed = attempt * 0.01
+                if elapsed > 0.1:  # Log if it took more than 100ms
+                    logger.warning(f"{description} became visible after {elapsed:.2f}s (filesystem sync delay)")
+                else:
+                    logger.info(f"{description} verified after {elapsed:.3f}s")
+                break
+            time.sleep(0.01)
+        else:
+            return False
+
+    # File exists, now verify it's readable
+    # Use binary mode to handle both text and binary files
+    try:
+        with open(file_path, "rb") as f:
+            f.read(1)  # Read just one byte to verify readability
+        logger.debug(f"{description} verified as readable: {file_path}")
+    except (OSError, PermissionError) as e:
+        logger.warning(f"{description} exists but not readable yet: {e}. Retrying...")
+        max_attempts = int(timeout_seconds / 0.01)
+        for attempt in range(max_attempts):
+            try:
+                with open(file_path, "rb") as f:
+                    f.read(1)
+                elapsed = attempt * 0.01
+                logger.info(f"{description} became readable after {elapsed:.3f}s")
+                break
+            except (OSError, PermissionError):
+                time.sleep(0.01)
+        else:
+            logger.error(f"{description} still not readable after {timeout_seconds}s")
+            return False
+
+    return True
+
+
+# ============================================================================
 # Clang/LLVM Installation
 # ============================================================================
 
@@ -453,6 +515,21 @@ def create_emscripten_config(install_dir: Path, platform: str, arch: str) -> Non
     exe_ext = ".exe" if platform == "win" else ""
     clang_binary = emscripten_bin / f"clang{exe_ext}"
 
+    # CRITICAL: On Windows, wait for filesystem sync before checking if binary exists
+    # This prevents race conditions where link_clang_binaries_to_emscripten() completes
+    # but the binaries aren't yet visible to other processes
+    if not clang_binary.exists():
+        logger.warning(f"Clang binary not visible yet, waiting for filesystem sync: {clang_binary}")
+        import time
+
+        for attempt in range(200):  # 200 * 0.01s = 2 seconds max
+            if clang_binary.exists():
+                elapsed = attempt * 0.01
+                if elapsed > 0.1:
+                    logger.warning(f"Clang binary became visible after {elapsed:.2f}s (filesystem sync delay)")
+                break
+            time.sleep(0.01)
+
     if not clang_binary.exists():
         # This indicates a programming error - the caller should have linked binaries first
         logger.error(
@@ -520,6 +597,11 @@ NODE_JS = '{node_js}'
     try:
         with open(config_path, "w", encoding="utf-8") as f:
             f.write(config_content)
+            # Explicitly flush and sync to ensure file is fully written
+            # This is critical on Windows to prevent "Permission denied" errors
+            # when other processes try to read the file immediately after
+            f.flush()
+            os.fsync(f.fileno())
         logger.info(f"Successfully created .emscripten config file with LLVM_ROOT={llvm_root}")
 
         # Verify the file was actually written
@@ -530,6 +612,17 @@ NODE_JS = '{node_js}'
         verify_content = config_path.read_text(encoding="utf-8")
         if verify_content != config_content:
             raise RuntimeError("Config file content mismatch after writing")
+
+        # CRITICAL: Wait for filesystem to fully sync the file so other processes can see it
+        # This prevents "config file not found" errors in parallel test execution on Windows
+        # where file metadata may not be immediately visible to other processes
+        if not _verify_file_readable(config_path, "Emscripten config (post-creation sync)", timeout_seconds=2.0):
+            # Log warning but don't fail - the file was written successfully above
+            # Filesystem sync issues are transient and should resolve when emcc actually runs
+            logger.warning(
+                f"Config file was created but verification failed: {config_path}\n"
+                f"This may indicate a filesystem sync delay, but the file should be accessible shortly."
+            )
 
     except Exception as e:
         logger.error(f"Failed to create .emscripten config file: {e}")
@@ -562,6 +655,29 @@ def link_clang_binaries_to_emscripten(platform: str, arch: str) -> None:
         logger.info(f"Clang/LLVM toolchain not found at {clang_bin}. Installing main LLVM toolchain...")
         # Ensure the main LLVM toolchain is installed
         ensure_toolchain(platform, arch)
+
+        # CRITICAL: On Windows, wait for filesystem sync before checking if binaries exist
+        # This prevents race conditions in parallel test execution
+        import time
+
+        for attempt in range(200):  # 200 * 0.01s = 2 seconds max
+            if clang_bin.exists():
+                if attempt > 0:
+                    elapsed = attempt * 0.01
+                    if elapsed > 0.1:
+                        logger.warning(
+                            f"Clang bin directory became visible after {elapsed:.2f}s (filesystem sync delay)"
+                        )
+                break
+            time.sleep(0.01)
+        else:
+            # Timeout - directory still not visible
+            raise RuntimeError(
+                f"Failed to install Clang/LLVM toolchain. Expected binaries at {clang_bin}.\n"
+                f"Directory not visible after 2 seconds (filesystem sync timeout).\n"
+                f"Emscripten requires the main LLVM toolchain to be installed."
+            )
+
         # Verify installation succeeded
         if not clang_bin.exists():
             raise RuntimeError(
@@ -618,13 +734,21 @@ def link_clang_binaries_to_emscripten(platform: str, arch: str) -> None:
             else:
                 # On Windows, check if the file size matches (simple verification)
                 # If sizes don't match, it's a different binary (e.g., from Emscripten archive)
-                if target.stat().st_size == source.stat().st_size:
-                    logger.debug(f"Binary already correct: {target}")
-                    continue
-                else:
-                    # Remove and replace with correct binary from LLVM toolchain
-                    logger.info(f"Replacing existing binary {target} with LLVM toolchain version")
-                    target.unlink()
+                try:
+                    target_size = target.stat().st_size
+                    source_size = source.stat().st_size
+                    if target_size == source_size:
+                        logger.debug(f"Binary already correct: {target}")
+                        continue
+                    else:
+                        # Remove and replace with correct binary from LLVM toolchain
+                        logger.info(f"Replacing existing binary {target} with LLVM toolchain version")
+                        target.unlink()
+                except (FileNotFoundError, OSError) as e:
+                    # File disappeared between exists() check and stat() call (filesystem sync issue)
+                    # This can happen on Windows with parallel processes
+                    logger.warning(f"File {target} disappeared during stat check: {e}, will recreate")
+                    # Fall through to copy the file below
 
         # Create symlink (Unix) or copy (Windows)
         try:
@@ -636,8 +760,61 @@ def link_clang_binaries_to_emscripten(platform: str, arch: str) -> None:
                 # Copy on Windows (symlinks require admin privileges)
                 shutil.copy2(source, target)
                 logger.info(f"Copied binary: {source} -> {target}")
+
+                # CRITICAL: On Windows, ensure the copied file is visible to other processes
+                # This prevents "file not found" errors in parallel test execution
+                # Wait up to 1 second for the file to become accessible
+                import time
+
+                for attempt in range(100):  # 100 * 0.01s = 1 second max
+                    if target.exists():
+                        if attempt > 0:
+                            elapsed = attempt * 0.01
+                            if elapsed > 0.1:  # Log if it took more than 100ms
+                                logger.warning(
+                                    f"Binary {binary} became visible after {elapsed:.2f}s (filesystem sync delay)"
+                                )
+                        break
+                    time.sleep(0.01)
+                else:
+                    # If this is a critical binary, fail immediately
+                    if binary in critical_binaries:
+                        raise RuntimeError(
+                            f"Critical binary {binary} not accessible after 1s: {target}\n"
+                            f"This indicates a Windows filesystem sync issue.\n"
+                            f"Source: {source}\n"
+                            f"Try removing ~/.clang-tool-chain and reinstalling."
+                        )
+                    else:
+                        logger.warning(f"Optional binary {binary} still not visible after 1s: {target}")
         except Exception as e:
-            logger.warning(f"Failed to link/copy {binary}: {e}")
+            if binary in critical_binaries:
+                logger.error(f"Failed to link/copy critical binary {binary}: {e}")
+                raise RuntimeError(
+                    f"Failed to link/copy critical binary {binary} from LLVM toolchain\n"
+                    f"Source: {source}\n"
+                    f"Target: {target}\n"
+                    f"Error: {e}\n"
+                    f"This binary is required for Emscripten to function.\n"
+                    f"Try removing ~/.clang-tool-chain and reinstalling."
+                ) from e
+            else:
+                logger.warning(f"Failed to link/copy optional binary {binary}: {e}")
+
+    # Final verification: ensure all critical binaries are present and accessible
+    logger.info("Verifying critical binaries are present in Emscripten bin directory")
+    for binary in critical_binaries:
+        target = emscripten_bin / binary
+        if not target.exists():
+            raise RuntimeError(
+                f"Critical binary verification failed: {binary} not found at {target}\n"
+                f"This should not happen after successful linking/copying.\n"
+                f"This indicates a filesystem sync issue or a programming error.\n"
+                f"Try removing ~/.clang-tool-chain and reinstalling."
+            )
+        logger.debug(f"Verified critical binary: {target}")
+
+    logger.info(f"Successfully linked {len(binaries_to_link)} binaries to Emscripten")
 
 
 def is_emscripten_installed(platform: str, arch: str) -> bool:
@@ -694,6 +871,27 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
 
             extract_tarball(archive_path, install_dir)
 
+            # CRITICAL: On Windows, verify extracted files are visible before proceeding
+            # This prevents race conditions where extraction completes but files aren't
+            # yet visible to other processes due to filesystem caching
+            exe_ext = ".exe" if platform == "win" else ""
+            bin_dir = install_dir / "bin"
+            critical_extracted_files = [
+                (install_dir / "emscripten" / "emcc.py", "emcc.py script"),
+                (bin_dir / f"wasm-opt{exe_ext}", "wasm-opt binary"),
+            ]
+
+            logger.info("Verifying critical extracted files are accessible...")
+            for file_path, description in critical_extracted_files:
+                if not _verify_file_readable(file_path, description, timeout_seconds=2.0):
+                    raise RuntimeError(
+                        f"Critical file not accessible after extraction: {description}\n"
+                        f"Expected: {file_path}\n"
+                        f"This indicates a filesystem sync issue or corrupted archive.\n"
+                        f"Try removing ~/.clang-tool-chain/emscripten and reinstalling."
+                    )
+            logger.info("All critical extracted files verified")
+
             # Fix permissions on Unix systems
             if platform in ("linux", "darwin"):
                 logger.info("Fixing file permissions...")
@@ -712,6 +910,13 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
                 f.write(f"Emscripten {latest_version} installed on {datetime.datetime.now()}\n")
                 f.write(f"Platform: {platform}\n")
                 f.write(f"Architecture: {arch}\n")
+                # Flush and sync to ensure file is fully written
+                f.flush()
+                os.fsync(f.fileno())
+
+            # Verify done.txt is readable
+            if not _verify_file_readable(done_file, "done.txt marker file", timeout_seconds=1.0):
+                logger.warning(f"done.txt file verification failed: {done_file}")
 
             logger.info("Emscripten installation complete")
 
@@ -744,14 +949,27 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
     # Quick check without lock - if fully set up, return immediately
     # This avoids lock contention for the common case where everything is ready
     # Check all critical files to ensure complete installation
+    # CRITICAL: Also verify files are readable, not just exists() - fixes filesystem sync race
     if (
         is_emscripten_installed(platform, arch)
         and config_path.exists()
         and clang_binary.exists()
         and wasm_opt_binary.exists()
     ):
-        logger.info(f"Emscripten already installed and configured for {platform}/{arch}")
-        return
+        # Files exist, but verify they're readable (Windows filesystem sync issue)
+        # Use a short timeout since this is the fast path
+        if _verify_file_readable(
+            config_path, "Emscripten config (quick check)", timeout_seconds=0.5
+        ) and _verify_file_readable(wasm_opt_binary, "wasm-opt binary (quick check)", timeout_seconds=0.5):
+            # Emscripten is already installed and configured
+            logger.info(f"Emscripten already installed and configured for {platform}/{arch}")
+            return
+        else:
+            # Files exist but aren't readable yet - fall through to acquire lock and wait
+            logger.warning(
+                "Emscripten files exist but aren't fully readable yet. "
+                "Acquiring lock to wait for installation to complete."
+            )
 
     # Need to install or configure - acquire lock for thread-safe setup
     logger.info(f"Emscripten needs setup, acquiring lock for {platform}/{arch}")
@@ -771,6 +989,21 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
             and wasm_opt_binary.exists()
         ):
             logger.info("Another process completed Emscripten setup while we waited")
+
+            # CRITICAL FIX for filesystem sync race condition:
+            # done.txt and config file exist, but filesystem may not have synced yet
+            # Similar to LLVM toolchain (lines 274-303), wait for critical files to be readable
+            # This prevents "config file not found" errors in parallel test execution
+
+            # Verify config file is readable (not just exists)
+            if not _verify_file_readable(config_path, "Emscripten config", timeout_seconds=2.0):
+                # Log warning but don't fail - another process completed the setup
+                logger.warning(
+                    f"Emscripten config file exists but verification failed: {config_path}\n"
+                    f"Another process may have just created it. Continuing..."
+                )
+
+            logger.info(f"Emscripten setup complete and verified for {platform}/{arch}")
             return
 
         # Check if installation is corrupted (done.txt exists but critical files missing)
@@ -813,7 +1046,7 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
         link_clang_binaries_to_emscripten(platform, arch)
         create_emscripten_config(install_dir, platform, arch)
 
-        # Final verification - ensure all critical components are present
+        # Final verification - ensure all critical components are present and readable
         logger.info("Verifying Emscripten installation")
         exe_ext = ".exe" if platform == "win" else ""
         critical_files = [
@@ -840,7 +1073,27 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
                 f"  2. Re-run your command to trigger a fresh installation"
             )
 
+        # CRITICAL: Verify config file is readable (not just exists)
+        # This prevents "config file not found" errors in parallel test execution
+        # where filesystem may not have synced yet
+        if not _verify_file_readable(config_path, "Emscripten config", timeout_seconds=2.0):
+            # Log warning but don't fail - the file was verified to exist above
+            logger.warning(
+                f"Emscripten config file exists but verification failed: {config_path}\n"
+                f"This may indicate a filesystem sync delay, continuing..."
+            )
+
         logger.info(f"Emscripten setup complete and verified for {platform}/{arch}")
+
+    # CRITICAL: After releasing the lock, do a final verification that the config file
+    # is accessible to external processes (like child processes that will run emcc)
+    # On Windows, filesystem metadata may not propagate immediately after lock release
+    if not _verify_file_readable(config_path, "Emscripten config (post-lock verification)", timeout_seconds=2.0):
+        # Log warning but don't fail - the file should be accessible when emcc actually needs it
+        logger.warning(
+            f"Emscripten config file verification failed after lock release: {config_path}\n"
+            f"This may indicate a filesystem sync delay, but file should be accessible when needed."
+        )
 
 
 # ============================================================================

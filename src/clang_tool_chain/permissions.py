@@ -92,6 +92,18 @@ def fix_file_permissions(install_dir: Path) -> None:
                 # Set executable permissions for all binaries
                 binary_file.chmod(0o755)
 
+    # Fix permissions for files in emscripten/ directory
+    # Emscripten tools (emcc, em++, emar, etc.) need executable permissions
+    emscripten_dir = install_dir / "emscripten"
+    if emscripten_dir.exists() and emscripten_dir.is_dir():
+        # Set executable permissions on all files in the emscripten root
+        # This includes emcc, em++, emar, emranlib, etc.
+        for emscripten_file in emscripten_dir.iterdir():
+            if emscripten_file.is_file():
+                # Most files in emscripten/ are executables or scripts
+                # Set executable permissions
+                emscripten_file.chmod(0o755)
+
     # Fix permissions for files in lib/ directory
     lib_dir = install_dir / "lib"
     if lib_dir.exists() and lib_dir.is_dir():
@@ -115,10 +127,16 @@ def fix_file_permissions(install_dir: Path) -> None:
     # Force filesystem sync to ensure all permission changes are committed
     # This prevents "Text file busy" errors when another thread tries to execute
     # binaries immediately after this function returns
-    if bin_dir and bin_dir.exists():
-        # Sync the bin directory to ensure all changes are written
-        fd = os.open(str(bin_dir), os.O_RDONLY)
+    # Note: Directory fsync is only supported on Unix-like systems
+    if bin_dir and bin_dir.exists() and platform.system() != "Windows":
         try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
+            # Sync the bin directory to ensure all changes are written
+            fd = os.open(str(bin_dir), os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        except (OSError, PermissionError) as e:
+            # fsync on directories is not universally supported
+            # Log but don't fail if it doesn't work
+            logger.debug(f"Could not fsync directory {bin_dir}: {e}")
