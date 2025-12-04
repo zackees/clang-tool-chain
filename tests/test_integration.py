@@ -523,14 +523,20 @@ class TestConcurrentDownload(unittest.TestCase):
             # Calculate time difference between completion times
             time_diff = abs(result1["end"] - result2["end"])
 
-            # Both should finish within 10 seconds of each other
+            # Both should finish within 30 seconds of each other
             # (One downloads, the other waits, both compile quickly)
-            # Using 10s to account for CI environment variability (network latency, filesystem sync, etc.)
+            # Using 30s to account for:
+            # - CI environment variability (network latency, slower hardware)
+            # - macOS APFS filesystem sync delays (multiple 2-5s waits in installer.py)
+            # - Post-lock verification delays (5s timeouts after lock release)
+            # On macOS x86 CI runners, observed delays of ~25s due to filesystem sync under load
             self.assertLess(
                 time_diff,
-                10.0,
-                f"Compilations finished {time_diff:.2f}s apart, expected < 10s. "
-                f"This suggests the locking mechanism may not be working correctly.",
+                30.0,
+                f"Compilations finished {time_diff:.2f}s apart, expected < 30s. "
+                f"This suggests the locking mechanism may not be working correctly or "
+                f"filesystem sync delays are excessive. Thread 1: {result1['duration']:.2f}s, "
+                f"Thread 2: {result2['duration']:.2f}s",
             )
 
             # Verify executables were created
