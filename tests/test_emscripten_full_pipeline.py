@@ -34,6 +34,7 @@ def is_emscripten_available() -> bool:
         return False
 
 
+@pytest.mark.serial
 @pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten binaries not available for this platform")
 class TestEmscriptenCompilationPipeline:
     """Comprehensive Emscripten compilation pipeline tests."""

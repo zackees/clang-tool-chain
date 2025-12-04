@@ -86,10 +86,12 @@ clang-tool-chain-empp -O3 hello.cpp -o hello.html
 ## What's Included
 
 - Emscripten Python scripts (emcc, em++, emconfigure, emmake)
-- LLVM/Clang binaries with WebAssembly backend
+- **LLVM 22 binaries with WebAssembly backend** (bundled with Emscripten, not shared with clang-tool-chain)
 - Binaryen tools (wasm-opt, wasm-as, etc.)
 - System libraries (libc, libc++, libcxxabi)
 - **Node.js runtime** (bundled automatically, ~23-24 MB)
+
+**Note on LLVM Version:** Emscripten uses its own bundled LLVM binaries (LLVM 22 for Emscripten 4.0.19) rather than sharing clang-tool-chain's LLVM 21.1.5. This ensures version compatibility between Emscripten's Python scripts and the LLVM toolchain. The two LLVM installations coexist independently.
 
 ## Requirements
 
@@ -153,6 +155,33 @@ Emscripten integration follows the same three-layer architecture as LLVM/Clang:
    - Verifies SHA256 checksums
    - Extracts to `~/.clang-tool-chain/emscripten/{platform}/{arch}/`
    - File locking prevents concurrent downloads
+
+### LLVM Separation
+
+clang-tool-chain provides two separate LLVM installations:
+
+1. **Main LLVM Toolchain (LLVM 21.1.5)** - Located at `~/.clang-tool-chain/{platform}/{arch}/`
+   - Used for: `clang`, `clang++`, `clang-format`, `clang-tidy`, etc.
+   - Purpose: Native compilation for the target platform
+
+2. **Emscripten LLVM (LLVM 22)** - Located at `~/.clang-tool-chain/emscripten/{platform}/{arch}/`
+   - Used for: WebAssembly compilation via Emscripten
+   - Purpose: WebAssembly compilation (bundled with Emscripten distribution)
+   - Installed: Extracted from Emscripten archive (not linked from main LLVM)
+
+This separation ensures that each tool uses the LLVM version it was designed for, avoiding version mismatch errors.
+
+### Why Not Share LLVM?
+
+Previously, clang-tool-chain attempted to share LLVM binaries between the main toolchain and Emscripten to save space (~200-400 MB). However, this caused version mismatches:
+
+- Emscripten 4.0.19 expects LLVM 22
+- Main toolchain provides LLVM 21.1.5
+- Result: "LLVM version mismatch" errors
+
+**Design Decision:** Correctness > Space Savings
+
+Emscripten distributions are designed to be self-contained. By using Emscripten's bundled LLVM, we ensure version compatibility and follow upstream's intended architecture.
 
 ## Key Differences from LLVM Integration
 

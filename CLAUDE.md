@@ -24,6 +24,8 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 *Version information as of November 11, 2025*
 
+**Note:** The LLVM versions listed above are for the main clang-tool-chain toolchain. Emscripten uses its own bundled LLVM (LLVM 22 for Emscripten 4.0.19), which is installed separately and does not share binaries with the main toolchain.
+
 ### Emscripten WebAssembly Support
 
 | Platform | Architecture | Emscripten Version | Status |

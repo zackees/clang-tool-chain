@@ -224,6 +224,68 @@ Earlier versions downloaded MinGW separately to `~/.clang-tool-chain/mingw/`.
 │           └── done.txt                  # Installation marker
 ```
 
+## Emscripten Distribution Architecture
+
+### Overview
+
+Emscripten distributions are **self-contained** and include all necessary components:
+
+- LLVM/Clang binaries (version matched to Emscripten version)
+- Binaryen tools (WebAssembly optimization)
+- System libraries (libc, libc++, libcxxabi)
+- Python scripts (emcc, em++, emconfigure, emmake)
+
+### Directory Structure
+
+```
+~/.clang-tool-chain/emscripten/{platform}/{arch}/
+├── bin/                    # LLVM 22 binaries (from Emscripten archive)
+│   ├── clang               # Emscripten's LLVM 22
+│   ├── clang++
+│   ├── wasm-ld             # WebAssembly linker
+│   ├── wasm-opt            # Binaryen optimizer
+│   └── ... (other tools)
+├── lib/
+│   └── clang/
+│       └── 22/             # LLVM 22 headers (matches binaries)
+│           └── include/
+├── emscripten/             # Python scripts
+│   ├── emcc.py
+│   ├── em++.py
+│   └── ...
+└── .emscripten             # Config file (points to bin/)
+```
+
+### LLVM Version Management
+
+**Design Principle:** Each tool uses its own LLVM version for compatibility.
+
+| Tool | LLVM Version | Installation Path | Purpose |
+|------|-------------|-------------------|---------|
+| Main Toolchain | 21.1.5 | `~/.clang-tool-chain/{platform}/{arch}/` | Native compilation |
+| Emscripten | 22 | `~/.clang-tool-chain/emscripten/{platform}/{arch}/` | WebAssembly compilation |
+
+**Why Separate?**
+- Emscripten versions are tightly coupled to specific LLVM versions
+- Version mismatches cause compilation errors and runtime issues
+- Emscripten distributions are designed to be self-contained
+- Space savings from sharing (~200 MB) are negligible vs. correctness
+
+**Historical Note:**
+Previously, clang-tool-chain attempted to share LLVM binaries between the main toolchain and Emscripten using `link_clang_binaries_to_emscripten()`. This was deprecated because it caused LLVM version mismatches (LLVM 21.1.5 vs. LLVM 22).
+
+### Configuration
+
+The `.emscripten` config file points to Emscripten's bin directory:
+
+```python
+LLVM_ROOT = '~/.clang-tool-chain/emscripten/win/x86_64/bin'  # Contains LLVM 22
+BINARYEN_ROOT = '~/.clang-tool-chain/emscripten/win/x86_64'  # Contains wasm-opt
+NODE_JS = 'node.exe'  # Bundled Node.js
+```
+
+This ensures Emscripten uses its bundled LLVM 22, not the main toolchain's LLVM 21.1.5.
+
 ## Environment Variables
 
 - **`CLANG_TOOL_CHAIN_DOWNLOAD_PATH`**: Override default download location (`~/.clang-tool-chain`)

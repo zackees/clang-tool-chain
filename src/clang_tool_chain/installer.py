@@ -497,8 +497,10 @@ def create_emscripten_config(install_dir: Path, platform: str, arch: str) -> Non
     The config file contains paths to LLVM, Binaryen, and Node.js tools
     that Emscripten needs to compile WebAssembly code.
 
-    IMPORTANT: This function expects that link_clang_binaries_to_emscripten()
-    has already been called. It will not call it itself to avoid circular dependencies.
+    IMPORTANT: Emscripten distributions include their own LLVM binaries
+    (e.g., LLVM 22 for Emscripten 4.0.19). This function configures paths
+    to use Emscripten's bundled LLVM, NOT clang-tool-chain's LLVM.
+    This ensures version compatibility between Emscripten and LLVM.
 
     Args:
         install_dir: Emscripten installation directory
@@ -507,10 +509,10 @@ def create_emscripten_config(install_dir: Path, platform: str, arch: str) -> Non
     """
     config_path = install_dir / ".emscripten"
 
-    # Verify the Emscripten bin directory exists
-    # NOTE: We don't create it or link binaries here to avoid circular dependency
-    # with link_clang_binaries_to_emscripten(). The caller is responsible for
-    # ensuring binaries are linked before calling this function.
+    # Verify the Emscripten bin directory exists and contains bundled LLVM binaries
+    # NOTE: Emscripten distributions include LLVM binaries. We do NOT link or override
+    # them with clang-tool-chain's LLVM to avoid version mismatches.
+    # The binaries should be present after archive extraction.
     emscripten_bin = install_dir / "bin"
     exe_ext = ".exe" if platform == "win" else ""
     clang_binary = emscripten_bin / f"clang{exe_ext}"
@@ -531,22 +533,25 @@ def create_emscripten_config(install_dir: Path, platform: str, arch: str) -> Non
             time.sleep(0.01)
 
     if not clang_binary.exists():
-        # This indicates a programming error - the caller should have linked binaries first
+        # This indicates archive extraction failed or produced incomplete installation
         logger.error(
             f"Cannot create .emscripten config: clang binary not found at {clang_binary}\n"
-            f"This is a programming error. link_clang_binaries_to_emscripten() must be called "
-            f"BEFORE create_emscripten_config().\n"
+            f"Emscripten archive extraction may have failed or produced incomplete installation.\n"
+            f"Expected Emscripten's bundled LLVM binary: {clang_binary}\n"
             f"Emscripten bin directory: {emscripten_bin}"
         )
         raise RuntimeError(
             f"Cannot create .emscripten config: clang binary not found at {clang_binary}\n"
-            f"The LLVM toolchain must be installed and linked before creating the config file.\n"
-            f"This indicates a programming error in the installation sequence.\n"
-            f"Please report this at https://github.com/zackees/clang-tool-chain/issues"
+            f"Emscripten archive extraction may have failed.\n"
+            f"Expected Emscripten's bundled LLVM binary at: {clang_binary}\n"
+            f"Try removing {install_dir} and reinstalling.\n"
+            f"Please report persistent issues at https://github.com/zackees/clang-tool-chain/issues"
         )
 
     # Set up paths relative to install_dir
-    # Emscripten expects Unix-style paths even on Windows
+    # IMPORTANT: Use forward slashes in the config file even on Windows!
+    # The config is a Python file and backslashes would be interpreted as escape sequences.
+    # Python and Emscripten handle forward slashes correctly on all platforms.
     llvm_root = str(install_dir / "bin").replace("\\", "/")
     # BINARYEN_ROOT should point to parent of bin/ directory
     # Emscripten will append "/bin" to find tools like wasm-opt
@@ -585,8 +590,16 @@ NODE_JS = '{node_js}'
         try:
             existing_content = config_path.read_text(encoding="utf-8")
             if existing_content == config_content:
-                logger.debug(".emscripten config file already exists with correct content")
-                return
+                # Verify that the LLVM_ROOT path in the config actually contains clang
+                # This catches cases where the config was created but installation is incomplete
+                if clang_binary.exists():
+                    logger.debug(".emscripten config file already exists with correct content")
+                    return
+                else:
+                    logger.warning(
+                        f"Config file exists but clang binary not found at {clang_binary}. "
+                        f"Recreating config file..."
+                    )
             else:
                 logger.info("Updating .emscripten config file with new paths")
         except Exception as e:
@@ -632,13 +645,24 @@ NODE_JS = '{node_js}'
         ) from e
 
 
+# DEPRECATED: This function is no longer used (see docstring for details)
 def link_clang_binaries_to_emscripten(platform: str, arch: str) -> None:
     """
-    Link or copy clang binaries from main LLVM toolchain to Emscripten bin directory.
+    DEPRECATED: This function is no longer used.
 
-    Emscripten expects clang/clang++ to be available in the LLVM_ROOT/bin directory.
-    This function ensures those binaries are available by creating symlinks (Unix) or
-    copies (Windows) from the main LLVM toolchain installation.
+    Previously linked clang-tool-chain's LLVM 21.1.5 binaries to Emscripten's bin directory.
+    This caused version mismatches because Emscripten 4.0.19 expects LLVM 22.
+
+    REASON FOR DEPRECATION:
+    Emscripten distributions already include their own LLVM binaries that match
+    their expected version. Overriding these binaries breaks version compatibility.
+
+    ARCHITECTURAL DECISION:
+    Emscripten should use its bundled LLVM, not clang-tool-chain's LLVM.
+    Each tool maintains its own LLVM version to ensure compatibility.
+
+    This function is kept for code history but should not be called.
+    It may be removed in a future version.
 
     Args:
         platform: Platform name (e.g., "win", "linux", "darwin")
@@ -897,12 +921,47 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
                 logger.info("Fixing file permissions...")
                 fix_file_permissions(install_dir)
 
-            # Link clang binaries from main LLVM toolchain
-            logger.info("Linking clang binaries from main LLVM toolchain...")
-            link_clang_binaries_to_emscripten(platform, arch)
+            # On Windows, create clang++.exe from clang.exe if it doesn't exist
+            # Some Emscripten distributions may not include clang++.exe
+            if platform == "win":
+                clang_exe = bin_dir / f"clang{exe_ext}"
+                clang_pp_exe = bin_dir / f"clang++{exe_ext}"
+                if clang_exe.exists() and not clang_pp_exe.exists():
+                    logger.info(f"Creating clang++{exe_ext} from clang{exe_ext}...")
+                    try:
+                        shutil.copy2(clang_exe, clang_pp_exe)
+                        logger.info(f"Successfully created {clang_pp_exe}")
+                        # Verify the copied file is accessible
+                        if not _verify_file_readable(clang_pp_exe, f"clang++{exe_ext}", timeout_seconds=1.0):
+                            logger.warning(f"clang++{exe_ext} created but not immediately readable")
+                    except Exception as e:
+                        logger.error(f"Failed to create clang++{exe_ext}: {e}")
+                        raise RuntimeError(
+                            f"Failed to create clang++{exe_ext} from clang{exe_ext}: {e}\n"
+                            f"This is required for C++ compilation with Emscripten."
+                        ) from e
+
+            # REMOVED: Binary linking no longer needed - Emscripten bundles its own LLVM 22
+            # Previously, we linked clang-tool-chain's LLVM 21.1.5 to Emscripten, causing version mismatch
+            # Emscripten distributions are self-contained with matching LLVM versions
+            # link_clang_binaries_to_emscripten(platform, arch)  # DEPRECATED
 
             # Create .emscripten config file if it doesn't exist
             create_emscripten_config(install_dir, platform, arch)
+
+            # CRITICAL: Remove entire cache directory to force proper header installation on first compile
+            # The extracted archive may contain an incomplete or corrupted cache from the build process.
+            # By removing it entirely, we ensure Emscripten's install_system_headers() runs on first use,
+            # properly generating all C/C++ headers from system/lib/libcxx/include to cache/sysroot/include.
+            # This fixes issues where iostream, bits/alltypes.h, and other headers are missing after installation.
+            cache_dir = install_dir / "emscripten" / "cache"
+            if cache_dir.exists():
+                logger.info("Removing Emscripten cache directory to ensure proper header installation on first compile")
+                try:
+                    shutil.rmtree(cache_dir)
+                    logger.info(f"Removed cache directory: {cache_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove cache directory (non-critical): {e}")
 
             # Write done marker
             done_file = install_dir / "done.txt"
@@ -950,17 +1009,22 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
     # This avoids lock contention for the common case where everything is ready
     # Check all critical files to ensure complete installation
     # CRITICAL: Also verify files are readable, not just exists() - fixes filesystem sync race
+    clang_pp_binary = bin_dir / f"clang++{exe_ext}"
     if (
         is_emscripten_installed(platform, arch)
         and config_path.exists()
         and clang_binary.exists()
+        and clang_pp_binary.exists()  # Also check clang++ exists
         and wasm_opt_binary.exists()
     ):
         # Files exist, but verify they're readable (Windows filesystem sync issue)
-        # Use a short timeout since this is the fast path
-        if _verify_file_readable(
-            config_path, "Emscripten config (quick check)", timeout_seconds=0.5
-        ) and _verify_file_readable(wasm_opt_binary, "wasm-opt binary (quick check)", timeout_seconds=0.5):
+        # Use a moderate timeout (2 seconds) to handle filesystem sync delays in parallel tests
+        # CRITICAL: Also verify clang binary is readable, not just config and wasm-opt
+        if (
+            _verify_file_readable(config_path, "Emscripten config (quick check)", timeout_seconds=2.0)
+            and _verify_file_readable(wasm_opt_binary, "wasm-opt binary (quick check)", timeout_seconds=2.0)
+            and _verify_file_readable(clang_binary, "clang binary (quick check)", timeout_seconds=2.0)
+        ):
             # Emscripten is already installed and configured
             logger.info(f"Emscripten already installed and configured for {platform}/{arch}")
             return
@@ -993,14 +1057,24 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
             # CRITICAL FIX for filesystem sync race condition:
             # done.txt and config file exist, but filesystem may not have synced yet
             # Similar to LLVM toolchain (lines 274-303), wait for critical files to be readable
-            # This prevents "config file not found" errors in parallel test execution
+            # This prevents "config file not found" and "clang not found" errors in parallel test execution
 
-            # Verify config file is readable (not just exists)
-            if not _verify_file_readable(config_path, "Emscripten config", timeout_seconds=2.0):
+            # Verify critical files are readable (not just exists)
+            # This is essential because Emscripten will try to execute these immediately
+            # Use a longer timeout (5 seconds) since another process just created these files
+            if not _verify_file_readable(config_path, "Emscripten config", timeout_seconds=5.0):
                 # Log warning but don't fail - another process completed the setup
                 logger.warning(
                     f"Emscripten config file exists but verification failed: {config_path}\n"
                     f"Another process may have just created it. Continuing..."
+                )
+
+            # Also verify clang binary is readable - critical for Emscripten execution
+            # Use same longer timeout to handle post-creation filesystem sync delays
+            if not _verify_file_readable(clang_binary, "clang binary", timeout_seconds=5.0):
+                logger.warning(
+                    f"Clang binary exists but verification failed: {clang_binary}\n"
+                    f"Filesystem sync delay detected. File should be accessible when needed."
                 )
 
             logger.info(f"Emscripten setup complete and verified for {platform}/{arch}")
@@ -1015,6 +1089,7 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
             critical_emscripten_files = [
                 (wasm_opt_binary, "wasm-opt (Binaryen tool)"),
                 (emscripten_dir / "emcc.py", "emcc.py (Emscripten compiler)"),
+                (clang_binary, "clang binary (Emscripten's bundled LLVM)"),
             ]
 
             missing_components = []
@@ -1040,10 +1115,28 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
         else:
             logger.info("Emscripten installed but needs configuration")
 
-        # Always ensure config and binaries are set up (idempotent operations)
-        # This handles cases where LLVM was installed after Emscripten
-        logger.info("Ensuring Emscripten configuration and binary links")
-        link_clang_binaries_to_emscripten(platform, arch)
+        # On Windows, ensure clang++.exe exists (create from clang.exe if missing)
+        # This handles cases where the installation predates this fix or the distribution
+        # doesn't include clang++.exe
+        if platform == "win":
+            clang_pp_binary = bin_dir / f"clang++{exe_ext}"
+            if not clang_pp_binary.exists() and clang_binary.exists():
+                logger.info(f"Creating missing clang++{exe_ext} from clang{exe_ext}...")
+                try:
+                    shutil.copy2(clang_binary, clang_pp_binary)
+                    logger.info(f"Successfully created {clang_pp_binary}")
+                    # Verify the copied file is accessible
+                    if not _verify_file_readable(clang_pp_binary, f"clang++{exe_ext}", timeout_seconds=1.0):
+                        logger.warning(f"clang++{exe_ext} created but not immediately readable")
+                except Exception as e:
+                    logger.error(f"Failed to create clang++{exe_ext}: {e}")
+                    # Don't fail here - the verification below will catch it
+
+        # Create Emscripten configuration file
+        # NOTE: Emscripten bundles its own LLVM binaries - we do NOT override them
+        # Previously, we linked clang-tool-chain's LLVM 21.1.5, causing version mismatch
+        logger.info("Creating Emscripten configuration file")
+        # link_clang_binaries_to_emscripten(platform, arch)  # DEPRECATED - removed to fix LLVM version mismatch
         create_emscripten_config(install_dir, platform, arch)
 
         # Final verification - ensure all critical components are present and readable
@@ -1073,8 +1166,8 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
                 f"  2. Re-run your command to trigger a fresh installation"
             )
 
-        # CRITICAL: Verify config file is readable (not just exists)
-        # This prevents "config file not found" errors in parallel test execution
+        # CRITICAL: Verify critical files are readable (not just exists)
+        # This prevents "config file not found" and "clang not found" errors in parallel test execution
         # where filesystem may not have synced yet
         if not _verify_file_readable(config_path, "Emscripten config", timeout_seconds=2.0):
             # Log warning but don't fail - the file was verified to exist above
@@ -1083,16 +1176,32 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
                 f"This may indicate a filesystem sync delay, continuing..."
             )
 
+        # Also verify clang binary is readable - critical for Emscripten execution
+        if not _verify_file_readable(clang_binary, "clang binary (final check)", timeout_seconds=2.0):
+            logger.warning(
+                f"Clang binary exists but verification failed: {clang_binary}\n"
+                f"Filesystem sync delay detected. File should be accessible when needed."
+            )
+
         logger.info(f"Emscripten setup complete and verified for {platform}/{arch}")
 
-    # CRITICAL: After releasing the lock, do a final verification that the config file
-    # is accessible to external processes (like child processes that will run emcc)
+    # CRITICAL: After releasing the lock, do a final verification that critical files are
+    # accessible to external processes (like child processes that will run emcc)
     # On Windows, filesystem metadata may not propagate immediately after lock release
-    if not _verify_file_readable(config_path, "Emscripten config (post-lock verification)", timeout_seconds=2.0):
+    # Use a longer timeout (5 seconds) in parallel test scenarios where filesystem sync is slower
+    if not _verify_file_readable(config_path, "Emscripten config (post-lock verification)", timeout_seconds=5.0):
         # Log warning but don't fail - the file should be accessible when emcc actually needs it
         logger.warning(
             f"Emscripten config file verification failed after lock release: {config_path}\n"
             f"This may indicate a filesystem sync delay, but file should be accessible when needed."
+        )
+
+    # Also verify clang binary is accessible after lock release
+    # Use same longer timeout to handle filesystem sync delays under parallel test load
+    if not _verify_file_readable(clang_binary, "clang binary (post-lock verification)", timeout_seconds=5.0):
+        logger.warning(
+            f"Clang binary verification failed after lock release: {clang_binary}\n"
+            f"Filesystem sync delay detected, but file should be accessible when needed."
         )
 
 

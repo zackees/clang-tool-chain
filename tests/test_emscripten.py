@@ -40,6 +40,7 @@ def is_emscripten_available() -> bool:
         return False
 
 
+@pytest.mark.serial
 @pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten binaries not available for this platform")
 class TestEmscripten:
     """Test Emscripten integration."""
@@ -223,6 +224,7 @@ class TestEmscriptenDownloader:
             pytest.skip(f"Manifest not available yet: {e}")
 
 
+@pytest.mark.serial
 @pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten binaries not available for this platform")
 class TestEmscriptenNodeJS:
     """Test Emscripten with bundled Node.js integration."""
@@ -298,6 +300,7 @@ def is_sccache_available() -> bool:
     return shutil.which("sccache") is not None
 
 
+@pytest.mark.serial
 @pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten binaries not available for this platform")
 @pytest.mark.skipif(not is_sccache_available(), reason="sccache not available in PATH")
 class TestEmscriptenSccache:
