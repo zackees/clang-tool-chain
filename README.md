@@ -8,13 +8,22 @@
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Linting](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml)
 
+**Clang**
+
 [![win-gnu](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win-gnu.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win-gnu.yml)
 [![win-msvc](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win-msvc.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-win-msvc.yml)
 [![linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-x86.yml)
 [![linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-linux-arm.yml)
 [![macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-x86.yml)
 [![macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-macos-arm.yml)
-[![emscripten-linux](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten.yml)
+
+**Emscripten**
+
+[![emscripten-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-x86.yml)
+[![emscripten-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-arm.yml)
+[![emscripten-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-x86.yml)
+[![emscripten-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-arm.yml)
+[![emscripten-windows-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-windows-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-windows-x86.yml)
 
 
 ---
