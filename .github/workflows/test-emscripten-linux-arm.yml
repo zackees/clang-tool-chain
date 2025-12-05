@@ -10,7 +10,7 @@ on:
 jobs:
   test-emscripten-linux-arm:
     name: Emscripten (Linux ARM64)
-    runs-on: ubuntu-latest-arm
+    runs-on: ubuntu-24.04-arm
 
     steps:
     - name: Checkout code
