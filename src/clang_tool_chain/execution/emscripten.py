@@ -597,24 +597,58 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
     env["EMSCRIPTEN_ROOT"] = str(install_dir / "emscripten")
     env["EM_CONFIG"] = str(config_path)
 
+    # Create a trampoline wrapper for clang++ to fix sccache compiler detection
+    # sccache runs "clang++ -E test.c" without the required -target flag, causing detection to fail
+    # on some platforms. The trampoline adds the target flag during detection.
+    import tempfile
+    import stat
+
+    trampoline_dir = None
+    if platform_name != "win":
+        # Create temporary directory for trampoline (Unix-like systems only)
+        trampoline_dir = Path(tempfile.mkdtemp(prefix="emscripten-sccache-"))
+
+        # Find the real clang++ that Emscripten uses
+        real_clangpp = install_dir / "bin" / "clang++"
+
+        # Create bash trampoline script
+        trampoline_script = trampoline_dir / "clang++"
+        trampoline_content = f'''#!/bin/bash
+# Trampoline for Emscripten clang++ to fix sccache compiler detection
+# When sccache runs "clang++ -E test.c" for detection, add the required target flag
+
+# Check if this is sccache's compiler detection (exactly: -E <tempfile>)
+# sccache runs: clang++ -E /tmp/sccache-temp-file.c (exactly 2 args)
+if [[ "$1" == "-E" ]] && [[ $# -eq 2 ]]; then
+    # Add required target for Emscripten compiler detection
+    exec "{real_clangpp}" -target wasm32-unknown-emscripten "$@"
+else
+    # Normal compilation - pass through unchanged
+    exec "{real_clangpp}" "$@"
+fi
+'''
+        trampoline_script.write_text(trampoline_content, encoding='utf-8')
+        trampoline_script.chmod(trampoline_script.stat().st_mode | stat.S_IEXEC)
+        logger.debug(f"Created clang++ trampoline at: {trampoline_script}")
+
     # Configure sccache integration via Emscripten's compiler wrapper mechanism
     env["EM_COMPILER_WRAPPER"] = str(sccache_path)
     env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
-    # SCCACHE_DIRECT=1 bypasses compiler detection which doesn't work with Emscripten's custom clang++
-    # This is necessary because sccache tries to detect the compiler by running it with specific flags,
-    # but Emscripten's clang++ wrapper requires the wasm32-unknown-emscripten target to be specified
-    env["SCCACHE_DIRECT"] = "1"
     logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
     logger.debug("EMCC_SKIP_SANITY_CHECK=1")
-    logger.debug("SCCACHE_DIRECT=1")
 
     # Add Node.js and Emscripten bin directories to PATH
-    # CRITICAL: Emscripten bin must be FIRST in PATH so sccache finds Emscripten's clang++,
-    # not the main toolchain clang++
+    # On Unix: Put trampoline FIRST so sccache finds it instead of real clang++
+    # On Windows: No trampoline needed (seems to work without it)
     node_bin_dir = node_path.parent
     emscripten_bin_dir = install_dir / "bin"
-    env["PATH"] = f"{emscripten_bin_dir}{os.pathsep}{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
-    logger.debug(f"Added to PATH (priority order): {emscripten_bin_dir}, {node_bin_dir}")
+
+    if trampoline_dir:
+        env["PATH"] = f"{trampoline_dir}{os.pathsep}{emscripten_bin_dir}{os.pathsep}{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
+        logger.debug(f"Added to PATH (priority order): {trampoline_dir}, {emscripten_bin_dir}, {node_bin_dir}")
+    else:
+        env["PATH"] = f"{emscripten_bin_dir}{os.pathsep}{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
+        logger.debug(f"Added to PATH (priority order): {emscripten_bin_dir}, {node_bin_dir}")
 
     # Build command: python tool_script.py args...
     python_exe = sys.executable
@@ -628,12 +662,23 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
     # Execute
     try:
         result = subprocess.run(cmd, env=env)
-        sys.exit(result.returncode)
+        return_code = result.returncode
     except FileNotFoundError:
         logger.error(f"Failed to execute Python: {python_exe}")
         print(f"\nError: Python interpreter not found: {python_exe}", file=sys.stderr)
-        sys.exit(1)
+        return_code = 1
     except Exception as e:
         logger.error(f"Failed to execute Emscripten tool: {e}")
         print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
-        sys.exit(1)
+        return_code = 1
+    finally:
+        # Clean up trampoline directory if it was created
+        if trampoline_dir and trampoline_dir.exists():
+            import shutil
+            try:
+                shutil.rmtree(trampoline_dir)
+                logger.debug(f"Cleaned up trampoline directory: {trampoline_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up trampoline directory: {e}")
+
+    sys.exit(return_code)
