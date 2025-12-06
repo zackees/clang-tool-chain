@@ -600,8 +600,8 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
     # Create a trampoline wrapper for clang++ to fix sccache compiler detection
     # sccache runs "clang++ -E test.c" without the required -target flag, causing detection to fail
     # on some platforms. The trampoline adds the target flag during detection.
-    import tempfile
     import stat
+    import tempfile
 
     trampoline_dir = None
     if platform_name != "win":
@@ -613,7 +613,7 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
 
         # Create bash trampoline script
         trampoline_script = trampoline_dir / "clang++"
-        trampoline_content = f'''#!/bin/bash
+        trampoline_content = f"""#!/bin/bash
 # Trampoline for Emscripten clang++ to fix sccache compiler detection
 # When sccache runs "clang++ -E test.c" for detection, add the required target flag
 
@@ -626,8 +626,8 @@ else
     # Normal compilation - pass through unchanged
     exec "{real_clangpp}" "$@"
 fi
-'''
-        trampoline_script.write_text(trampoline_content, encoding='utf-8')
+"""
+        trampoline_script.write_text(trampoline_content, encoding="utf-8")
         trampoline_script.chmod(trampoline_script.stat().st_mode | stat.S_IEXEC)
         logger.debug(f"Created clang++ trampoline at: {trampoline_script}")
 
@@ -644,7 +644,9 @@ fi
     emscripten_bin_dir = install_dir / "bin"
 
     if trampoline_dir:
-        env["PATH"] = f"{trampoline_dir}{os.pathsep}{emscripten_bin_dir}{os.pathsep}{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
+        env["PATH"] = (
+            f"{trampoline_dir}{os.pathsep}{emscripten_bin_dir}{os.pathsep}{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
+        )
         logger.debug(f"Added to PATH (priority order): {trampoline_dir}, {emscripten_bin_dir}, {node_bin_dir}")
     else:
         env["PATH"] = f"{emscripten_bin_dir}{os.pathsep}{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
@@ -675,6 +677,7 @@ fi
         # Clean up trampoline directory if it was created
         if trampoline_dir and trampoline_dir.exists():
             import shutil
+
             try:
                 shutil.rmtree(trampoline_dir)
                 logger.debug(f"Cleaned up trampoline directory: {trampoline_dir}")
