@@ -39,11 +39,18 @@ def _robust_rmtree(path: Path, max_retries: int = 3) -> None:  # pyright: ignore
 
     def handle_remove_readonly(func: Any, path_str: str, exc: Any) -> None:
         """Error handler to remove readonly flag and retry."""
+        import contextlib
         import stat
 
         # Make the file writable and try again
         os.chmod(path_str, stat.S_IWRITE)
-        func(path_str)
+        # Handle os.open which requires (path, flags) signature
+        if func is os.open:
+            # For directory removal, we typically don't hit os.open, but be defensive
+            with contextlib.suppress(Exception):
+                func(path_str, os.O_RDONLY)
+        else:
+            func(path_str)
 
     # Try removing with readonly handler
     try:
