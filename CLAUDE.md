@@ -33,8 +33,8 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 | macOS    | x86_64      | 4.0.19            | ✅ Available |
 | macOS    | arm64       | 4.0.19            | ✅ Available |
 | Windows  | x86_64      | 4.0.19            | ✅ Available |
-| Linux    | x86_64      | 4.0.15            | ✅ Available |
-| Linux    | arm64       | -                 | ⏳ Pending |
+| Linux    | x86_64      | 4.0.21            | ✅ Available |
+| Linux    | arm64       | 4.0.21            | ✅ Available |
 
 *Emscripten support added November 2025*
 
