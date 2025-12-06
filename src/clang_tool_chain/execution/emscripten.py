@@ -618,18 +618,42 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
 # Trampoline for Emscripten clang++ to fix sccache compiler detection
 # sccache runs various compiler detection commands that need the -target flag
 
-# List of flags that indicate compiler detection queries
+# Check if any argument is a compiler detection flag
 # These commands need -target wasm32-unknown-emscripten to work correctly
-case "$1" in
-    -E|-dumpmachine|-print-target-triple|-print-targets|--version|-v|-dumpversion)
-        # Compiler detection command - add target flag
-        exec "{real_clangpp}" -target wasm32-unknown-emscripten "$@"
-        ;;
-    *)
-        # Normal compilation - pass through unchanged
-        exec "{real_clangpp}" "$@"
-        ;;
-esac
+is_detection_cmd=false
+for arg in "$@"; do
+    case "$arg" in
+        -E|-dumpmachine|-print-target-triple|-print-targets|--version|-v|-dumpversion)
+            is_detection_cmd=true
+            break
+            ;;
+    esac
+done
+
+if [[ "$is_detection_cmd" == "true" ]]; then
+    # Compiler detection command found - replace any 'unknown' target with wasm32
+    # sccache may pass "-target unknown" which we need to override
+    new_args=()
+    skip_next=false
+    for current_arg in "$@"; do
+        if [[ "$skip_next" == "true" ]]; then
+            # Skip the 'unknown' after -target
+            skip_next=false
+            continue
+        fi
+        if [[ "$current_arg" == "-target" ]]; then
+            # Found -target flag, check if next arg is 'unknown'
+            skip_next=true
+            continue
+        fi
+        new_args+=("$current_arg")
+    done
+    # Execute with correct target for Emscripten
+    exec "{real_clangpp}" -target wasm32-unknown-emscripten "${{new_args[@]}}"
+fi
+
+# Normal compilation - pass through unchanged
+exec "{real_clangpp}" "$@"
 """
         trampoline_script.write_text(trampoline_content, encoding="utf-8")
         trampoline_script.chmod(trampoline_script.stat().st_mode | stat.S_IEXEC)
