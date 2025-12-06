@@ -598,8 +598,9 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
     env["EM_CONFIG"] = str(config_path)
 
     # Create a trampoline wrapper for clang++ to fix sccache compiler detection
-    # sccache runs "clang++ -E test.c" without the required -target flag, causing detection to fail
-    # on some platforms. The trampoline adds the target flag during detection.
+    # sccache runs various compiler detection commands (-E, -dumpmachine, etc.) without the
+    # required -target flag, causing detection to fail. The trampoline adds the target flag
+    # during detection while passing through normal compilation unchanged.
     import stat
     import tempfile
 
@@ -615,17 +616,20 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
         trampoline_script = trampoline_dir / "clang++"
         trampoline_content = f"""#!/bin/bash
 # Trampoline for Emscripten clang++ to fix sccache compiler detection
-# When sccache runs "clang++ -E test.c" for detection, add the required target flag
+# sccache runs various compiler detection commands that need the -target flag
 
-# Check if this is sccache's compiler detection (exactly: -E <tempfile>)
-# sccache runs: clang++ -E /tmp/sccache-temp-file.c (exactly 2 args)
-if [[ "$1" == "-E" ]] && [[ $# -eq 2 ]]; then
-    # Add required target for Emscripten compiler detection
-    exec "{real_clangpp}" -target wasm32-unknown-emscripten "$@"
-else
-    # Normal compilation - pass through unchanged
-    exec "{real_clangpp}" "$@"
-fi
+# List of flags that indicate compiler detection queries
+# These commands need -target wasm32-unknown-emscripten to work correctly
+case "$1" in
+    -E|-dumpmachine|-print-target-triple|-print-targets|--version|-v|-dumpversion)
+        # Compiler detection command - add target flag
+        exec "{real_clangpp}" -target wasm32-unknown-emscripten "$@"
+        ;;
+    *)
+        # Normal compilation - pass through unchanged
+        exec "{real_clangpp}" "$@"
+        ;;
+esac
 """
         trampoline_script.write_text(trampoline_content, encoding="utf-8")
         trampoline_script.chmod(trampoline_script.stat().st_mode | stat.S_IEXEC)
