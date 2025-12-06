@@ -600,8 +600,13 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
     # Configure sccache integration via Emscripten's compiler wrapper mechanism
     env["EM_COMPILER_WRAPPER"] = str(sccache_path)
     env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
+    # SCCACHE_DIRECT=1 bypasses compiler detection which doesn't work with Emscripten's custom clang++
+    # This is necessary because sccache tries to detect the compiler by running it with specific flags,
+    # but Emscripten's clang++ wrapper requires the wasm32-unknown-emscripten target to be specified
+    env["SCCACHE_DIRECT"] = "1"
     logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
     logger.debug("EMCC_SKIP_SANITY_CHECK=1")
+    logger.debug("SCCACHE_DIRECT=1")
 
     # Add Node.js and Emscripten bin directories to PATH
     # CRITICAL: Emscripten bin must be FIRST in PATH so sccache finds Emscripten's clang++,
