@@ -603,7 +603,6 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
     # sccache runs various compiler detection commands (-E, -dumpmachine, etc.) without the
     # required -target flag, causing detection to fail. The trampoline adds the target flag
     # during detection while passing through normal compilation unchanged.
-    import stat
     import tempfile
 
     trampoline_dir = None
