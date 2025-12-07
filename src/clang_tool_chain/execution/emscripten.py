@@ -684,17 +684,19 @@ exec "{real_clangpp}" "$@"
     arch = platform.machine().lower()
     is_arm64 = "arm" in arch or "aarch64" in arch
 
+    # Always use SCCACHE_DIRECT to skip compiler detection phase
+    # Detection fails with Emscripten because clang++ needs -target flag
+    env["SCCACHE_DIRECT"] = "1"
+    logger.debug("SCCACHE_DIRECT=1 (skip compiler detection)")
+
     if "x86_64" in arch or "amd64" in arch:
-        # x86_64: Use SCCACHE_DIRECT for optimal performance (skip detection)
-        # Use standalone mode (no daemon) - works reliably on x86_64
-        env["SCCACHE_DIRECT"] = "1"
+        # x86_64: Use standalone mode (no daemon) - works reliably
         env["SCCACHE_NO_DAEMON"] = "1"
-        logger.debug("SCCACHE_DIRECT=1, SCCACHE_NO_DAEMON=1 (x86_64)")
+        logger.debug("SCCACHE_NO_DAEMON=1 (x86_64 standalone mode)")
     else:
-        # ARM64: Use daemon mode with full compiler detection via trampoline
-        # Daemon mode handles Emscripten compiler warnings more gracefully
+        # ARM64: Use daemon mode for better stability
         # Don't set SCCACHE_NO_DAEMON - let sccache use default daemon mode
-        logger.debug(f"Using sccache daemon mode for {arch} (trampoline-based detection)")
+        logger.debug(f"Using sccache daemon mode for {arch}")
 
     logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
     logger.debug("EMCC_SKIP_SANITY_CHECK=1")
