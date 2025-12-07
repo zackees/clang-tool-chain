@@ -681,22 +681,23 @@ exec "{real_clangpp}" "$@"
     env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
 
     # Platform-specific sccache configuration
-    # ARM64: Use full compiler detection with trampoline (more reliable)
-    # x86_64: Use SCCACHE_DIRECT for faster operation (skip detection)
     arch = platform.machine().lower()
-    if "x86_64" in arch or "amd64" in arch:
-        env["SCCACHE_DIRECT"] = "1"
-        logger.debug("SCCACHE_DIRECT=1 (x86_64 only)")
-    else:
-        logger.debug(f"SCCACHE_DIRECT disabled for {arch} (using full compiler detection)")
+    is_arm64 = "arm" in arch or "aarch64" in arch
 
-    # Force standalone mode (no daemon) for reliability across all platforms
-    # This avoids daemon-related issues with environment propagation
-    env["SCCACHE_NO_DAEMON"] = "1"
+    if "x86_64" in arch or "amd64" in arch:
+        # x86_64: Use SCCACHE_DIRECT for optimal performance (skip detection)
+        # Use standalone mode (no daemon) - works reliably on x86_64
+        env["SCCACHE_DIRECT"] = "1"
+        env["SCCACHE_NO_DAEMON"] = "1"
+        logger.debug("SCCACHE_DIRECT=1, SCCACHE_NO_DAEMON=1 (x86_64)")
+    else:
+        # ARM64: Use daemon mode with full compiler detection via trampoline
+        # Daemon mode handles Emscripten compiler warnings more gracefully
+        # Don't set SCCACHE_NO_DAEMON - let sccache use default daemon mode
+        logger.debug(f"Using sccache daemon mode for {arch} (trampoline-based detection)")
 
     logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
     logger.debug("EMCC_SKIP_SANITY_CHECK=1")
-    logger.debug("SCCACHE_NO_DAEMON=1")
 
     # Add Node.js and Emscripten bin directories to PATH
     # On Unix: Put trampoline FIRST so sccache finds it instead of real clang++
