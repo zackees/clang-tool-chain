@@ -684,9 +684,14 @@ exec "{real_clangpp}" "$@"
     # tries to detect compiler capabilities without the required -target flag
     env["SCCACHE_DIRECT"] = "1"
 
+    # Force standalone mode (no daemon) for better ARM64 compatibility
+    # Some ARM64 platforms have issues with sccache daemon mode
+    env["SCCACHE_NO_DAEMON"] = "1"
+
     logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
     logger.debug("EMCC_SKIP_SANITY_CHECK=1")
     logger.debug("SCCACHE_DIRECT=1")
+    logger.debug("SCCACHE_NO_DAEMON=1")
 
     # Add Node.js and Emscripten bin directories to PATH
     # On Unix: Put trampoline FIRST so sccache finds it instead of real clang++
