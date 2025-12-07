@@ -13,7 +13,9 @@ Key Features:
 
 import logging
 import os
+import platform
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -679,18 +681,22 @@ exec "{real_clangpp}" "$@"
     env["EM_COMPILER_WRAPPER"] = str(sccache_path)
     env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
 
-    # Enable SCCACHE_DIRECT mode to skip compiler detection
-    # This avoids the "unknown target triple" error on Linux where sccache
-    # tries to detect compiler capabilities without the required -target flag
-    env["SCCACHE_DIRECT"] = "1"
+    # Platform-specific sccache configuration
+    # ARM64: Use full compiler detection with trampoline (more reliable)
+    # x86_64: Use SCCACHE_DIRECT for faster operation (skip detection)
+    arch = platform.machine().lower()
+    if "x86_64" in arch or "amd64" in arch:
+        env["SCCACHE_DIRECT"] = "1"
+        logger.debug("SCCACHE_DIRECT=1 (x86_64 only)")
+    else:
+        logger.debug(f"SCCACHE_DIRECT disabled for {arch} (using full compiler detection)")
 
-    # Force standalone mode (no daemon) for better ARM64 compatibility
-    # Some ARM64 platforms have issues with sccache daemon mode
+    # Force standalone mode (no daemon) for reliability across all platforms
+    # This avoids daemon-related issues with environment propagation
     env["SCCACHE_NO_DAEMON"] = "1"
 
     logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
     logger.debug("EMCC_SKIP_SANITY_CHECK=1")
-    logger.debug("SCCACHE_DIRECT=1")
     logger.debug("SCCACHE_NO_DAEMON=1")
 
     # Add Node.js and Emscripten bin directories to PATH
