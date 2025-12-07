@@ -614,10 +614,26 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
 
         # Create bash trampoline script
         trampoline_script = trampoline_dir / "clang++"
+        # Check if verbose logging is enabled via environment variable
+        enable_verbose_logging = "CLANG_TOOL_CHAIN_DEBUG" in os.environ
+
+        verbose_prefix = ""
+        verbose_detection = ""
+        verbose_normal = ""
+        if enable_verbose_logging:
+            verbose_prefix = """
+# Verbose logging enabled via CLANG_TOOL_CHAIN_DEBUG
+echo "[TRAMPOLINE] clang++ called with args: $*" >&2
+"""
+            verbose_detection = (
+                '\n    echo "[TRAMPOLINE] Detection command - adding -target wasm32-unknown-emscripten" >&2'
+            )
+            verbose_normal = '\necho "[TRAMPOLINE] Normal compilation - passing through" >&2'
+
         trampoline_content = f"""#!/bin/bash
 # Trampoline for Emscripten clang++ to fix sccache compiler detection
 # sccache runs various compiler detection commands that need the -target flag
-
+{verbose_prefix}
 # Check if any argument is a compiler detection flag
 # These commands need -target wasm32-unknown-emscripten to work correctly
 is_detection_cmd=false
@@ -648,11 +664,11 @@ if [[ "$is_detection_cmd" == "true" ]]; then
         fi
         new_args+=("$current_arg")
     done
-    # Execute with correct target for Emscripten
+    # Execute with correct target for Emscripten{verbose_detection}
     exec "{real_clangpp}" -target wasm32-unknown-emscripten "${{new_args[@]}}"
 fi
 
-# Normal compilation - pass through unchanged
+# Normal compilation - pass through unchanged{verbose_normal}
 exec "{real_clangpp}" "$@"
 """
         trampoline_script.write_text(trampoline_content, encoding="utf-8")
@@ -662,8 +678,15 @@ exec "{real_clangpp}" "$@"
     # Configure sccache integration via Emscripten's compiler wrapper mechanism
     env["EM_COMPILER_WRAPPER"] = str(sccache_path)
     env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
+
+    # Enable SCCACHE_DIRECT mode to skip compiler detection
+    # This avoids the "unknown target triple" error on Linux where sccache
+    # tries to detect compiler capabilities without the required -target flag
+    env["SCCACHE_DIRECT"] = "1"
+
     logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
     logger.debug("EMCC_SKIP_SANITY_CHECK=1")
+    logger.debug("SCCACHE_DIRECT=1")
 
     # Add Node.js and Emscripten bin directories to PATH
     # On Unix: Put trampoline FIRST so sccache finds it instead of real clang++
