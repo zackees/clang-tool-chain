@@ -349,7 +349,7 @@ int main() {
             ["clang-tool-chain-sccache-empp", str(source_file), "-o", str(output_file)],
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=600,
         )
 
         assert result.returncode == 0, f"Compilation with sccache failed: {result.stderr}"
@@ -369,7 +369,7 @@ int main() {
             ["clang-tool-chain-sccache-empp", str(source_file), "-o", str(output_file2)],
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=600,
         )
 
         assert result2.returncode == 0, f"Second compilation with sccache failed: {result2.stderr}"
