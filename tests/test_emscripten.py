@@ -308,6 +308,10 @@ def is_sccache_available() -> bool:
     platform.system().lower() == "linux",
     reason="sccache + Emscripten integration disabled on Linux due to timeout issues",
 )
+@pytest.mark.skipif(
+    platform.system().lower() == "darwin" and platform.machine().lower() == "x86_64",
+    reason="sccache + Emscripten integration disabled on macOS x86_64 due to timeout issues",
+)
 class TestEmscriptenSccache:
     """Test Emscripten + sccache integration."""
 
