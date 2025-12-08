@@ -6,7 +6,6 @@ system Node.js installation - the wrapper will download a minimal
 Node.js runtime (~10-15 MB) on first use.
 """
 
-import platform
 import shutil
 import subprocess
 from pathlib import Path

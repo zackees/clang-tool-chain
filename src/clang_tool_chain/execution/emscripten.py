@@ -498,7 +498,7 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
                     print(f"sccache server start returned: {start_result.returncode}", file=sys.stderr)
                     if start_result.stderr:
                         print(f"stderr: {start_result.stderr.strip()}", file=sys.stderr)
-                
+
                 # Check server status
                 stats_result = subprocess.run(
                     [str(sccache_path), "--show-stats"],
@@ -670,7 +670,7 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
         # Find the real clang++ that Emscripten uses
         real_clangpp_original = install_dir / "bin" / "clang++"
         real_clangpp_backup = install_dir / "bin" / "clang++.real"
-        
+
         # On ARM: Replace the real clang++ with trampoline to fix sccache detection
         # sccache calls clang++ directly by full path, bypassing PATH-based trampoline
         # So we rename real clang++ to clang++.real and create trampoline as clang++
@@ -681,7 +681,7 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
                 shutil.move(str(real_clangpp_original), str(real_clangpp_backup))
                 logger.debug(f"Renamed original clang++ to: {real_clangpp_backup}")
                 print(f"Renamed original clang++ to: {real_clangpp_backup}", file=sys.stderr)
-            
+
             # Trampoline will be created as the new clang++
             trampoline_script = real_clangpp_original
             real_clangpp = real_clangpp_backup
