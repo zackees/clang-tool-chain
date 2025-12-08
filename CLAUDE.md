@@ -123,6 +123,27 @@ uv run pytest tests/test_msvc_compile.py -v     # Windows MSVC comprehensive tes
 
 See [Testing Guide](docs/TESTING.md) for comprehensive testing documentation.
 
+## Test Matrix
+
+The project uses a comprehensive test matrix with 35 GitHub Actions workflows covering all platform+tool combinations:
+
+- **5 platforms:** Windows x64, Linux x86_64, Linux ARM64, macOS x86_64, macOS ARM64
+- **7 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, format-lint, binary-utils
+
+Each workflow runs platform-specific tests to ensure all tools work correctly on all platforms.
+
+See the "Test Matrix" section in README.md for live status badges.
+
+### Test Organization by Tool Category
+
+- **tests/test_integration.py** - Basic clang compilation tests
+- **tests/test_emscripten.py** - Emscripten WebAssembly compilation
+- **tests/test_emscripten_full_pipeline.py** - Full Emscripten pipeline tests
+- **tests/test_iwyu.py** - Include What You Use analyzer tests
+- **tests/test_format_lint.py** - clang-format and clang-tidy tests
+- **tests/test_binary_utils.py** - LLVM binary utilities tests (ar, nm, objdump, strip, etc.)
+- **tests/test_build_run_cached_integration.py** - sccache integration tests
+
 ### Code Quality
 
 ```bash

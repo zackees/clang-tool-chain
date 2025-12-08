@@ -56,6 +56,13 @@ uv run pytest tests/test_cli.py::MainTester::test_imports -v
 - `test_emscripten.py` - Emscripten/WebAssembly tests
 - `test_nodejs_downloader.py` - Node.js bundling infrastructure tests
 
+### Tool-Specific Tests
+
+- `test_format_lint.py` - clang-format and clang-tidy tools (6 tests)
+- `test_binary_utils.py` - LLVM binary utilities (14 tests: ar, nm, objdump, strip, readelf, objcopy, ranlib)
+- `test_iwyu.py` - Include What You Use analyzer tests
+- `test_build_run_cached_integration.py` - sccache integration tests
+
 ## Windows-Specific Testing
 
 ### Windows GNU ABI Tests
@@ -185,14 +192,32 @@ Tests are designed to be independent and can run in any order:
 
 ### GitHub Actions Workflows
 
+The project uses a comprehensive test matrix with **35 GitHub Actions workflows** covering all platform+tool combinations:
+
+**Test Matrix Structure:**
+- **5 platforms:** Windows x64, Linux x86_64, Linux ARM64, macOS x86_64, macOS ARM64
+- **7 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, format-lint, binary-utils
+
+**Core Workflows:**
 - `.github/workflows/test.yml` - Cross-platform test suite (Linux, macOS, Windows)
 - `.github/workflows/test-win-msvc.yml` - Windows MSVC-specific tests
 - `.github/workflows/lint.yml` - Code quality checks
+
+**Tool-Specific Workflows (per platform):**
+- `test-clang-{platform}.yml` - Basic clang compilation tests
+- `test-clang-sccache-{platform}.yml` - Clang with sccache caching
+- `test-emscripten-{platform}.yml` - Emscripten WebAssembly compilation
+- `test-emscripten-sccache-{platform}.yml` - Emscripten with sccache
+- `test-iwyu-{platform}.yml` - Include What You Use analyzer
+- `test-format-lint-{platform}.yml` - clang-format and clang-tidy
+- `test-binary-utils-{platform}.yml` - LLVM binary utilities
 
 All workflows run on:
 - Every push to main branch
 - Every pull request
 - Manual workflow dispatch
+
+See the README.md "Test Matrix" section for live status badges showing all 35 workflows.
 
 ## Writing New Tests
 
