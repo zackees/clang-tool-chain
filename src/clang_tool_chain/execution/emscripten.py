@@ -746,13 +746,12 @@ exec "{real_clangpp}" "$@"
     env["EM_COMPILER_WRAPPER"] = str(sccache_path)
     env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
     env["SCCACHE_DIRECT"] = "1"  # Skip expensive compiler detection
-    env["SCCACHE_NO_DAEMON"] = "1"  # Use standalone mode
     env["SCCACHE_LOG"] = "debug"  # Enable debug logging
     env["RUST_LOG"] = "sccache=debug"  # Rust logging for sccache
 
     logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
     logger.debug("EMCC_SKIP_SANITY_CHECK=1")
-    logger.debug(f"SCCACHE_DIRECT=1, SCCACHE_NO_DAEMON=1 ({platform_name}/{arch} standalone mode)")
+    logger.debug(f"SCCACHE_DIRECT=1 ({platform_name}/{arch} daemon mode)")
     logger.debug("SCCACHE_LOG=debug, RUST_LOG=sccache=debug")
 
     # Add Node.js and Emscripten bin directories to PATH
@@ -794,7 +793,6 @@ exec "{real_clangpp}" "$@"
     print(f"EM_COMPILER_WRAPPER: {env.get('EM_COMPILER_WRAPPER', 'NOT SET')}", file=sys.stderr)
     print(f"EMCC_SKIP_SANITY_CHECK: {env.get('EMCC_SKIP_SANITY_CHECK', 'NOT SET')}", file=sys.stderr)
     print(f"SCCACHE_DIRECT: {env.get('SCCACHE_DIRECT', 'NOT SET')}", file=sys.stderr)
-    print(f"SCCACHE_NO_DAEMON: {env.get('SCCACHE_NO_DAEMON', 'NOT SET')}", file=sys.stderr)
     print(f"SCCACHE_LOG: {env.get('SCCACHE_LOG', 'NOT SET')}", file=sys.stderr)
     print(f"{'='*60}\n", file=sys.stderr)
 
