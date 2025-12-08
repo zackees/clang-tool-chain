@@ -1,0 +1,30 @@
+# Dockerfile for testing clang-tool-chain on Linux ARM64
+# This uses Ubuntu 24.04 LTS for consistency with GitHub Actions runner
+
+FROM ubuntu:24.04
+
+# Set non-interactive to avoid prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install required system packages
+# Ubuntu 24.04 comes with Python 3.12 by default
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    curl \
+    git \
+    build-essential \
+    software-properties-common \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv (Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Set up PATH for uv
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Set working directory
+WORKDIR /workspace
+
+# Default command: run bash
+CMD ["/bin/bash"]
