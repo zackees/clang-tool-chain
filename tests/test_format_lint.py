@@ -58,9 +58,7 @@ class TestClangFormat(unittest.TestCase):
         try:
             # Create unformatted C++ file
             test_cpp = temp_path / "test_format.cpp"
-            test_cpp.write_text(
-                "int main(){int x=1;int y=2;return x+y;}\n"
-            )
+            test_cpp.write_text("int main(){int x=1;int y=2;return x+y;}\n")
 
             # Run clang-format
             result = subprocess.run(
@@ -87,6 +85,7 @@ class TestClangFormat(unittest.TestCase):
             raise
         finally:
             import shutil
+
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     def test_clang_format_inplace(self) -> None:
@@ -130,6 +129,7 @@ class TestClangFormat(unittest.TestCase):
             raise
         finally:
             import shutil
+
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 
@@ -211,6 +211,7 @@ int main() {
             self.skipTest("clang-tidy analysis timed out - this may be a platform-specific issue")
         finally:
             import shutil
+
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     def test_clang_tidy_with_checks(self) -> None:
@@ -260,6 +261,7 @@ int main() {
             self.skipTest("clang-tidy analysis timed out - this may be a platform-specific issue")
         finally:
             import shutil
+
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 

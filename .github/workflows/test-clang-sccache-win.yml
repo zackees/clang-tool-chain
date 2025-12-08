@@ -36,7 +36,6 @@ jobs:
       run: |
         echo "Platform: Windows x64 with sccache"
         python --version
-        sccache --version || echo "sccache will be available after installation"
       shell: bash
 
     - name: Download and install toolchain
@@ -47,8 +46,8 @@ jobs:
 
     - name: Verify sccache installation
       run: |
-        sccache --version
-        sccache --show-stats
+        uv run clang-tool-chain-sccache --version
+        uv run clang-tool-chain-sccache --show-stats
       shell: bash
 
     - name: Test C compilation with sccache
@@ -79,7 +78,7 @@ jobs:
 
     - name: Check sccache statistics
       run: |
-        sccache --show-stats
+        uv run clang-tool-chain-sccache --show-stats
       shell: bash
 
     - name: Run integration tests

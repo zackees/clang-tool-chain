@@ -236,6 +236,7 @@ int main() {
         """Clean up temporary directory."""
         os.chdir(self.original_dir)
         import shutil
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_llvm_ar_create_archive(self) -> None:

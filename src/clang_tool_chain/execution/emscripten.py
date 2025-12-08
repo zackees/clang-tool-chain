@@ -485,10 +485,7 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
             try:
                 print("Starting sccache server...", file=sys.stderr)
                 start_result = subprocess.run(
-                    [str(sccache_path), "--start-server"],
-                    capture_output=True,
-                    text=True,
-                    timeout=30
+                    [str(sccache_path), "--start-server"], capture_output=True, text=True, timeout=30
                 )
                 if start_result.returncode == 0:
                     print("sccache server started successfully", file=sys.stderr)
@@ -501,10 +498,7 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
 
                 # Check server status
                 stats_result = subprocess.run(
-                    [str(sccache_path), "--show-stats"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
+                    [str(sccache_path), "--show-stats"], capture_output=True, text=True, timeout=10
                 )
                 if stats_result.returncode == 0:
                     print("sccache server is running", file=sys.stderr)
@@ -678,6 +672,7 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
             # Rename original clang++ to clang++.real (only once)
             if not real_clangpp_backup.exists():
                 import shutil
+
                 shutil.move(str(real_clangpp_original), str(real_clangpp_backup))
                 logger.debug(f"Renamed original clang++ to: {real_clangpp_backup}")
                 print(f"Renamed original clang++ to: {real_clangpp_backup}", file=sys.stderr)

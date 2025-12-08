@@ -36,7 +36,6 @@ jobs:
       run: |
         echo "Platform: Windows x64 with Emscripten and sccache"
         python --version
-        sccache --version || echo "sccache will be available after installation"
       shell: bash
 
     - name: Download Emscripten toolchain
@@ -46,8 +45,8 @@ jobs:
 
     - name: Verify sccache installation
       run: |
-        sccache --version
-        sccache --show-stats
+        uv run clang-tool-chain-sccache --version
+        uv run clang-tool-chain-sccache --show-stats
       shell: bash
 
     - name: Test Emscripten compilation with sccache
@@ -64,7 +63,7 @@ jobs:
       shell: bash
 
     - name: Check sccache statistics
-      run: sccache --show-stats
+      run: uv run clang-tool-chain-sccache --show-stats
       shell: bash
 
     - name: Run Emscripten basic tests

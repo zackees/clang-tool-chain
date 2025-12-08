@@ -34,7 +34,6 @@ jobs:
         echo "Platform: Linux ARM64 with Emscripten and sccache"
         uname -a
         python --version
-        sccache --version || echo "sccache will be available after installation"
 
     - name: Download Emscripten toolchain
       run: uv run clang-tool-chain-emcc --version
@@ -42,8 +41,8 @@ jobs:
 
     - name: Verify sccache installation
       run: |
-        sccache --version
-        sccache --show-stats
+        uv run clang-tool-chain-sccache --version
+        uv run clang-tool-chain-sccache --show-stats
 
     - name: Test Emscripten compilation with sccache
       run: |
@@ -58,7 +57,7 @@ jobs:
         node test_em_sccache.js
 
     - name: Check sccache statistics
-      run: sccache --show-stats
+      run: uv run clang-tool-chain-sccache --show-stats
 
     - name: Run Emscripten basic tests
       run: uv run pytest tests/test_emscripten.py -v
