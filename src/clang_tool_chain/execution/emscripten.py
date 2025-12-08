@@ -677,25 +677,25 @@ exec "{real_clangpp}" "$@"
         logger.debug(f"Created clang++ trampoline at: {trampoline_script}")
 
     # Platform-specific sccache configuration
-    arch = platform.machine().lower()
-    is_arm64 = "arm" in arch or "aarch64" in arch
-
-    if is_arm64:
-        # ARM64: Disable sccache due to compiler detection issues
-        # sccache cannot reliably detect Emscripten's clang++ wrapper on ARM64
-        # This is an acceptable trade-off: ARM64 builds work but without caching
-        logger.warning(f"Skipping sccache integration on {arch} due to compatibility issues")
+    # sccache integration with Emscripten is unreliable on Linux due to
+    # compiler detection issues that cause timeouts and hangs
+    if platform_name == "linux":
+        # Linux: Disable sccache entirely (both x86_64 and ARM64)
+        # Testing has shown that sccache + Emscripten causes 5-10 minute timeouts
+        # regardless of configuration (SCCACHE_DIRECT, SCCACHE_NO_DAEMON, etc.)
+        # This is an acceptable trade-off: Linux builds work but without caching
+        logger.warning(f"Skipping sccache integration on {platform_name} due to compatibility issues")
         logger.warning("Compilation will proceed without caching (slower but functional)")
         # Don't set EM_COMPILER_WRAPPER - let Emscripten use clang++ directly
     else:
-        # x86_64: Configure sccache integration via Emscripten's compiler wrapper mechanism
+        # Windows/macOS: Configure sccache integration via Emscripten's compiler wrapper mechanism
         env["EM_COMPILER_WRAPPER"] = str(sccache_path)
         env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
         env["SCCACHE_DIRECT"] = "1"  # Skip expensive compiler detection
-        env["SCCACHE_NO_DAEMON"] = "1"  # Use standalone mode (reliable on x86_64)
+        env["SCCACHE_NO_DAEMON"] = "1"  # Use standalone mode
         logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
         logger.debug("EMCC_SKIP_SANITY_CHECK=1")
-        logger.debug("SCCACHE_DIRECT=1, SCCACHE_NO_DAEMON=1 (x86_64 standalone mode)")
+        logger.debug(f"SCCACHE_DIRECT=1, SCCACHE_NO_DAEMON=1 ({platform_name} standalone mode)")
 
     # Add Node.js and Emscripten bin directories to PATH
     # On Unix: Put trampoline FIRST so sccache finds it instead of real clang++
