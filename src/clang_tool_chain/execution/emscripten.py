@@ -745,13 +745,22 @@ exec "{real_clangpp}" "$@"
     logger.info(f"Enabling sccache integration on {platform_name}/{arch}")
     env["EM_COMPILER_WRAPPER"] = str(sccache_path)
     env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
-    env["SCCACHE_DIRECT"] = "1"  # Skip expensive compiler detection
+    # ARM platforms: Disable SCCACHE_DIRECT to allow proper compiler detection via trampoline
+    # x86_64 platforms: Enable SCCACHE_DIRECT to skip expensive compiler detection
+    # The trampoline script on ARM requires full compiler detection to work correctly
+    if arch in ("arm64", "aarch64", "arm"):
+        # Disable SCCACHE_DIRECT on ARM - trampoline needs full compiler detection
+        pass  # Do not set SCCACHE_DIRECT, let sccache do full compiler detection
+    else:
+        # Enable SCCACHE_DIRECT on x86_64 - skip expensive compiler detection
+        env["SCCACHE_DIRECT"] = "1"
     env["SCCACHE_LOG"] = "debug"  # Enable debug logging
     env["RUST_LOG"] = "sccache=debug"  # Rust logging for sccache
 
     logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
     logger.debug("EMCC_SKIP_SANITY_CHECK=1")
-    logger.debug(f"SCCACHE_DIRECT=1 ({platform_name}/{arch} daemon mode)")
+    sccache_direct_status = "disabled" if arch in ("arm64", "aarch64", "arm") else "enabled"
+    logger.debug(f"SCCACHE_DIRECT: {sccache_direct_status} ({platform_name}/{arch} daemon mode)")
     logger.debug("SCCACHE_LOG=debug, RUST_LOG=sccache=debug")
 
     # Add Node.js and Emscripten bin directories to PATH
