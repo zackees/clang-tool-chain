@@ -479,6 +479,42 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
             print(f"{'='*60}", file=sys.stderr)
             print(f"sccache path: {sccache_path}", file=sys.stderr)
             print(f"sccache version: {sccache_version}", file=sys.stderr)
+
+            # Start sccache server to avoid timeouts during compilation
+            # The server mode is more reliable than standalone mode for long-running compilations
+            try:
+                print("Starting sccache server...", file=sys.stderr)
+                start_result = subprocess.run(
+                    [str(sccache_path), "--start-server"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if start_result.returncode == 0:
+                    print("sccache server started successfully", file=sys.stderr)
+                    logger.info("sccache server started")
+                else:
+                    # Server might already be running, which is fine
+                    print(f"sccache server start returned: {start_result.returncode}", file=sys.stderr)
+                    if start_result.stderr:
+                        print(f"stderr: {start_result.stderr.strip()}", file=sys.stderr)
+                
+                # Check server status
+                stats_result = subprocess.run(
+                    [str(sccache_path), "--show-stats"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if stats_result.returncode == 0:
+                    print("sccache server is running", file=sys.stderr)
+                    print(f"sccache stats:
+{stats_result.stdout}", file=sys.stderr)
+                else:
+                    print(f"Warning: Could not get sccache stats", file=sys.stderr)
+            except Exception as e:
+                print(f"Warning: Could not start sccache server: {e}", file=sys.stderr)
+                print("Continuing anyway - sccache will use standalone mode if needed", file=sys.stderr)
             print(f"{'='*60}\n", file=sys.stderr)
         except Exception as e:
             print(f"Warning: Could not verify sccache version: {e}", file=sys.stderr)
@@ -695,38 +731,29 @@ exec "{real_clangpp}" "$@"
         print(f"Created trampoline script at: {trampoline_script}", file=sys.stderr)
 
     # Platform-specific sccache configuration
-    # sccache integration with Emscripten is unreliable on Linux due to
-    # compiler detection issues that cause timeouts and hangs
-    if platform_name == "linux":
-        # Linux: Disable sccache entirely (both x86_64 and ARM64)
-        # Testing has shown that sccache + Emscripten causes 5-10 minute timeouts
-        # regardless of configuration (SCCACHE_DIRECT, SCCACHE_NO_DAEMON, etc.)
-        # This is an acceptable trade-off: Linux builds work but without caching
-        logger.warning(f"Skipping sccache integration on {platform_name} due to compatibility issues")
-        logger.warning("Compilation will proceed without caching (slower but functional)")
-        # Don't set EM_COMPILER_WRAPPER - let Emscripten use clang++ directly
-    else:
-        # Windows/macOS: Configure sccache integration via Emscripten's compiler wrapper mechanism
-        print(f"\n{'='*60}", file=sys.stderr)
-        print(f"DEBUG: Configuring sccache on {platform_name}/{arch}", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
-        print(f"sccache path: {sccache_path}", file=sys.stderr)
-        print(f"Platform: {platform_name}/{arch}", file=sys.stderr)
-        print(f"Emscripten dir: {install_dir}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+    # Configure sccache integration via Emscripten's compiler wrapper mechanism
+    # Enabled for ALL platforms (Linux, macOS, Windows)
+    # Uses EM_COMPILER_WRAPPER to wrap compiler calls with sccache for caching
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"DEBUG: Configuring sccache on {platform_name}/{arch}", file=sys.stderr)
+    print(f"{'='*60}", file=sys.stderr)
+    print(f"sccache path: {sccache_path}", file=sys.stderr)
+    print(f"Platform: {platform_name}/{arch}", file=sys.stderr)
+    print(f"Emscripten dir: {install_dir}", file=sys.stderr)
+    print(f"{'='*60}\n", file=sys.stderr)
 
-        logger.info(f"Enabling sccache integration on {platform_name}/{arch}")
-        env["EM_COMPILER_WRAPPER"] = str(sccache_path)
-        env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
-        env["SCCACHE_DIRECT"] = "1"  # Skip expensive compiler detection
-        env["SCCACHE_NO_DAEMON"] = "1"  # Use standalone mode
-        env["SCCACHE_LOG"] = "debug"  # Enable debug logging
-        env["RUST_LOG"] = "sccache=debug"  # Rust logging for sccache
+    logger.info(f"Enabling sccache integration on {platform_name}/{arch}")
+    env["EM_COMPILER_WRAPPER"] = str(sccache_path)
+    env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
+    env["SCCACHE_DIRECT"] = "1"  # Skip expensive compiler detection
+    # env["SCCACHE_NO_DAEMON"] = "1"  # Removed - using daemon mode for better reliability
+    env["SCCACHE_LOG"] = "debug"  # Enable debug logging
+    env["RUST_LOG"] = "sccache=debug"  # Rust logging for sccache
 
-        logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
-        logger.debug("EMCC_SKIP_SANITY_CHECK=1")
-        logger.debug(f"SCCACHE_DIRECT=1, SCCACHE_NO_DAEMON=1 ({platform_name}/{arch} standalone mode)")
-        logger.debug("SCCACHE_LOG=debug, RUST_LOG=sccache=debug")
+    logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
+    logger.debug("EMCC_SKIP_SANITY_CHECK=1")
+    logger.debug(f"SCCACHE_DIRECT=1, using daemon mode ({platform_name}/{arch})")
+    logger.debug("SCCACHE_LOG=debug, RUST_LOG=sccache=debug")
 
     # Add Node.js and Emscripten bin directories to PATH
     # On Unix: Put trampoline FIRST so sccache finds it instead of real clang++
@@ -754,7 +781,7 @@ exec "{real_clangpp}" "$@"
     python_exe = sys.executable
     cmd = [python_exe, str(tool_script)] + args
 
-    sccache_enabled = platform_name != "linux"
+    sccache_enabled = True  # sccache now enabled for all platforms
     sccache_status = "enabled" if sccache_enabled else "disabled"
 
     print(f"\n{'='*60}", file=sys.stderr)
