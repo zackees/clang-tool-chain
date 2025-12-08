@@ -32,6 +32,10 @@ class TestClangFormat(unittest.TestCase):
                 timeout=30,
             )
 
+            # If tool not found in binaries, skip the test
+            if result.returncode != 0 and "Tool 'clang-format' not found" in result.stderr:
+                pytest.skip("clang-format not included in LLVM binaries for this platform")
+
             # clang-format --version should succeed
             self.assertEqual(result.returncode, 0, f"clang-format --version failed: {result.stderr}")
 
@@ -65,6 +69,10 @@ class TestClangFormat(unittest.TestCase):
                 text=True,
                 timeout=30,
             )
+
+            # If tool not found in binaries, skip the test
+            if result.returncode != 0 and "Tool 'clang-format' not found" in result.stderr:
+                pytest.skip("clang-format not included in LLVM binaries for this platform")
 
             # Should succeed
             self.assertEqual(result.returncode, 0, f"clang-format failed: {result.stderr}")
@@ -100,6 +108,10 @@ class TestClangFormat(unittest.TestCase):
                 timeout=30,
             )
 
+            # If tool not found in binaries, skip the test
+            if result.returncode != 0 and "Tool 'clang-format' not found" in result.stderr:
+                pytest.skip("clang-format not included in LLVM binaries for this platform")
+
             # Should succeed
             self.assertEqual(result.returncode, 0, f"clang-format -i failed: {result.stderr}")
 
@@ -134,6 +146,10 @@ class TestClangTidy(unittest.TestCase):
                 text=True,
                 timeout=30,
             )
+
+            # If tool not found in binaries, skip the test
+            if result.returncode != 0 and "Tool 'clang-tidy' not found" in result.stderr:
+                pytest.skip("clang-tidy not included in LLVM binaries for this platform")
 
             # clang-tidy --version should succeed
             self.assertEqual(result.returncode, 0, f"clang-tidy --version failed: {result.stderr}")
@@ -177,6 +193,10 @@ int main() {
                 text=True,
                 timeout=60,
             )
+
+            # If tool not found in binaries, skip the test
+            if result.returncode != 0 and "Tool 'clang-tidy' not found" in result.stderr:
+                pytest.skip("clang-tidy not included in LLVM binaries for this platform")
 
             # clang-tidy may return non-zero for warnings, so check it completed
             self.assertIn(
@@ -222,6 +242,10 @@ int main() {
                 text=True,
                 timeout=60,
             )
+
+            # If tool not found in binaries, skip the test
+            if result.returncode != 0 and "Tool 'clang-tidy' not found" in result.stderr:
+                pytest.skip("clang-tidy not included in LLVM binaries for this platform")
 
             # Should complete (may find warnings)
             self.assertIn(
