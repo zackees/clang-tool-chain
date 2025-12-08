@@ -304,7 +304,10 @@ def is_sccache_available() -> bool:
 @pytest.mark.serial
 @pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten binaries not available for this platform")
 @pytest.mark.skipif(not is_sccache_available(), reason="sccache not available in PATH")
-@pytest.mark.skipif(platform.system().lower() == "linux", reason="sccache + Emscripten integration disabled on Linux due to timeout issues")
+@pytest.mark.skipif(
+    platform.system().lower() == "linux",
+    reason="sccache + Emscripten integration disabled on Linux due to timeout issues",
+)
 class TestEmscriptenSccache:
     """Test Emscripten + sccache integration."""
 

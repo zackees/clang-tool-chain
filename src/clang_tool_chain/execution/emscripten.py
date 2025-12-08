@@ -33,7 +33,6 @@ def get_platform_info() -> tuple[str, str]:
         Platform: "win", "linux", or "darwin"
         Architecture: "x86_64" or "aarch64"
     """
-    import platform
 
     system = platform.system().lower()
     machine = platform.machine().lower()
@@ -468,6 +467,22 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
     try:
         sccache_path = find_sccache_binary()
         logger.info(f"Found sccache at: {sccache_path}")
+
+        # Verify sccache works and get version
+        try:
+            version_result = subprocess.run(
+                [str(sccache_path), "--version"], capture_output=True, text=True, timeout=10
+            )
+            sccache_version = version_result.stdout.strip() if version_result.returncode == 0 else "unknown"
+            print(f"\n{'='*60}", file=sys.stderr)
+            print("DEBUG: sccache verification", file=sys.stderr)
+            print(f"{'='*60}", file=sys.stderr)
+            print(f"sccache path: {sccache_path}", file=sys.stderr)
+            print(f"sccache version: {sccache_version}", file=sys.stderr)
+            print(f"{'='*60}\n", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Could not verify sccache version: {e}", file=sys.stderr)
+
     except RuntimeError as e:
         logger.error(f"Failed to find sccache: {e}")
         print(f"\n{'='*60}", file=sys.stderr)
@@ -610,26 +625,26 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
         # Create temporary directory for trampoline (Unix-like systems only)
         trampoline_dir = Path(tempfile.mkdtemp(prefix="emscripten-sccache-"))
 
+        print(f"\n{'='*60}", file=sys.stderr)
+        print("DEBUG: Creating clang++ trampoline", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(f"Trampoline dir: {trampoline_dir}", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
+
         # Find the real clang++ that Emscripten uses
         real_clangpp = install_dir / "bin" / "clang++"
 
         # Create bash trampoline script
         trampoline_script = trampoline_dir / "clang++"
-        # Check if verbose logging is enabled via environment variable
-        enable_verbose_logging = "CLANG_TOOL_CHAIN_DEBUG" in os.environ
 
-        verbose_prefix = ""
-        verbose_detection = ""
-        verbose_normal = ""
-        if enable_verbose_logging:
-            verbose_prefix = """
-# Verbose logging enabled via CLANG_TOOL_CHAIN_DEBUG
+        # Always enable verbose logging to diagnose timeout issues
+        verbose_prefix = """
+# Verbose logging enabled for timeout diagnosis
 echo "[TRAMPOLINE] clang++ called with args: $*" >&2
+echo "[TRAMPOLINE] Called at: $(date '+%H:%M:%S')" >&2
 """
-            verbose_detection = (
-                '\n    echo "[TRAMPOLINE] Detection command - adding -target wasm32-unknown-emscripten" >&2'
-            )
-            verbose_normal = '\necho "[TRAMPOLINE] Normal compilation - passing through" >&2'
+        verbose_detection = '\n    echo "[TRAMPOLINE] Detection command - adding -target wasm32-unknown-emscripten" >&2'
+        verbose_normal = '\necho "[TRAMPOLINE] Normal compilation - passing through" >&2'
 
         trampoline_content = f"""#!/bin/bash
 # Trampoline for Emscripten clang++ to fix sccache compiler detection
@@ -666,15 +681,18 @@ if [[ "$is_detection_cmd" == "true" ]]; then
         new_args+=("$current_arg")
     done
     # Execute with correct target for Emscripten{verbose_detection}
+    echo "[TRAMPOLINE] Executing: {real_clangpp} -target wasm32-unknown-emscripten ${{new_args[@]}}" >&2
     exec "{real_clangpp}" -target wasm32-unknown-emscripten "${{new_args[@]}}"
 fi
 
 # Normal compilation - pass through unchanged{verbose_normal}
+echo "[TRAMPOLINE] Executing: {real_clangpp} $@" >&2
 exec "{real_clangpp}" "$@"
 """
         trampoline_script.write_text(trampoline_content, encoding="utf-8")
         trampoline_script.chmod(trampoline_script.stat().st_mode | stat.S_IEXEC)
         logger.debug(f"Created clang++ trampoline at: {trampoline_script}")
+        print(f"Created trampoline script at: {trampoline_script}", file=sys.stderr)
 
     # Platform-specific sccache configuration
     # sccache integration with Emscripten is unreliable on Linux due to
@@ -689,13 +707,26 @@ exec "{real_clangpp}" "$@"
         # Don't set EM_COMPILER_WRAPPER - let Emscripten use clang++ directly
     else:
         # Windows/macOS: Configure sccache integration via Emscripten's compiler wrapper mechanism
+        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"DEBUG: Configuring sccache on {platform_name}/{arch}", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(f"sccache path: {sccache_path}", file=sys.stderr)
+        print(f"Platform: {platform_name}/{arch}", file=sys.stderr)
+        print(f"Emscripten dir: {install_dir}", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
+
+        logger.info(f"Enabling sccache integration on {platform_name}/{arch}")
         env["EM_COMPILER_WRAPPER"] = str(sccache_path)
         env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
         env["SCCACHE_DIRECT"] = "1"  # Skip expensive compiler detection
         env["SCCACHE_NO_DAEMON"] = "1"  # Use standalone mode
+        env["SCCACHE_LOG"] = "debug"  # Enable debug logging
+        env["RUST_LOG"] = "sccache=debug"  # Rust logging for sccache
+
         logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
         logger.debug("EMCC_SKIP_SANITY_CHECK=1")
-        logger.debug(f"SCCACHE_DIRECT=1, SCCACHE_NO_DAEMON=1 ({platform_name} standalone mode)")
+        logger.debug(f"SCCACHE_DIRECT=1, SCCACHE_NO_DAEMON=1 ({platform_name}/{arch} standalone mode)")
+        logger.debug("SCCACHE_LOG=debug, RUST_LOG=sccache=debug")
 
     # Add Node.js and Emscripten bin directories to PATH
     # On Unix: Put trampoline FIRST so sccache finds it instead of real clang++
@@ -708,6 +739,13 @@ exec "{real_clangpp}" "$@"
             f"{trampoline_dir}{os.pathsep}{emscripten_bin_dir}{os.pathsep}{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
         )
         logger.debug(f"Added to PATH (priority order): {trampoline_dir}, {emscripten_bin_dir}, {node_bin_dir}")
+        print(f"\n{'='*60}", file=sys.stderr)
+        print("DEBUG: PATH configuration", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(f"1. Trampoline dir: {trampoline_dir}", file=sys.stderr)
+        print(f"2. Emscripten bin: {emscripten_bin_dir}", file=sys.stderr)
+        print(f"3. Node.js bin: {node_bin_dir}", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
     else:
         env["PATH"] = f"{emscripten_bin_dir}{os.pathsep}{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
         logger.debug(f"Added to PATH (priority order): {emscripten_bin_dir}, {node_bin_dir}")
@@ -716,15 +754,70 @@ exec "{real_clangpp}" "$@"
     python_exe = sys.executable
     cmd = [python_exe, str(tool_script)] + args
 
-    logger.info(f"Executing command: {python_exe} {tool_script} (with {len(args)} args, sccache enabled)")
+    sccache_enabled = platform_name != "linux"
+    sccache_status = "enabled" if sccache_enabled else "disabled"
+
+    print(f"\n{'='*60}", file=sys.stderr)
+    print("DEBUG: About to execute Emscripten with sccache", file=sys.stderr)
+    print(f"{'='*60}", file=sys.stderr)
+    print(f"Python: {python_exe}", file=sys.stderr)
+    print(f"Tool script: {tool_script}", file=sys.stderr)
+    print(f"Args: {args}", file=sys.stderr)
+    print(f"sccache status: {sccache_status}", file=sys.stderr)
+    print(f"EM_COMPILER_WRAPPER: {env.get('EM_COMPILER_WRAPPER', 'NOT SET')}", file=sys.stderr)
+    print(f"EMCC_SKIP_SANITY_CHECK: {env.get('EMCC_SKIP_SANITY_CHECK', 'NOT SET')}", file=sys.stderr)
+    print(f"SCCACHE_DIRECT: {env.get('SCCACHE_DIRECT', 'NOT SET')}", file=sys.stderr)
+    print(f"SCCACHE_NO_DAEMON: {env.get('SCCACHE_NO_DAEMON', 'NOT SET')}", file=sys.stderr)
+    print(f"SCCACHE_LOG: {env.get('SCCACHE_LOG', 'NOT SET')}", file=sys.stderr)
+    print(f"{'='*60}\n", file=sys.stderr)
+
+    logger.info(f"Executing command: {python_exe} {tool_script} (with {len(args)} args, sccache {sccache_status})")
     logger.debug(f"Environment: EMSCRIPTEN={env.get('EMSCRIPTEN')}")
     logger.debug(f"Environment: EM_CONFIG={env.get('EM_CONFIG')}")
-    logger.debug(f"Environment: EM_COMPILER_WRAPPER={env.get('EM_COMPILER_WRAPPER')}")
+    logger.debug(f"Environment: EM_COMPILER_WRAPPER={env.get('EM_COMPILER_WRAPPER', 'NOT SET')}")
+    logger.debug(f"Platform: {platform_name}/{arch}, sccache: {sccache_status}")
 
-    # Execute
+    # Debug: Log command start time for timeout diagnosis
+    import time
+
+    start_time = time.time()
+    current_time = time.strftime("%H:%M:%S")
+    logger.info(f"Starting Emscripten compilation at {current_time}")
+    print(f"[{current_time}] Starting compilation (timeout=none, will track manually)...", file=sys.stderr)
+
+    # Execute with periodic progress updates
     try:
+        logger.debug(f"Subprocess command: {' '.join(cmd[:2])} [+ {len(args)} args]")
+
+        # Run with output streaming to see progress
+        import threading
+
+        def progress_monitor():
+            """Print progress every 30 seconds to detect hangs"""
+            interval = 30
+            while True:
+                time.sleep(interval)
+                elapsed = time.time() - start_time
+                print(
+                    f"[{time.strftime('%H:%M:%S')}] Still running... ({elapsed:.0f}s elapsed)",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+        monitor_thread = threading.Thread(target=progress_monitor, daemon=True)
+        monitor_thread.start()
+
+        print(f"[{time.strftime('%H:%M:%S')}] Launching subprocess...", file=sys.stderr, flush=True)
         result = subprocess.run(cmd, env=env)
         return_code = result.returncode
+        elapsed = time.time() - start_time
+
+        print(
+            f"[{time.strftime('%H:%M:%S')}] Compilation completed in {elapsed:.2f}s with return code {return_code}",
+            file=sys.stderr,
+            flush=True,
+        )
+        logger.info(f"Compilation completed in {elapsed:.2f}s with return code {return_code}")
     except FileNotFoundError:
         logger.error(f"Failed to execute Python: {python_exe}")
         print(f"\nError: Python interpreter not found: {python_exe}", file=sys.stderr)
