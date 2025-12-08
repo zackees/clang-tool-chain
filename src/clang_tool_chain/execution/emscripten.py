@@ -508,10 +508,10 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
                 )
                 if stats_result.returncode == 0:
                     print("sccache server is running", file=sys.stderr)
-                    print(f"sccache stats:
-{stats_result.stdout}", file=sys.stderr)
+                    stats_output = stats_result.stdout
+                    print(f"sccache stats: {stats_output}", file=sys.stderr)
                 else:
-                    print(f"Warning: Could not get sccache stats", file=sys.stderr)
+                    print("Warning: Could not get sccache stats", file=sys.stderr)
             except Exception as e:
                 print(f"Warning: Could not start sccache server: {e}", file=sys.stderr)
                 print("Continuing anyway - sccache will use standalone mode if needed", file=sys.stderr)
@@ -746,13 +746,13 @@ exec "{real_clangpp}" "$@"
     env["EM_COMPILER_WRAPPER"] = str(sccache_path)
     env["EMCC_SKIP_SANITY_CHECK"] = "1"  # Sanity checks don't work with compiler wrappers
     env["SCCACHE_DIRECT"] = "1"  # Skip expensive compiler detection
-    # env["SCCACHE_NO_DAEMON"] = "1"  # Removed - using daemon mode for better reliability
+    env["SCCACHE_NO_DAEMON"] = "1"  # Use standalone mode
     env["SCCACHE_LOG"] = "debug"  # Enable debug logging
     env["RUST_LOG"] = "sccache=debug"  # Rust logging for sccache
 
     logger.debug(f"EM_COMPILER_WRAPPER={sccache_path}")
     logger.debug("EMCC_SKIP_SANITY_CHECK=1")
-    logger.debug(f"SCCACHE_DIRECT=1, using daemon mode ({platform_name}/{arch})")
+    logger.debug(f"SCCACHE_DIRECT=1, SCCACHE_NO_DAEMON=1 ({platform_name}/{arch} standalone mode)")
     logger.debug("SCCACHE_LOG=debug, RUST_LOG=sccache=debug")
 
     # Add Node.js and Emscripten bin directories to PATH
