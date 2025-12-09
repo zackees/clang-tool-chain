@@ -14,7 +14,7 @@ on:
 
 jobs:
   build-emscripten-macos-x64:
-    runs-on: macos-13  # Intel Mac
+    runs-on: macos-15-intel  # Intel Mac
     steps:
       - uses: actions/checkout@v4
         with:

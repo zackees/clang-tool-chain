@@ -10,7 +10,7 @@ on:
 jobs:
   test-emscripten-macos-x86:
     name: Emscripten (macOS x86_64)
-    runs-on: macos-13
+    runs-on: macos-15-intel
 
     steps:
     - name: Checkout code
