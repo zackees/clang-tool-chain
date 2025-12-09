@@ -93,11 +93,27 @@ def fix_file_permissions(install_dir: Path) -> None:
 
     # Fix permissions for files in bin/ directory
     bin_dir = install_dir / "bin"
+    logger.info(f"DEBUG: Checking bin directory: {bin_dir}")
+    logger.info(f"DEBUG: bin_dir exists: {bin_dir.exists()}")
+    logger.info(f"DEBUG: bin_dir is_dir: {bin_dir.is_dir() if bin_dir.exists() else 'N/A'}")
+
     if bin_dir.exists() and bin_dir.is_dir():
-        for binary_file in bin_dir.iterdir():
+        bin_files = list(bin_dir.iterdir())
+        logger.info(f"DEBUG: Found {len(bin_files)} items in bin/")
+        for binary_file in bin_files:
             if binary_file.is_file():
+                # Get current permissions before change
+                old_mode = binary_file.stat().st_mode
                 # Set executable permissions for all binaries
                 binary_file.chmod(0o755)
+                new_mode = binary_file.stat().st_mode
+                logger.info(
+                    f"DEBUG: Set permissions on {binary_file.name}: "
+                    f"{oct(old_mode)[-3:]} -> {oct(new_mode)[-3:]} "
+                    f"(executable: {new_mode & 0o111 != 0})"
+                )
+    else:
+        logger.warning(f"DEBUG: bin directory does not exist or is not a directory: {bin_dir}")
 
     # Fix permissions for files in emscripten/ directory
     # Emscripten tools (emcc, em++, emar, etc.) need executable permissions
