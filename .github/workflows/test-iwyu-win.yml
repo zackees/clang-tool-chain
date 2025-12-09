@@ -48,6 +48,7 @@ jobs:
       run: |
         rm -rf ~/.clang-tool-chain/iwyu
         echo "Purged old IWYU installation to force fresh download"
+      shell: bash
 
     - name: Run IWYU tests
       run: |
