@@ -120,7 +120,7 @@ class TestIWYUExecution(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def get_iwyu_env(self) -> dict[str, str]:
-        """Get environment dict for running IWYU with DLL path on Windows."""
+        """Get environment dict for running IWYU with DLL path on Windows and shared libraries on Linux."""
         import os
 
         env = os.environ.copy()
@@ -129,6 +129,16 @@ class TestIWYUExecution(unittest.TestCase):
         if sys.platform == "win32":
             bin_dir = wrapper.get_iwyu_binary_dir()
             env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+        # On Linux, add the IWYU lib directory to LD_LIBRARY_PATH so shared libraries can be found
+        elif sys.platform == "linux":
+            bin_dir = wrapper.get_iwyu_binary_dir()
+            lib_dir = bin_dir.parent / "lib"
+            if lib_dir.exists():
+                existing_ld_path = env.get("LD_LIBRARY_PATH", "")
+                if existing_ld_path:
+                    env["LD_LIBRARY_PATH"] = f"{lib_dir}{os.pathsep}{existing_ld_path}"
+                else:
+                    env["LD_LIBRARY_PATH"] = str(lib_dir)
 
         return env
 
