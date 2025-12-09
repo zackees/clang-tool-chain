@@ -436,6 +436,16 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
             logger.info("Setting executable permissions on IWYU binaries")
             fix_file_permissions(install_dir)
 
+        # Verify the IWYU binary actually exists before marking as complete
+        iwyu_binary_name = "include-what-you-use.exe" if platform == "win" else "include-what-you-use"
+        iwyu_binary = install_dir / "bin" / iwyu_binary_name
+        if not iwyu_binary.exists():
+            raise RuntimeError(
+                f"IWYU installation verification failed: binary not found at {iwyu_binary}. "
+                f"Extraction may have failed or archive structure is incorrect."
+            )
+        logger.info(f"IWYU binary verified at: {iwyu_binary}")
+
         # Mark installation as complete
         # Ensure install_dir exists before writing done.txt
         install_dir.mkdir(parents=True, exist_ok=True)
