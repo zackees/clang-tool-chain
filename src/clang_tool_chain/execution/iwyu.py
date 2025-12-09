@@ -189,9 +189,14 @@ def execute_iwyu_tool(tool_name: str, args: list[str] | None = None) -> NoReturn
 
     # Execute tool
     if platform_name == "win":
-        # Windows: use subprocess
+        # Windows: use subprocess with modified PATH to find DLLs
         try:
-            result = subprocess.run(cmd)
+            # Add IWYU bin directory to PATH so DLLs can be found
+            bin_dir = get_iwyu_binary_dir()
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+
+            result = subprocess.run(cmd, env=env)
             sys.exit(result.returncode)
         except FileNotFoundError as err:
             raise RuntimeError(f"IWYU tool not found: {tool_path}") from err

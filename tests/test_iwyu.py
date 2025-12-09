@@ -119,11 +119,26 @@ class TestIWYUExecution(unittest.TestCase):
 
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
+    def get_iwyu_env(self) -> dict[str, str]:
+        """Get environment dict for running IWYU with DLL path on Windows."""
+        import os
+
+        env = os.environ.copy()
+
+        # On Windows, add the IWYU bin directory to PATH so DLLs can be found
+        if sys.platform == "win32":
+            bin_dir = wrapper.get_iwyu_binary_dir()
+            env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+
+        return env
+
     def test_iwyu_version(self) -> None:
         """Test that IWYU can report its version."""
         try:
             iwyu_path = wrapper.find_iwyu_tool("include-what-you-use")
-            result = subprocess.run([str(iwyu_path), "--version"], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                [str(iwyu_path), "--version"], capture_output=True, text=True, timeout=10, env=self.get_iwyu_env()
+            )
 
             # IWYU may return 0 or non-zero for --version
             self.assertIn(
@@ -160,6 +175,7 @@ class TestIWYUExecution(unittest.TestCase):
                 text=True,
                 timeout=30,
                 cwd=str(self.temp_path),
+                env=self.get_iwyu_env(),
             )
 
             # IWYU returns non-zero when it finds issues (which is expected)
@@ -198,6 +214,7 @@ class TestIWYUExecution(unittest.TestCase):
                 text=True,
                 timeout=30,
                 cwd=str(self.temp_path),
+                env=self.get_iwyu_env(),
             )
 
             # IWYU should complete (return code may vary)
@@ -237,6 +254,7 @@ class TestIWYUExecution(unittest.TestCase):
                 text=True,
                 timeout=30,
                 cwd=str(self.temp_path),
+                env=self.get_iwyu_env(),
             )
 
             # IWYU should complete (may have warnings/suggestions)

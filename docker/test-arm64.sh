@@ -1,13 +1,13 @@
 #!/bin/bash
 # Helper script to run clang-tool-chain tests on Linux ARM64 using Docker emulation
 # This script should be run from the repository root directory
-# Usage: ./.github/docker/test-arm64.sh
+# Usage: ./docker/test-arm64.sh
 
 set -e
 
-# Change to repository root if script is run from .github/docker/
+# Change to repository root if script is run from docker/
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 echo "=========================================="
@@ -17,7 +17,7 @@ echo ""
 
 # Build ARM64 Docker image
 echo "Building ARM64 Docker image..."
-docker build --platform linux/arm64 -t clang-tool-chain-arm64-test -f .github/docker/Dockerfile.arm64-test .
+docker build --platform linux/arm64 -t clang-tool-chain-arm64-test -f docker/Dockerfile.arm64-test .
 
 echo ""
 echo "Running test in ARM64 container..."

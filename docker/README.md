@@ -1,6 +1,6 @@
 # Docker Testing Infrastructure
 
-This directory contains Docker-based testing infrastructure for clang-tool-chain, specifically for testing on different architectures.
+This directory contains Docker-based testing infrastructure for clang-tool-chain, specifically for local testing on different architectures.
 
 ## ARM64 Testing
 
@@ -11,11 +11,11 @@ This directory contains Docker-based testing infrastructure for clang-tool-chain
 
 ### Purpose
 
-These files enable testing clang-tool-chain on Linux ARM64 architecture without requiring physical ARM64 hardware. This is particularly useful for:
+These files enable local testing of clang-tool-chain on Linux ARM64 architecture without requiring physical ARM64 hardware. This is particularly useful for:
 
 1. Reproducing platform-specific issues (e.g., sccache + Emscripten timeouts on ARM64)
-2. Validating fixes across different architectures
-3. Testing before deploying to ARM64 CI runners
+2. Validating fixes across different architectures locally
+3. Debugging architecture-specific behavior before submitting changes
 
 ### Requirements
 
@@ -29,7 +29,7 @@ These files enable testing clang-tool-chain on Linux ARM64 architecture without 
 Run the entire test suite on ARM64:
 
 ```bash
-./.github/docker/test-arm64.sh
+./docker/test-arm64.sh
 ```
 
 This script will:
@@ -43,7 +43,7 @@ This script will:
 Build the ARM64 image:
 
 ```bash
-docker build --platform linux/arm64 -t clang-tool-chain-arm64-test -f .github/docker/Dockerfile.arm64-test .
+docker build --platform linux/arm64 -t clang-tool-chain-arm64-test -f docker/Dockerfile.arm64-test .
 ```
 
 Run interactive shell for debugging:
@@ -97,7 +97,7 @@ The Docker image mounts the current repository directory to `/workspace`, allowi
 ### Future Improvements
 
 Consider adding:
-- GitHub Actions workflow using these Docker files
 - Multi-architecture testing (x86_64 + ARM64 in parallel)
 - Cached Docker layers for faster builds
 - Additional platform-specific test scenarios
+- x86_64 Docker test environment for consistency

@@ -587,7 +587,7 @@ def sccache_c_main() -> int:
         return 1
 
     # Add platform-specific arguments (same logic as execute_tool)
-    platform_name, arch = get_platform_info()
+    platform_name, _arch = get_platform_info()
 
     # Add macOS SDK path automatically if needed
     if platform_name == "darwin":
@@ -622,7 +622,7 @@ def sccache_cpp_main() -> int:
         return 1
 
     # Add platform-specific arguments (same logic as execute_tool)
-    platform_name, arch = get_platform_info()
+    platform_name, _arch = get_platform_info()
 
     # Add macOS SDK path automatically if needed
     if platform_name == "darwin":
