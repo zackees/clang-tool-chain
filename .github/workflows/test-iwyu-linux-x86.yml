@@ -40,6 +40,11 @@ jobs:
         uv run clang-tool-chain-c --version
       timeout-minutes: 20
 
+    - name: Purge old IWYU installation (force re-download with new archives)
+      run: |
+        rm -rf ~/.clang-tool-chain/iwyu
+        echo "Purged old IWYU installation to force fresh download"
+
     - name: Run IWYU tests
       run: |
         uv run pytest tests/test_iwyu.py -v
