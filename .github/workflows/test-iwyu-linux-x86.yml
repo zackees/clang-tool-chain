@@ -47,6 +47,19 @@ jobs:
         echo "Purged old IWYU installation and cached archives to force fresh download"
       shell: bash
 
+    - name: Debug IWYU installation
+      run: |
+        echo "=== IWYU Installation Structure ==="
+        ls -laR ~/.clang-tool-chain/iwyu/ || echo "IWYU dir not found"
+        echo "=== Checking for lib directory ==="
+        ls -la ~/.clang-tool-chain/iwyu/*/lib/ || echo "lib dir not found"
+        echo "=== Checking IWYU binary ==="
+        file ~/.clang-tool-chain/iwyu/*/bin/include-what-you-use || echo "IWYU binary not found"
+        echo "=== Testing IWYU with LD_LIBRARY_PATH ==="
+        export LD_LIBRARY_PATH=~/.clang-tool-chain/iwyu/*/lib:$LD_LIBRARY_PATH
+        ldd ~/.clang-tool-chain/iwyu/*/bin/include-what-you-use || echo "ldd failed"
+      shell: bash
+
     - name: Run IWYU tests
       run: |
         uv run pytest tests/test_iwyu.py -v
