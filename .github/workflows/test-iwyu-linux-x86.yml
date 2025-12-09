@@ -47,6 +47,12 @@ jobs:
         echo "Purged old IWYU installation and cached archives to force fresh download"
       shell: bash
 
+    - name: Trigger IWYU download
+      run: |
+        echo "Triggering IWYU download by calling include-what-you-use --version"
+        uv run include-what-you-use --version || echo "IWYU version check failed (expected)"
+      shell: bash
+
     - name: Debug IWYU installation
       run: |
         echo "=== IWYU Installation Structure ==="
