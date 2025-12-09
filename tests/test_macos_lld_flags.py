@@ -5,7 +5,6 @@ This module tests the translation of GNU ld flags to ld64.lld equivalents
 when using lld on macOS.
 """
 
-import sys
 import unittest
 from pathlib import Path
 

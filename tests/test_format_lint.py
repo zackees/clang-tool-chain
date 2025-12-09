@@ -6,7 +6,6 @@ and functional across all platforms.
 """
 
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path

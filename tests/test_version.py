@@ -5,7 +5,6 @@ These tests verify that version information is consistent across different files
 """
 
 import re
-import sys
 import unittest
 from pathlib import Path
 

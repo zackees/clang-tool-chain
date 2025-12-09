@@ -204,13 +204,36 @@ def execute_iwyu_tool(tool_name: str, args: list[str] | None = None) -> NoReturn
             raise RuntimeError(f"Error executing IWYU tool: {e}") from e
     else:
         # Unix: use exec to replace current process
+        # On Linux, we need to set LD_LIBRARY_PATH to find shared libraries
         try:
+            # Get the IWYU installation directory
+            install_dir = downloader.get_iwyu_install_dir(platform_name, get_platform_info()[1])
+            lib_dir = install_dir / "lib"
+
+            # Check if lib directory exists (it should for Linux with bundled .so files)
+            if lib_dir.exists():
+                logger.debug(f"Adding {lib_dir} to LD_LIBRARY_PATH")
+                env = os.environ.copy()
+                # Prepend lib directory to LD_LIBRARY_PATH
+                existing_ld_path = env.get("LD_LIBRARY_PATH", "")
+                if existing_ld_path:
+                    env["LD_LIBRARY_PATH"] = f"{lib_dir}{os.pathsep}{existing_ld_path}"
+                else:
+                    env["LD_LIBRARY_PATH"] = str(lib_dir)
+            else:
+                logger.debug(f"No lib directory found at {lib_dir}, using system libraries")
+                env = None
+
             if tool_name.endswith(".py"):
                 # For Python scripts, we can't use execv directly
-                result = subprocess.run(cmd)
+                result = subprocess.run(cmd, env=env)
                 sys.exit(result.returncode)
             else:
-                os.execv(cmd[0], cmd)
+                # For native binaries, use execve to pass environment
+                if env:
+                    os.execve(cmd[0], cmd, env)
+                else:
+                    os.execv(cmd[0], cmd)
         except FileNotFoundError as err:
             raise RuntimeError(f"IWYU tool not found: {tool_path}") from err
         except Exception as e:

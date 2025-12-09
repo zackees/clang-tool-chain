@@ -8,7 +8,6 @@ including caching functionality and shebang support on Unix platforms.
 import os
 import platform
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path

@@ -5,7 +5,6 @@ These tests verify that manifest files are well-formed and contain valid data.
 """
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
