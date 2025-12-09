@@ -9,10 +9,7 @@ import sys
 import unittest
 from pathlib import Path
 
-# Add src to path for imports
 src_dir = Path(__file__).parent.parent / "src"
-sys.path.insert(0, str(src_dir))
-
 from clang_tool_chain.wrapper import _translate_linker_flags_for_macos_lld  # noqa: E402
 
 

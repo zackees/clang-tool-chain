@@ -9,9 +9,6 @@ import sys
 import unittest
 from pathlib import Path
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 # Check if downloads directory exists to determine if tests should run
 _DOWNLOADS_DIR = Path(__file__).parent.parent / "downloads-bins" / "assets" / "clang"
 _SKIP_REASON = (
