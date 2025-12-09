@@ -260,10 +260,22 @@ def _try_system_tar(tar_file: Path, extract_dir: Path) -> bool:
     # Try to extract using system tar
     try:
         logger.info(f"Using system tar to extract {tar_file}")
+        logger.info(f"DEBUG: Extracting to directory: {extract_dir}")
+        logger.info(f"DEBUG: extract_dir exists: {extract_dir.exists()}")
         result = subprocess.run(
             ["tar", "-xf", str(tar_file), "-C", str(extract_dir)], capture_output=True, timeout=300, check=True
         )
         logger.info("System tar extraction completed successfully")
+
+        # DEBUG: Log what was extracted
+        try:
+            extracted_items = list(extract_dir.iterdir())
+            logger.info(f"DEBUG: System tar extracted {len(extracted_items)} items to {extract_dir}")
+            for item in extracted_items[:20]:  # First 20 items
+                logger.info(f"DEBUG:   - {item.name} ({'dir' if item.is_dir() else 'file'})")
+        except Exception as e:
+            logger.warning(f"DEBUG: Could not list extracted items: {e}")
+
         return True
     except subprocess.CalledProcessError as e:
         logger.warning(f"System tar extraction failed: {e.stderr.decode()[:500]}")
@@ -428,6 +440,15 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                             shutil.move(str(item), str(target))
                 else:
                     logger.warning(f"No extracted content found to move to {dest_dir}")
+
+            # DEBUG: Log final directory structure
+            logger.info(f"DEBUG: Final verification - dest_dir: {dest_dir}")
+            logger.info(f"DEBUG: dest_dir exists: {dest_dir.exists()}")
+            if dest_dir.exists():
+                final_items = list(dest_dir.iterdir())
+                logger.info(f"DEBUG: dest_dir contains {len(final_items)} items:")
+                for item in final_items[:10]:
+                    logger.info(f"DEBUG:   - {item.name} ({'dir' if item.is_dir() else 'file'})")
 
             logger.info(f"Successfully extracted to {dest_dir}")
 

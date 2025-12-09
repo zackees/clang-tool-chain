@@ -431,6 +431,34 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
         logger.info("Extracting IWYU archive")
         extract_tarball(archive_file, install_dir)
 
+        # DEBUG: Log directory structure after extraction
+        logger.info(f"DEBUG: Checking installation directory: {install_dir}")
+        logger.info(f"DEBUG: install_dir exists: {install_dir.exists()}")
+        logger.info(f"DEBUG: install_dir is_dir: {install_dir.is_dir()}")
+
+        if install_dir.exists():
+            try:
+                items = list(install_dir.iterdir())
+                logger.info(f"DEBUG: Found {len(items)} items in {install_dir}")
+                for item in items:
+                    logger.info(f"DEBUG:   - {item.name} ({'dir' if item.is_dir() else 'file'})")
+                    if item.is_dir() and item.name == "bin":
+                        bin_items = list(item.iterdir())
+                        logger.info(f"DEBUG:     bin/ contains {len(bin_items)} items:")
+                        for bin_item in bin_items[:10]:  # First 10 items
+                            logger.info(f"DEBUG:       - {bin_item.name} ({bin_item.stat().st_size} bytes)")
+            except Exception as e:
+                logger.error(f"DEBUG: Error listing directory contents: {e}")
+        else:
+            # Check parent directory
+            parent = install_dir.parent
+            logger.info(f"DEBUG: install_dir doesn't exist, checking parent: {parent}")
+            if parent.exists():
+                parent_items = list(parent.iterdir())
+                logger.info(f"DEBUG: Parent contains {len(parent_items)} items:")
+                for item in parent_items[:20]:  # First 20 items
+                    logger.info(f"DEBUG:   - {item.name} ({'dir' if item.is_dir() else 'file'})")
+
         # Fix permissions on Unix systems
         if os.name != "nt":
             logger.info("Setting executable permissions on IWYU binaries")
@@ -439,7 +467,19 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
         # Verify the IWYU binary actually exists before marking as complete
         iwyu_binary_name = "include-what-you-use.exe" if platform == "win" else "include-what-you-use"
         iwyu_binary = install_dir / "bin" / iwyu_binary_name
+        logger.info(f"DEBUG: Looking for IWYU binary at: {iwyu_binary}")
+        logger.info(f"DEBUG: Binary exists: {iwyu_binary.exists()}")
+
         if not iwyu_binary.exists():
+            # Additional debugging before failing
+            bin_dir = install_dir / "bin"
+            logger.error(f"DEBUG: bin_dir ({bin_dir}) exists: {bin_dir.exists()}")
+            if bin_dir.exists():
+                bin_contents = list(bin_dir.iterdir())
+                logger.error(f"DEBUG: bin_dir contains {len(bin_contents)} items:")
+                for item in bin_contents:
+                    logger.error(f"DEBUG:   - {item.name}")
+
             raise RuntimeError(
                 f"IWYU installation verification failed: binary not found at {iwyu_binary}. "
                 f"Extraction may have failed or archive structure is incorrect."
