@@ -10,6 +10,9 @@ import sys
 from typing import NoReturn
 
 from . import sccache_runner, wrapper
+from .linker import _add_lld_linker_if_needed
+from .platform.detection import get_platform_info
+from .sdk import _add_macos_sysroot_if_needed
 
 try:
     from .__version__ import __version__
@@ -583,6 +586,16 @@ def sccache_c_main() -> int:
         print("=" * 70, file=sys.stderr)
         return 1
 
+    # Add platform-specific arguments (same logic as execute_tool)
+    platform_name, arch = get_platform_info()
+
+    # Add macOS SDK path automatically if needed
+    if platform_name == "darwin":
+        args = _add_macos_sysroot_if_needed(args)
+
+    # Force lld linker on macOS and Linux for cross-platform consistency
+    args = _add_lld_linker_if_needed(platform_name, args)
+
     return sccache_runner.run_sccache_with_compiler(str(clang_path), args)
 
 
@@ -607,6 +620,16 @@ def sccache_cpp_main() -> int:
         print(file=sys.stderr)
         print("=" * 70, file=sys.stderr)
         return 1
+
+    # Add platform-specific arguments (same logic as execute_tool)
+    platform_name, arch = get_platform_info()
+
+    # Add macOS SDK path automatically if needed
+    if platform_name == "darwin":
+        args = _add_macos_sysroot_if_needed(args)
+
+    # Force lld linker on macOS and Linux for cross-platform consistency
+    args = _add_lld_linker_if_needed(platform_name, args)
 
     return sccache_runner.run_sccache_with_compiler(str(clang_cpp_path), args)
 
