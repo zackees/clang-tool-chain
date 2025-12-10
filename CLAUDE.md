@@ -42,6 +42,7 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 - Pre-built Clang/LLVM binaries (~50-400 MB per platform)
 - Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)
 - Automatic toolchain download and installation on first use
+- **Parallel downloads with HTTP range requests (3-5x faster)**
 - Manifest-based distribution system with checksum verification
 - Python wrapper commands for all essential tools
 - Ultra-compressed archives using zstd level 22 (~94% size reduction)
@@ -56,6 +57,7 @@ Detailed documentation is organized into focused sub-documents:
 - **[Clang/LLVM Toolchain](docs/CLANG_LLVM.md)** - Clang/LLVM compiler wrappers, macOS SDK detection, Windows GNU/MSVC ABI, sccache integration
 - **[Emscripten](docs/EMSCRIPTEN.md)** - WebAssembly compilation with Emscripten
 - **[Node.js Integration](docs/NODEJS.md)** - Bundled Node.js runtime for WebAssembly
+- **[Parallel Downloads](docs/PARALLEL_DOWNLOADS.md)** - High-speed downloads with multi-threaded range requests
 - **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture, manifest system, multi-part archives
 - **[Maintainer Tools](docs/MAINTAINER.md)** - Binary packaging, archive creation, troubleshooting
 - **[Testing Guide](docs/TESTING.md)** - Test infrastructure, running tests, CI/CD

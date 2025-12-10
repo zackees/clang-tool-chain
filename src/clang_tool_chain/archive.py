@@ -2,7 +2,7 @@
 Archive operations module.
 
 Handles downloading, checksum verification, and extraction of archives:
-- Single-file and multi-part archive downloads
+- Single-file and multi-part archive downloads with parallel support
 - SHA256 checksum verification
 - Zstd decompression
 - Tar extraction with system tar fallback
@@ -10,6 +10,7 @@ Handles downloading, checksum verification, and extraction of archives:
 """
 
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -22,10 +23,59 @@ import pyzstd
 
 from .logging_config import configure_logging
 from .manifest import ToolchainInfrastructureError, VersionInfo
+from .parallel_download import DownloadConfig, download_file_parallel
 from .permissions import _robust_rmtree
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)
+
+# Environment variable configuration for parallel downloads
+DISABLE_PARALLEL_DOWNLOAD = os.environ.get("CLANG_TOOL_CHAIN_DISABLE_PARALLEL", "0") == "1"
+
+
+def _get_download_config() -> DownloadConfig:
+    """
+    Get download configuration from environment variables.
+
+    Environment variables:
+    - CLANG_TOOL_CHAIN_DISABLE_PARALLEL: Set to "1" to disable parallel downloads
+    - CLANG_TOOL_CHAIN_CHUNK_SIZE: Chunk size in MB (default: 8)
+    - CLANG_TOOL_CHAIN_MAX_WORKERS: Number of parallel workers (default: 6)
+    - CLANG_TOOL_CHAIN_MIN_SIZE: Minimum file size in MB for parallel download (default: 10)
+
+    Returns:
+        DownloadConfig with values from environment or defaults
+    """
+    config = DownloadConfig()
+
+    # Chunk size in MB
+    chunk_size_mb = os.environ.get("CLANG_TOOL_CHAIN_CHUNK_SIZE")
+    if chunk_size_mb:
+        try:
+            config.chunk_size = int(chunk_size_mb) * 1024 * 1024
+            logger.debug(f"Using chunk size from env: {chunk_size_mb} MB")
+        except ValueError:
+            logger.warning(f"Invalid CLANG_TOOL_CHAIN_CHUNK_SIZE: {chunk_size_mb}, using default")
+
+    # Max workers
+    max_workers = os.environ.get("CLANG_TOOL_CHAIN_MAX_WORKERS")
+    if max_workers:
+        try:
+            config.max_workers = int(max_workers)
+            logger.debug(f"Using max workers from env: {max_workers}")
+        except ValueError:
+            logger.warning(f"Invalid CLANG_TOOL_CHAIN_MAX_WORKERS: {max_workers}, using default")
+
+    # Minimum size for parallel download in MB
+    min_size_mb = os.environ.get("CLANG_TOOL_CHAIN_MIN_SIZE")
+    if min_size_mb:
+        try:
+            config.min_size_for_parallel = int(min_size_mb) * 1024 * 1024
+            logger.debug(f"Using min size from env: {min_size_mb} MB")
+        except ValueError:
+            logger.warning(f"Invalid CLANG_TOOL_CHAIN_MIN_SIZE: {min_size_mb}, using default")
+
+    return config
 
 
 def verify_checksum(file_path: Path, expected_sha256: str) -> bool:
@@ -60,6 +110,35 @@ def verify_checksum(file_path: Path, expected_sha256: str) -> bool:
 def download_file(url: str, dest_path: Path, expected_sha256: str | None = None) -> None:
     """
     Download a file from a URL to a destination path.
+
+    Automatically uses parallel download with range requests for large files
+    when the server supports it. Falls back to single-threaded download otherwise.
+
+    Set environment variable CLANG_TOOL_CHAIN_DISABLE_PARALLEL=1 to disable
+    parallel downloads (useful for debugging or compatibility issues).
+
+    Args:
+        url: URL to download from
+        dest_path: Path to save the file
+        expected_sha256: Optional SHA256 checksum to verify
+
+    Raises:
+        ToolchainInfrastructureError: If download fails or checksum doesn't match
+    """
+    if DISABLE_PARALLEL_DOWNLOAD:
+        logger.info("Parallel downloads disabled via environment variable")
+        _download_file_legacy(url, dest_path, expected_sha256)
+    else:
+        # Use new parallel download implementation with config from environment
+        config = _get_download_config()
+        download_file_parallel(url, dest_path, expected_sha256, config)
+
+
+def _download_file_legacy(url: str, dest_path: Path, expected_sha256: str | None = None) -> None:
+    """
+    Download a file using the legacy single-threaded approach.
+
+    This is the original implementation kept for compatibility and debugging.
 
     Args:
         url: URL to download from
