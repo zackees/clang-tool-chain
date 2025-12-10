@@ -77,6 +77,8 @@ clang-tool-chain-cpp-msvc main.cpp -o program.exe # Downloads ~71 MB on first us
 
 ### 📋 Command Quick Reference
 
+#### Compilation Commands
+
 | Task | Command (Default) | Windows MSVC Variant |
 |------|-------------------|---------------------|
 | **Compile C** | `clang-tool-chain-c main.c -o program` | `clang-tool-chain-c-msvc main.c -o program.exe` |
@@ -88,10 +90,20 @@ clang-tool-chain-cpp-msvc main.cpp -o program.exe # Downloads ~71 MB on first us
 | **Link Objects** | `clang-tool-chain-ld obj1.o obj2.o -o program` | N/A (use compiler) |
 | **Create Library** | `clang-tool-chain-ar rcs libname.a obj1.o obj2.o` | Same |
 | **Format Code** | `clang-tool-chain-format -i file.cpp` | Same |
-| **Check Installation** | `clang-tool-chain info` | Same |
-| **Verify Setup** | `clang-tool-chain-test` | Same |
 
 **Note:** MSVC variants require Windows SDK. See [Windows Target Selection](#windows-target-selection) for details.
+
+#### Management Commands
+
+| Task | Command | Description |
+|------|---------|-------------|
+| **Pre-install Clang** | `clang-tool-chain install clang` | Download Clang/LLVM (~71-91 MB) |
+| **Add to PATH** | `clang-tool-chain install clang-env` | Use `clang` directly (auto-installs if needed) |
+| **Remove from PATH** | `clang-tool-chain uninstall clang-env` | Keep files, remove from PATH |
+| **Remove Everything** | `clang-tool-chain purge` | Delete all toolchains + auto-remove from PATH |
+| **Check Installation** | `clang-tool-chain info` | Show installation details |
+| **Verify Setup** | `clang-tool-chain-test` | Run 7 diagnostic tests |
+| **List Tools** | `clang-tool-chain list-tools` | Show all available wrappers |
 
 ---
 
@@ -120,6 +132,65 @@ uv pip install -e ".[dev]"
 ```
 
 **macOS Users:** Requires Xcode Command Line Tools for system headers. Run `xcode-select --install` if not already installed.
+
+### Installation Options
+
+#### Option 1: Auto-Download (Recommended)
+
+The toolchain downloads automatically on first use - no setup needed!
+
+```bash
+pip install clang-tool-chain
+clang-tool-chain-c hello.c -o hello  # Downloads toolchain on first use
+```
+
+#### Option 2: Pre-Install Toolchain
+
+Download the toolchain before use (useful for CI/CD or offline work):
+
+```bash
+# Pre-download just the core Clang/LLVM toolchain
+clang-tool-chain install clang
+
+# This downloads ~71-91 MB and does NOT include:
+# - IWYU (downloads on first use of clang-tool-chain-iwyu)
+# - Emscripten (downloads on first use of clang-tool-chain-emcc)
+# - Node.js (downloads with Emscripten)
+```
+
+#### Option 3: Install to System PATH
+
+Use `clang` directly without the `clang-tool-chain-` prefix:
+
+```bash
+# Add Clang/LLVM to system PATH (auto-installs if needed)
+clang-tool-chain install clang-env
+
+# Now use tools directly (after restarting terminal)
+clang --version
+clang++ main.cpp -o program
+```
+
+**Remove from PATH:**
+```bash
+clang-tool-chain uninstall clang-env  # Keeps files, removes PATH entry
+```
+
+**Remove everything:**
+```bash
+clang-tool-chain purge  # Deletes files + auto-removes from PATH
+```
+
+**Important Notes:**
+- PATH changes require terminal restart (or log out/in)
+- Works cross-platform (Windows, macOS, Linux)
+- Wrapper commands (`clang-tool-chain-*`) always available
+- Uses [setenvironment](https://github.com/zackees/setenvironment) for persistent PATH modification
+- Tracked in SQLite database for automatic cleanup
+
+**Future commands:**
+- `install iwyu` / `install iwyu-env` - IWYU analyzer
+- `install emscripten` / `install emscripten-env` - Emscripten WebAssembly (includes own LLVM)
 
 ---
 

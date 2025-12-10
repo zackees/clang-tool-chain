@@ -219,9 +219,107 @@ def cmd_package_version(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_install_clang(args: argparse.Namespace) -> int:
+    """Pre-download and install the core Clang/LLVM toolchain."""
+    from . import env_breadcrumbs, installer
+    from .path_utils import get_install_dir
+
+    print("Clang Tool Chain - Install Clang/LLVM")
+    print("=" * 60)
+    print()
+
+    # Get current platform info
+    try:
+        platform_name, arch = wrapper.get_platform_info()
+        print(f"Platform:     {platform_name}")
+        print(f"Architecture: {arch}")
+        print()
+    except RuntimeError as e:
+        print(f"Error detecting platform: {e}")
+        return 1
+
+    # Check if already installed (without triggering auto-download)
+    if installer.is_toolchain_installed(platform_name, arch):
+        install_dir = get_install_dir(platform_name, arch)
+        print("✓ Clang/LLVM toolchain already installed at:")
+        print(f"  {install_dir}")
+        print()
+
+        # Mark as installed in database
+        env_breadcrumbs.mark_component_installed("clang", str(install_dir))
+
+        print("To verify installation, run:")
+        print("  clang-tool-chain-test")
+        return 0
+
+    # Download and install
+    print("Downloading and installing Clang/LLVM toolchain...")
+    print()
+    print("This will download approximately:")
+    if platform_name == "win":
+        print("  - Windows GNU ABI: ~90 MB (includes MinGW sysroot)")
+        print("  - Windows MSVC ABI: ~71 MB")
+    else:
+        print("  - ~71-91 MB (compressed)")
+    print()
+
+    try:
+        # Use the installer to ensure toolchain is installed
+        installer.ensure_toolchain(platform_name, arch)
+
+        # Verify installation
+        bin_dir = wrapper.get_platform_binary_dir()
+        if bin_dir.exists():
+            print()
+            print("=" * 60)
+            print("✓ Installation Complete!")
+            print()
+            print(f"Toolchain installed at: {bin_dir.parent}")
+            print()
+
+            # Mark as installed in database
+            env_breadcrumbs.mark_component_installed("clang", str(bin_dir.parent))
+
+            # Count tools
+            tool_count = len(list(bin_dir.glob("*")))
+            print(f"Available tools: {tool_count}")
+            print()
+
+            # Show some key tools
+            key_tools = ["clang", "clang++", "lld", "llvm-ar", "clang-format"]
+            print("Key tools installed:")
+            for tool in key_tools:
+                tool_name = f"{tool}.exe" if platform_name == "win" else tool
+                tool_path = bin_dir / tool_name
+                if tool_path.exists():
+                    print(f"  ✓ {tool}")
+            print()
+
+            print("To use these tools:")
+            print("  clang-tool-chain-c hello.c -o hello")
+            print("  clang-tool-chain-cpp hello.cpp -o hello")
+            print()
+            print("To verify installation:")
+            print("  clang-tool-chain-test")
+            print()
+            print("To install additional components:")
+            print("  - IWYU: Run 'clang-tool-chain-iwyu' (auto-downloads on first use)")
+            print("  - Emscripten: Run 'clang-tool-chain-emcc' (auto-downloads on first use)")
+            print()
+            return 0
+        else:
+            print("✗ Installation verification failed - bin directory not found")
+            return 1
+
+    except Exception as e:
+        print()
+        print(f"✗ Installation failed: {e}")
+        return 1
+
+
 def cmd_purge(args: argparse.Namespace) -> int:
     """Remove all downloaded toolchains and cached data."""
-    from . import downloader
+    from . import component_db, downloader
 
     toolchain_dir = downloader.get_home_toolchain_dir()
 
@@ -230,6 +328,10 @@ def cmd_purge(args: argparse.Namespace) -> int:
         print("Nothing to purge.")
         return 0
 
+    # Get all installed components and PATH components
+    all_components = component_db.get_all_installed_components()
+    path_components = component_db.get_all_path_components()
+
     # Show what will be removed
     print("Clang Tool Chain - Purge")
     print("=" * 60)
@@ -237,6 +339,22 @@ def cmd_purge(args: argparse.Namespace) -> int:
     print("This will remove all downloaded toolchains from:")
     print(f"  {toolchain_dir}")
     print()
+
+    # Show installed components
+    if all_components:
+        print("Installed components:")
+        for comp in all_components:
+            status = " (in PATH)" if comp["in_path"] else ""
+            install_path = comp.get("install_path", "unknown")
+            print(f"  - {comp['name']}: {install_path}{status}")
+        print()
+
+    # Show PATH components that will be cleaned up
+    if path_components:
+        print("Components in system PATH (will be removed from PATH):")
+        for component, bin_path in path_components:
+            print(f"  - {component}: {bin_path}")
+        print()
 
     # Calculate total size
     try:
@@ -255,6 +373,25 @@ def cmd_purge(args: argparse.Namespace) -> int:
             print("Purge cancelled.")
             return 0
 
+    # Remove environment PATH entries first (if setenvironment is available)
+    if path_components:
+        print()
+        print("Removing components from system PATH...")
+        try:
+            import setenvironment
+
+            for component, bin_path in path_components:
+                try:
+                    setenvironment.remove_env_path(bin_path)
+                    print(f"  ✓ Removed {component} from PATH")
+                except Exception as e:
+                    print(f"  ✗ Failed to remove {component} from PATH: {e}")
+        except ImportError:
+            print("  ⚠ setenvironment not installed, cannot auto-remove from PATH")
+            print("  Please run the following commands manually:")
+            for component, _bin_path in path_components:
+                print(f"    clang-tool-chain uninstall {component}-env")
+
     # Remove the directory
     print()
     print("Removing toolchain directory...")
@@ -262,11 +399,140 @@ def cmd_purge(args: argparse.Namespace) -> int:
         downloader._robust_rmtree(toolchain_dir)
         print("✓ Successfully removed all toolchains.")
         print()
+        if path_components:
+            print("Note: PATH changes take effect in new terminal sessions.")
+            print()
         print("Toolchains will be re-downloaded on next use of clang-tool-chain commands.")
+
+        # Clear the component database
+        component_db.remove_all_components()
+
         return 0
     except Exception as e:
         print(f"✗ Failed to remove toolchain directory: {e}")
         return 1
+
+
+def cmd_install_clang_env(args: argparse.Namespace) -> int:
+    """Install Clang/LLVM toolchain binaries to system environment (PATH)."""
+    import setenvironment
+
+    from . import env_breadcrumbs, installer
+
+    print("Clang Tool Chain - Install to Environment")
+    print("=" * 60)
+    print()
+
+    # First, ensure clang is installed
+    try:
+        platform_name, arch = wrapper.get_platform_info()
+    except RuntimeError as e:
+        print(f"Error: Failed to detect platform: {e}")
+        return 1
+
+    if not installer.is_toolchain_installed(platform_name, arch):
+        print("Clang/LLVM toolchain not found. Installing first...")
+        print()
+        installer.ensure_toolchain(platform_name, arch)
+        print()
+        print("✓ Clang/LLVM toolchain installed")
+        print()
+
+    # Get the binary directory
+    try:
+        bin_dir = wrapper.get_platform_binary_dir()
+    except RuntimeError as e:
+        print(f"Error: Failed to locate toolchain binaries: {e}")
+        return 1
+
+    if not bin_dir.exists():
+        print(f"Error: Binary directory does not exist: {bin_dir}")
+        print()
+        print("Installation failed. Please try running:")
+        print("  clang-tool-chain install clang")
+        return 1
+
+    print(f"Binary directory: {bin_dir}")
+    print()
+
+    # Add bin directory to PATH
+    print("Adding toolchain bin directory to PATH...")
+    try:
+        setenvironment.add_env_path(str(bin_dir))
+        print(f"✓ Added to PATH: {bin_dir}")
+
+        # Mark as installed to environment (for automatic cleanup during purge)
+        env_breadcrumbs.mark_component_installed_to_env("clang", str(bin_dir))
+    except Exception as e:
+        print(f"✗ Failed to add to PATH: {e}")
+        return 1
+
+    print()
+    print("=" * 60)
+    print("Installation Complete!")
+    print()
+    print("The following tools are now available globally:")
+    print("  clang, clang++, lld, llvm-ar, llvm-nm, llvm-objdump,")
+    print("  llvm-strip, clang-format, clang-tidy, and more...")
+    print()
+    print("IMPORTANT: You may need to:")
+    print("  - Restart your terminal/shell for changes to take effect")
+    print("  - On some systems, log out and log back in")
+    print()
+    print("To verify installation, open a new terminal and run:")
+    print("  clang --version")
+    print()
+
+    return 0
+
+
+def cmd_uninstall_clang_env(args: argparse.Namespace) -> int:
+    """Remove Clang/LLVM toolchain binaries from system environment (PATH)."""
+    import setenvironment
+
+    from . import env_breadcrumbs
+
+    print("Clang Tool Chain - Uninstall from Environment")
+    print("=" * 60)
+    print()
+
+    # Get the binary directory
+    try:
+        bin_dir = wrapper.get_platform_binary_dir()
+    except RuntimeError as e:
+        print(f"Error: Failed to locate toolchain binaries: {e}")
+        return 1
+
+    print(f"Binary directory: {bin_dir}")
+    print()
+
+    # Remove bin directory from PATH
+    print("Removing toolchain bin directory from PATH...")
+    try:
+        setenvironment.remove_env_path(str(bin_dir))
+        print(f"✓ Removed from PATH: {bin_dir}")
+
+        # Remove breadcrumb
+        env_breadcrumbs.unmark_component_installed_to_env("clang")
+    except Exception as e:
+        print(f"✗ Failed to remove from PATH: {e}")
+        return 1
+
+    print()
+    print("=" * 60)
+    print("Uninstallation Complete!")
+    print()
+    print("The toolchain binaries are no longer in your system PATH.")
+    print()
+    print("IMPORTANT: You may need to:")
+    print("  - Restart your terminal/shell for changes to take effect")
+    print("  - On some systems, log out and log back in")
+    print()
+    print("You can still use the tools via clang-tool-chain wrapper commands:")
+    print("  clang-tool-chain-c, clang-tool-chain-cpp, etc.")
+    print()
+
+    return 0
 
 
 def cmd_test(args: argparse.Namespace) -> int:
@@ -511,6 +777,47 @@ def main() -> int:
     )
     parser_test.set_defaults(func=cmd_test)
 
+    # install command (with subcommands)
+    parser_install = subparsers.add_parser(
+        "install",
+        help="Install toolchain components",
+    )
+    install_subparsers = parser_install.add_subparsers(
+        dest="install_component",
+        help="Component to install",
+    )
+
+    # install clang
+    parser_install_clang = install_subparsers.add_parser(
+        "clang",
+        help="Pre-download and install the core Clang/LLVM toolchain",
+    )
+    parser_install_clang.set_defaults(func=cmd_install_clang)
+
+    # install clang-env
+    parser_install_clang_env = install_subparsers.add_parser(
+        "clang-env",
+        help="Install Clang/LLVM toolchain binaries to system environment (PATH)",
+    )
+    parser_install_clang_env.set_defaults(func=cmd_install_clang_env)
+
+    # uninstall command (with subcommands)
+    parser_uninstall = subparsers.add_parser(
+        "uninstall",
+        help="Uninstall toolchain components from environment",
+    )
+    uninstall_subparsers = parser_uninstall.add_subparsers(
+        dest="uninstall_component",
+        help="Component to uninstall",
+    )
+
+    # uninstall clang-env
+    parser_uninstall_clang_env = uninstall_subparsers.add_parser(
+        "clang-env",
+        help="Remove Clang/LLVM toolchain binaries from system environment (PATH)",
+    )
+    parser_uninstall_clang_env.set_defaults(func=cmd_uninstall_clang_env)
+
     # purge command
     parser_purge = subparsers.add_parser(
         "purge",
@@ -531,6 +838,26 @@ def main() -> int:
     if not args.command:
         parser.print_help()
         return 0
+
+    # Handle install/uninstall subcommands without component specified
+    if args.command == "install" and not hasattr(args, "func"):
+        print("Error: Please specify what to install")
+        print()
+        print("Available options:")
+        print("  clang-tool-chain install clang       - Install core Clang/LLVM toolchain")
+        print("  clang-tool-chain install clang-env   - Add Clang to system PATH")
+        print()
+        print("For more information: clang-tool-chain install --help")
+        return 1
+
+    if args.command == "uninstall" and not hasattr(args, "func"):
+        print("Error: Please specify what to uninstall")
+        print()
+        print("Available options:")
+        print("  clang-tool-chain uninstall clang-env - Remove Clang from system PATH")
+        print()
+        print("For more information: clang-tool-chain uninstall --help")
+        return 1
 
     # Execute command
     return args.func(args)

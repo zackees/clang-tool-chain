@@ -17,6 +17,7 @@ import pytest
 from clang_tool_chain.downloader import ToolchainInfrastructureError
 
 
+@pytest.mark.serial
 class TestLLVMBinaryUtilsVersion(unittest.TestCase):
     """Test that LLVM binary utilities are installed and report versions."""
 

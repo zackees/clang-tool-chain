@@ -80,6 +80,18 @@ pre-commit install
 uv pip install -e ".[sccache]"
 ```
 
+### Pre-installing the Toolchain
+
+```bash
+# Pre-download and install just the core Clang/LLVM toolchain
+clang-tool-chain install clang
+
+# This downloads ~71-91 MB and does NOT include:
+# - IWYU (downloads on first use of clang-tool-chain-iwyu)
+# - Emscripten (downloads on first use of clang-tool-chain-emcc)
+# - Node.js (downloads with Emscripten)
+```
+
 ### Removing Toolchains
 
 ```bash
@@ -96,7 +108,27 @@ clang-tool-chain purge --yes    # Skip confirmation (for scripts)
 # - Lock files
 
 # Toolchains will be re-downloaded on next use
+# Also automatically removes any PATH entries (clang-env, iwyu-env, etc.)
 ```
+
+### Installing Toolchain to System Environment
+
+To make clang++ and related tools available globally (without the `clang-tool-chain-` prefix):
+
+```bash
+# Add Clang/LLVM toolchain binaries to system PATH
+clang-tool-chain install clang-env
+
+# Remove Clang/LLVM from PATH
+clang-tool-chain uninstall clang-env
+```
+
+**Note:** This feature uses the `setenvironment` package (included as a dependency) and modifies system/user PATH persistently. Changes take effect in new terminal sessions.
+
+**Future expansion:**
+- `install iwyu` / `install iwyu-env` - IWYU analyzer (depends on clang)
+- `install emscripten` / `install emscripten-env` - Emscripten SDK (includes its own LLVM, separate from main clang)
+  - Note: Emscripten includes its own bundled LLVM, so `install emscripten-env` would add Emscripten's tools to PATH (emcc, em++, etc.), not the main clang toolchain.
 
 ### Testing
 

@@ -39,6 +39,42 @@ uv run pytest -m "not slow"      # Skip slow tests
 uv run pytest tests/test_cli.py::MainTester::test_imports -v
 ```
 
+## Parallel Testing Infrastructure
+
+The test suite supports parallel execution using `pytest-xdist` for faster test runs.
+
+### Automatic Toolchain Pre-installation
+
+The `tests/conftest.py` file contains a `pytest_configure()` hook that **automatically pre-installs the toolchain before running parallel tests**. This prevents race conditions and timeout issues when multiple worker processes try to download the toolchain simultaneously.
+
+**How it works:**
+1. The hook runs once in the main process before pytest-xdist spawns workers
+2. It checks if the toolchain is already installed
+3. If not, it downloads and installs the toolchain (~30-60 seconds for initial download)
+4. Worker processes find the toolchain already installed and start immediately
+5. No test timeouts waiting for concurrent downloads
+
+**Why this is needed:**
+- Without pre-installation, all worker processes would call `ensure_toolchain()` simultaneously
+- Process 1 acquires the lock and downloads ~90MB (~30-60 seconds)
+- Processes 2-N wait for the lock
+- Tests timeout (10-30 seconds) before download completes → test failures
+
+This pattern is especially important for:
+- CI environments (GitHub Actions) with fresh installations
+- Local development after `clang-tool-chain purge`
+- Windows where file locking can add delays
+
+**Implementation details:**
+```python
+# tests/conftest.py
+def pytest_configure(config):
+    """Pre-install toolchain before spawning worker processes."""
+    if not hasattr(config, "workerinput"):  # Only in main process
+        platform_name, arch = get_platform_info()
+        installer.ensure_toolchain(platform_name, arch)
+```
+
 ## Test Organization
 
 ### Core Tests

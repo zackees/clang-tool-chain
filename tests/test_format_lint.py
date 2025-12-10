@@ -15,6 +15,7 @@ import pytest
 from clang_tool_chain.downloader import ToolchainInfrastructureError
 
 
+@pytest.mark.serial
 class TestClangFormat(unittest.TestCase):
     """Test clang-format functionality."""
 
