@@ -10,7 +10,7 @@ This module tests the automatic Node.js bundling system including:
 """
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -166,9 +166,20 @@ class TestNodeJSDownloader:
         # Create directory with done.txt
         test_dir = tmp_path / "nodejs" / "linux" / "x86_64"
         test_dir.mkdir(parents=True)
-        (test_dir / "done.txt").write_text("installed")
+        test_sha256 = "xyz789abc123"
+        (test_dir / "done.txt").write_text(f"installed\nSHA256: {test_sha256}\n")
 
-        with patch("clang_tool_chain.installer.get_nodejs_install_dir", return_value=test_dir):
+        # Mock the manifest to return matching SHA256
+        mock_manifest = MagicMock()
+        mock_manifest.latest = "1.0.0"
+        mock_version_info = MagicMock()
+        mock_version_info.sha256 = test_sha256
+        mock_manifest.versions = {"1.0.0": mock_version_info}
+
+        with (
+            patch("clang_tool_chain.installer.get_nodejs_install_dir", return_value=test_dir),
+            patch("clang_tool_chain.installer.fetch_nodejs_platform_manifest", return_value=mock_manifest),
+        ):
             result = downloader.is_nodejs_installed("linux", "x86_64")
             assert result is True
 
@@ -180,9 +191,20 @@ class TestNodeJSDownloader:
         # Mock installation directory with done.txt
         test_dir = tmp_path / "nodejs" / "linux" / "x86_64"
         test_dir.mkdir(parents=True)
-        (test_dir / "done.txt").write_text("installed")
+        test_sha256 = "fast123path456"
+        (test_dir / "done.txt").write_text(f"installed\nSHA256: {test_sha256}\n")
 
-        with patch("clang_tool_chain.installer.get_nodejs_install_dir", return_value=test_dir):
+        # Mock the manifest to return matching SHA256
+        mock_manifest = MagicMock()
+        mock_manifest.latest = "1.0.0"
+        mock_version_info = MagicMock()
+        mock_version_info.sha256 = test_sha256
+        mock_manifest.versions = {"1.0.0": mock_version_info}
+
+        with (
+            patch("clang_tool_chain.installer.get_nodejs_install_dir", return_value=test_dir),
+            patch("clang_tool_chain.installer.fetch_nodejs_platform_manifest", return_value=mock_manifest),
+        ):
             start_time = time.time()
             result_dir = downloader.ensure_nodejs_available("linux", "x86_64")
             elapsed = time.time() - start_time

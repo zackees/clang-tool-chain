@@ -116,18 +116,67 @@ def is_toolchain_installed(platform: str, arch: str) -> bool:
     Check if the toolchain is already installed for the given platform/arch.
 
     This checks for the presence of a done.txt file which is created after
-    successful download and extraction.
+    successful download and extraction, and verifies that the installed
+    version matches the current manifest SHA256 hash.
+
+    If the SHA256 hash in the manifest has changed (e.g., archive was rebuilt),
+    this will return False to trigger a re-download.
 
     Args:
         platform: Platform name (e.g., "win", "linux", "darwin")
         arch: Architecture name (e.g., "x86_64", "arm64")
 
     Returns:
-        True if installed, False otherwise
+        True if installed and hash matches, False otherwise
     """
     install_dir = get_install_dir(platform, arch)
     done_file = install_dir / "done.txt"
-    return done_file.exists()
+
+    if not done_file.exists():
+        return False
+
+    # Read the done.txt file to get the installed SHA256
+    try:
+        done_content = done_file.read_text()
+        installed_sha256 = None
+        for line in done_content.splitlines():
+            if line.startswith("SHA256:"):
+                installed_sha256 = line.split(":", 1)[1].strip()
+                break
+
+        if not installed_sha256:
+            logger.warning(f"No SHA256 found in {done_file}, will re-download to verify integrity")
+            return False
+
+        # Fetch current manifest to compare SHA256
+        platform_manifest = fetch_platform_manifest(platform, arch)
+        latest_version = platform_manifest.latest
+        if not latest_version:
+            logger.error("Manifest does not specify a 'latest' version")
+            return False
+
+        version_info = platform_manifest.versions.get(latest_version)
+        if not version_info:
+            logger.error(f"Version {latest_version} not found in manifest")
+            return False
+
+        current_sha256 = version_info.sha256
+
+        if installed_sha256.lower() != current_sha256.lower():
+            logger.info(
+                f"SHA256 mismatch detected for {platform}/{arch}:\n"
+                f"  Installed: {installed_sha256}\n"
+                f"  Current:   {current_sha256}\n"
+                f"Archive was rebuilt or updated - will re-download"
+            )
+            return False
+
+        logger.debug(f"SHA256 matches for {platform}/{arch}, toolchain is up to date")
+        return True
+
+    except Exception as e:
+        logger.warning(f"Error checking toolchain installation status: {e}, will re-download")
+        return False
 
 
 def download_and_install_toolchain(platform: str, arch: str, verbose: bool = False) -> None:
@@ -290,7 +339,9 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         # Ensure install_dir exists before writing done.txt
         install_dir.mkdir(parents=True, exist_ok=True)
         done_file = install_dir / "done.txt"
-        done_file.write_text(f"Installation completed successfully\nVersion: {latest_version}\n")
+        done_file.write_text(
+            f"Installation completed successfully\n" f"Version: {latest_version}\n" f"SHA256: {version_info.sha256}\n"
+        )
 
     finally:
         # Clean up downloaded archive
@@ -379,18 +430,54 @@ def ensure_toolchain(platform: str, arch: str) -> None:
 
 def is_iwyu_installed(platform: str, arch: str) -> bool:
     """
-    Check if IWYU is already installed.
+    Check if IWYU is already installed and hash matches current manifest.
 
     Args:
         platform: Platform name (e.g., "win", "linux", "darwin")
         arch: Architecture name (e.g., "x86_64", "arm64")
 
     Returns:
-        True if installed, False otherwise
+        True if installed and hash matches, False otherwise
     """
     install_dir = get_iwyu_install_dir(platform, arch)
     done_file = install_dir / "done.txt"
-    return done_file.exists()
+
+    if not done_file.exists():
+        return False
+
+    try:
+        done_content = done_file.read_text()
+        installed_sha256 = None
+        for line in done_content.splitlines():
+            if line.startswith("SHA256:"):
+                installed_sha256 = line.split(":", 1)[1].strip()
+                break
+
+        if not installed_sha256:
+            logger.warning(f"No SHA256 found in IWYU {done_file}, will re-download")
+            return False
+
+        # Fetch current manifest
+        platform_manifest = fetch_iwyu_platform_manifest(platform, arch)
+        latest_version = platform_manifest.latest
+        if not latest_version:
+            return False
+
+        version_info = platform_manifest.versions.get(latest_version)
+        if not version_info:
+            return False
+
+        current_sha256 = version_info.sha256
+
+        if installed_sha256.lower() != current_sha256.lower():
+            logger.info("IWYU SHA256 mismatch - will re-download")
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"Error checking IWYU installation: {e}, will re-download")
+        return False
 
 
 def download_and_install_iwyu(platform: str, arch: str) -> None:
@@ -491,7 +578,7 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
         install_dir.mkdir(parents=True, exist_ok=True)
         done_file = install_dir / "done.txt"
         with open(done_file, "w") as f:
-            f.write(f"IWYU {manifest.latest} installed successfully\n")
+            f.write(f"IWYU {manifest.latest} installed successfully\n" f"SHA256: {version_info.sha256}\n")
 
         logger.info(f"IWYU installation complete for {platform}/{arch}")
 
@@ -892,10 +979,46 @@ def link_clang_binaries_to_emscripten(platform: str, arch: str) -> None:
 
 
 def is_emscripten_installed(platform: str, arch: str) -> bool:
-    """Check if Emscripten is already installed."""
+    """Check if Emscripten is already installed and hash matches current manifest."""
     install_dir = get_emscripten_install_dir(platform, arch)
     done_file = install_dir / "done.txt"
-    return done_file.exists()
+
+    if not done_file.exists():
+        return False
+
+    try:
+        done_content = done_file.read_text()
+        installed_sha256 = None
+        for line in done_content.splitlines():
+            if line.startswith("SHA256:"):
+                installed_sha256 = line.split(":", 1)[1].strip()
+                break
+
+        if not installed_sha256:
+            logger.warning(f"No SHA256 found in Emscripten {done_file}, will re-download")
+            return False
+
+        # Fetch current manifest
+        platform_manifest = fetch_emscripten_platform_manifest(platform, arch)
+        latest_version = platform_manifest.latest
+        if not latest_version:
+            return False
+
+        version_info = platform_manifest.versions.get(latest_version)
+        if not version_info:
+            return False
+
+        current_sha256 = version_info.sha256
+
+        if installed_sha256.lower() != current_sha256.lower():
+            logger.info("Emscripten SHA256 mismatch - will re-download")
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"Error checking Emscripten installation: {e}, will re-download")
+        return False
 
 
 def download_and_install_emscripten(platform: str, arch: str) -> None:
@@ -1019,6 +1142,7 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
                 f.write(f"Emscripten {latest_version} installed on {datetime.datetime.now()}\n")
                 f.write(f"Platform: {platform}\n")
                 f.write(f"Architecture: {arch}\n")
+                f.write(f"SHA256: {version_info.sha256}\n")
                 # Flush and sync to ensure file is fully written
                 f.flush()
                 os.fsync(f.fileno())
@@ -1262,18 +1386,54 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
 
 def is_nodejs_installed(platform: str, arch: str) -> bool:
     """
-    Check if Node.js is already installed.
+    Check if Node.js is already installed and hash matches current manifest.
 
     Args:
         platform: Platform name (e.g., "win", "linux", "darwin")
         arch: Architecture name (e.g., "x86_64", "arm64")
 
     Returns:
-        True if installed, False otherwise
+        True if installed and hash matches, False otherwise
     """
     install_dir = get_nodejs_install_dir(platform, arch)
     done_file = install_dir / "done.txt"
-    return done_file.exists()
+
+    if not done_file.exists():
+        return False
+
+    try:
+        done_content = done_file.read_text()
+        installed_sha256 = None
+        for line in done_content.splitlines():
+            if line.startswith("SHA256:"):
+                installed_sha256 = line.split(":", 1)[1].strip()
+                break
+
+        if not installed_sha256:
+            logger.warning(f"No SHA256 found in Node.js {done_file}, will re-download")
+            return False
+
+        # Fetch current manifest
+        platform_manifest = fetch_nodejs_platform_manifest(platform, arch)
+        latest_version = platform_manifest.latest
+        if not latest_version:
+            return False
+
+        version_info = platform_manifest.versions.get(latest_version)
+        if not version_info:
+            return False
+
+        current_sha256 = version_info.sha256
+
+        if installed_sha256.lower() != current_sha256.lower():
+            logger.info("Node.js SHA256 mismatch - will re-download")
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"Error checking Node.js installation: {e}, will re-download")
+        return False
 
 
 def download_and_install_nodejs(platform: str, arch: str) -> None:
@@ -1360,6 +1520,7 @@ def download_and_install_nodejs(platform: str, arch: str) -> None:
                 f.write(f"Node.js {latest_version} installed on {datetime.datetime.now()}\n")
                 f.write(f"Platform: {platform}\n")
                 f.write(f"Architecture: {arch}\n")
+                f.write(f"SHA256: {version_info.sha256}\n")
 
             logger.info("Node.js installation complete")
 

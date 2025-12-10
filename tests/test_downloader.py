@@ -423,11 +423,22 @@ class TestDownloader(unittest.TestCase):
             install_dir = Path(tmpdir)
             install_dir.mkdir(parents=True, exist_ok=True)
 
-            # Create done.txt file
+            # Create done.txt file with SHA256
             done_file = install_dir / "done.txt"
-            done_file.write_text("Installation completed successfully\n")
+            test_sha256 = "abc123def456"
+            done_file.write_text(f"Installation completed successfully\nSHA256: {test_sha256}\n")
 
-            with patch("clang_tool_chain.installer.get_install_dir", return_value=install_dir):
+            # Mock the manifest to return matching SHA256
+            mock_manifest = MagicMock()
+            mock_manifest.latest = "1.0.0"
+            mock_version_info = MagicMock()
+            mock_version_info.sha256 = test_sha256
+            mock_manifest.versions = {"1.0.0": mock_version_info}
+
+            with (
+                patch("clang_tool_chain.installer.get_install_dir", return_value=install_dir),
+                patch("clang_tool_chain.installer.fetch_platform_manifest", return_value=mock_manifest),
+            ):
                 result = downloader.is_toolchain_installed("linux", "x86_64")
                 self.assertTrue(result)
 
