@@ -7,7 +7,7 @@ Provides commands for managing and using the LLVM toolchain.
 import argparse
 import subprocess
 import sys
-from typing import NoReturn
+from typing import Any, NoReturn
 
 from . import sccache_runner, wrapper
 from .linker import _add_lld_linker_if_needed
@@ -18,6 +18,63 @@ try:
     from .__version__ import __version__
 except ImportError:
     __version__ = "unknown"
+
+
+def safe_print(*args: Any, **kwargs: Any) -> None:
+    """
+    Print function that handles encoding errors gracefully.
+
+    Falls back to ASCII characters if the console doesn't support Unicode.
+    This ensures compatibility with Windows CP1252 and other limited encodings.
+    """
+    try:
+        # Try to print normally first
+        print(*args, **kwargs)
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        # If encoding fails, replace Unicode characters with ASCII equivalents
+        file = kwargs.get("file", sys.stdout)
+        encoding = getattr(file, "encoding", "utf-8") or "utf-8"
+
+        safe_args = []
+        for arg in args:
+            text = str(arg)
+
+            # First, replace known Unicode characters with ASCII equivalents
+            text = text.replace("✓", "[OK]")
+            text = text.replace("✗", "[FAIL]")
+
+            # Then, replace any remaining unencodable characters
+            safe_text = []
+            for char in text:
+                try:
+                    char.encode(encoding)
+                    safe_text.append(char)
+                except (UnicodeEncodeError, UnicodeDecodeError):
+                    # Replace unencodable character with its Unicode codepoint
+                    codepoint = f"U+{ord(char):04X}"
+                    safe_text.append(f"[{codepoint}]")
+
+            safe_args.append("".join(safe_text))
+
+        # Try printing again with replaced characters
+        try:
+            print(*safe_args, **kwargs)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            # Last resort: write to buffer with error handling
+            if hasattr(file, "buffer"):
+                output = " ".join(safe_args)
+                end_value = kwargs.get("end")
+                if end_value is not None:
+                    output += str(end_value)
+                else:
+                    output += "\n"
+                file.buffer.write(output.encode("ascii", errors="backslashreplace"))
+                file.flush()
+            else:
+                # Ultimate fallback: convert to ASCII with backslashreplace
+                for arg in safe_args:
+                    file.write(arg.encode("ascii", errors="backslashreplace").decode("ascii"))
+                file.write("\n")
 
 
 def cmd_info(args: argparse.Namespace) -> int:
@@ -397,7 +454,7 @@ def cmd_purge(args: argparse.Namespace) -> int:
     print("Removing toolchain directory...")
     try:
         downloader._robust_rmtree(toolchain_dir)
-        print("✓ Successfully removed all toolchains.")
+        safe_print("✓ Successfully removed all toolchains.")
         print()
         if path_components:
             print("Note: PATH changes take effect in new terminal sessions.")
@@ -409,7 +466,7 @@ def cmd_purge(args: argparse.Namespace) -> int:
 
         return 0
     except Exception as e:
-        print(f"✗ Failed to remove toolchain directory: {e}")
+        safe_print(f"✗ Failed to remove toolchain directory: {e}")
         return 1
 
 
@@ -549,9 +606,9 @@ def cmd_test(args: argparse.Namespace) -> int:
     try:
         platform_name, arch = wrapper.get_platform_info()
         print(f"      Platform: {platform_name}/{arch}")
-        print("      ✓ PASSED")
+        safe_print("      ✓ PASSED")
     except Exception as e:
-        print(f"      ✗ FAILED: {e}")
+        safe_print(f"      ✗ FAILED: {e}")
         return 1
     print()
 
@@ -561,12 +618,12 @@ def cmd_test(args: argparse.Namespace) -> int:
         bin_dir = wrapper.get_platform_binary_dir()
         if bin_dir.exists():
             print(f"      Binary directory: {bin_dir}")
-            print("      ✓ PASSED")
+            safe_print("      ✓ PASSED")
         else:
-            print(f"      ✗ FAILED: Binary directory does not exist: {bin_dir}")
+            safe_print(f"      ✗ FAILED: Binary directory does not exist: {bin_dir}")
             return 1
     except Exception as e:
-        print(f"      ✗ FAILED: {e}")
+        safe_print(f"      ✗ FAILED: {e}")
         return 1
     print()
 
@@ -576,11 +633,11 @@ def cmd_test(args: argparse.Namespace) -> int:
         clang_path = wrapper.find_tool_binary("clang")
         print(f"      Found: {clang_path}")
         if not clang_path.exists():
-            print(f"      ✗ FAILED: Binary does not exist: {clang_path}")
+            safe_print(f"      ✗ FAILED: Binary does not exist: {clang_path}")
             return 1
-        print("      ✓ PASSED")
+        safe_print("      ✓ PASSED")
     except Exception as e:
-        print(f"      ✗ FAILED: {e}")
+        safe_print(f"      ✗ FAILED: {e}")
         return 1
     print()
 
@@ -590,11 +647,11 @@ def cmd_test(args: argparse.Namespace) -> int:
         clang_cpp_path = wrapper.find_tool_binary("clang++")
         print(f"      Found: {clang_cpp_path}")
         if not clang_cpp_path.exists():
-            print(f"      ✗ FAILED: Binary does not exist: {clang_cpp_path}")
+            safe_print(f"      ✗ FAILED: Binary does not exist: {clang_cpp_path}")
             return 1
-        print("      ✓ PASSED")
+        safe_print("      ✓ PASSED")
     except Exception as e:
-        print(f"      ✗ FAILED: {e}")
+        safe_print(f"      ✗ FAILED: {e}")
         return 1
     print()
 
@@ -605,13 +662,13 @@ def cmd_test(args: argparse.Namespace) -> int:
         if result.returncode == 0:
             version_line = result.stdout.split("\n")[0]
             print(f"      {version_line}")
-            print("      ✓ PASSED")
+            safe_print("      ✓ PASSED")
         else:
-            print(f"      ✗ FAILED: clang --version returned {result.returncode}")
+            safe_print(f"      ✗ FAILED: clang --version returned {result.returncode}")
             print(f"      stderr: {result.stderr}")
             return 1
     except Exception as e:
-        print(f"      ✗ FAILED: {e}")
+        safe_print(f"      ✗ FAILED: {e}")
         return 1
     print()
 
@@ -641,20 +698,20 @@ int main() {
                 [str(clang_path), str(test_c), "-o", str(test_out)], capture_output=True, text=True, timeout=30
             )
             if result.returncode != 0:
-                print("      ✗ FAILED: Compilation failed")
+                safe_print("      ✗ FAILED: Compilation failed")
                 print(f"      stdout: {result.stdout}")
                 print(f"      stderr: {result.stderr}")
                 return 1
 
             # Verify output file was created
             if not test_out.exists():
-                print(f"      ✗ FAILED: Output binary not created: {test_out}")
+                safe_print(f"      ✗ FAILED: Output binary not created: {test_out}")
                 return 1
 
             print(f"      Compiled: {test_out}")
-            print("      ✓ PASSED")
+            safe_print("      ✓ PASSED")
         except Exception as e:
-            print(f"      ✗ FAILED: {e}")
+            safe_print(f"      ✗ FAILED: {e}")
             return 1
     print()
 
@@ -684,25 +741,25 @@ int main() {
                 [str(clang_cpp_path), str(test_cpp), "-o", str(test_out)], capture_output=True, text=True, timeout=30
             )
             if result.returncode != 0:
-                print("      ✗ FAILED: Compilation failed")
+                safe_print("      ✗ FAILED: Compilation failed")
                 print(f"      stdout: {result.stdout}")
                 print(f"      stderr: {result.stderr}")
                 return 1
 
             # Verify output file was created
             if not test_out.exists():
-                print(f"      ✗ FAILED: Output binary not created: {test_out}")
+                safe_print(f"      ✗ FAILED: Output binary not created: {test_out}")
                 return 1
 
             print(f"      Compiled: {test_out}")
-            print("      ✓ PASSED")
+            safe_print("      ✓ PASSED")
         except Exception as e:
-            print(f"      ✗ FAILED: {e}")
+            safe_print(f"      ✗ FAILED: {e}")
             return 1
     print()
 
     print("=" * 70)
-    print("All tests passed! ✓")
+    safe_print("All tests passed! ✓")
     print()
     return 0
 
