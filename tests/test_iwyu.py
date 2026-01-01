@@ -119,8 +119,12 @@ class TestIWYUExecution(unittest.TestCase):
 
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def get_iwyu_env(self) -> dict[str, str]:
-        """Get environment dict for running IWYU with DLL path on Windows and shared libraries on Linux."""
+    def get_iwyu_env(self, verbose: bool = False) -> dict[str, str]:
+        """Get environment dict for running IWYU with DLL path on Windows and shared libraries on Linux.
+
+        Args:
+            verbose: If True, enable verbose library loading diagnostics (LD_DEBUG on Linux)
+        """
         import os
 
         env = os.environ.copy()
@@ -140,7 +144,58 @@ class TestIWYUExecution(unittest.TestCase):
                 else:
                     env["LD_LIBRARY_PATH"] = str(lib_dir)
 
+            # Enable verbose library loading diagnostics if requested
+            # LD_DEBUG=libs shows library search paths and loading details
+            # LD_DEBUG=all shows everything (very verbose)
+            if verbose:
+                env["LD_DEBUG"] = "libs"
+
         return env
+
+    def _check_for_crash(self, result: subprocess.CompletedProcess, iwyu_path: Path, context: str = "") -> None:
+        """Check if IWYU crashed and provide detailed diagnostics.
+
+        Args:
+            result: The subprocess result from running IWYU
+            iwyu_path: Path to the IWYU binary
+            context: Additional context for the error message
+        """
+        if result.returncode < 0:
+            signal_name = {
+                -11: "SIGSEGV (Segmentation fault)",
+                -6: "SIGABRT (Abort)",
+                -4: "SIGILL (Illegal instruction)",
+            }.get(result.returncode, f"Signal {-result.returncode}")
+
+            # Re-run with verbose diagnostics to get library loading info
+            diagnostic_info = ""
+            if sys.platform == "linux":
+                try:
+                    verbose_result = subprocess.run(
+                        [str(iwyu_path), "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        env=self.get_iwyu_env(verbose=True),
+                    )
+                    diagnostic_info = (
+                        f"\n\nLibrary loading diagnostics (LD_DEBUG=libs):\n{verbose_result.stderr[:2000]}"
+                    )
+                except Exception as e:
+                    diagnostic_info = f"\n\nFailed to get diagnostics: {e}"
+
+            context_msg = f" ({context})" if context else ""
+            self.fail(
+                f"IWYU crashed with {signal_name}{context_msg}. "
+                f"This usually indicates:\n"
+                f"  - Missing shared library dependencies\n"
+                f"  - ABI incompatibility between binary and system libraries\n"
+                f"  - Corrupted binary\n\n"
+                f"Binary path: {iwyu_path}\n"
+                f"Return code: {result.returncode}\n"
+                f"stdout: {result.stdout[:500]}\n"
+                f"stderr: {result.stderr[:500]}{diagnostic_info}"
+            )
 
     def test_iwyu_version(self) -> None:
         """Test that IWYU can report its version."""
@@ -149,6 +204,9 @@ class TestIWYUExecution(unittest.TestCase):
             result = subprocess.run(
                 [str(iwyu_path), "--version"], capture_output=True, text=True, timeout=10, env=self.get_iwyu_env()
             )
+
+            # Check for crash signals (negative return codes on Unix)
+            self._check_for_crash(result, iwyu_path, context="--version command")
 
             # IWYU may return 0 or non-zero for --version
             self.assertIn(
@@ -187,6 +245,9 @@ class TestIWYUExecution(unittest.TestCase):
                 cwd=str(self.temp_path),
                 env=self.get_iwyu_env(),
             )
+
+            # Check for crash signals
+            self._check_for_crash(result, iwyu_path, context="analyzing test file")
 
             # IWYU returns non-zero when it finds issues (which is expected)
             # We just verify it runs without crashing
@@ -227,6 +288,9 @@ class TestIWYUExecution(unittest.TestCase):
                 env=self.get_iwyu_env(),
             )
 
+            # Check for crash signals
+            self._check_for_crash(result, iwyu_path, context="analyzing good file")
+
             # IWYU should complete (return code may vary)
             self.assertIn(
                 result.returncode,
@@ -266,6 +330,9 @@ class TestIWYUExecution(unittest.TestCase):
                 cwd=str(self.temp_path),
                 env=self.get_iwyu_env(),
             )
+
+            # Check for crash signals
+            self._check_for_crash(result, iwyu_path, context="with compilation database")
 
             # IWYU should complete (may have warnings/suggestions)
             self.assertIn(
