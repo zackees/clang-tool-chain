@@ -8,6 +8,8 @@ This directory contains Docker-based testing infrastructure for clang-tool-chain
 
 - **Dockerfile.arm64-test** - Ubuntu 24.04 LTS ARM64 image for testing
 - **test-arm64.sh** - Helper script to build and run ARM64 tests using Docker emulation
+- **Dockerfile.iwyu-arm64-builder** - Builder for IWYU 0.25 with LLVM 21.1.5 on ARM64
+- **build-iwyu-arm64.sh** - Automated script to build and extract IWYU ARM64 binaries
 
 ### Purpose
 
@@ -94,6 +96,97 @@ The Docker image mounts the current repository directory to `/workspace`, allowi
 
 2. **Docker Emulation Performance**: ARM64 emulation on x86_64 hosts is significantly slower than native execution. Expect tests to take 2-5x longer.
 
+## IWYU ARM64 Builder
+
+### Purpose
+
+Build Include-What-You-Use (IWYU) 0.25 from source for Linux ARM64 with proper LLVM 21.1.5 dependencies. This is needed because the original ARM64 binary was a Homebrew build (for macOS) and incompatible with Linux.
+
+### Files
+
+- **Dockerfile.iwyu-arm64-builder** - Multi-stage build that compiles LLVM and IWYU from source
+- **build-iwyu-arm64.sh** - Automated build, cleanup, and extraction script
+
+### Quick Start
+
+```bash
+# From clang-tool-chain root directory
+./docker/build-iwyu-arm64.sh
+```
+
+This will:
+1. Build LLVM 21.1.5 shared libraries (libclang-cpp, libLLVM)
+2. Build IWYU 0.25 against LLVM
+3. Bundle only LLVM-specific libraries (no system libraries)
+4. Set RPATH to `$ORIGIN/../lib`
+5. Extract to `downloads-bins/assets/iwyu/linux/arm64/`
+
+**Build time**: 30-60 minutes (depends on hardware and ARM64 emulation speed)
+
+**Output**: ~758 MB uncompressed IWYU installation with proper Linux ARM64 binaries
+
+### Manual Build
+
+```bash
+# Build Docker image
+docker build --platform linux/arm64 \
+    -t iwyu-arm64-builder \
+    -f docker/Dockerfile.iwyu-arm64-builder \
+    .
+
+# Run build and extract to output/
+mkdir -p docker/output
+docker run --platform linux/arm64 --rm \
+    -v "$(pwd)/docker/output:/output" \
+    iwyu-arm64-builder
+```
+
+### Next Steps
+
+After building, create the distribution archive:
+
+```bash
+cd downloads-bins
+
+# Create compressed archive (zstd level 10, NOT 22!)
+uv run create-iwyu-archives --platform linux --arch arm64 --zstd-level 10
+
+# Rename to -fixed suffix
+cd assets/iwyu/linux/arm64
+mv iwyu-0.25-linux-arm64.tar.zst iwyu-0.25-linux-arm64-fixed.tar.zst
+mv iwyu-0.25-linux-arm64.tar.zst.sha256 iwyu-0.25-linux-arm64-fixed.tar.zst.sha256
+
+# Update manifest.json with new SHA256 and filename
+```
+
+See `docs/IWYU_ARM64_FIX_GUIDE.md` for complete instructions.
+
+### What's Different from x86_64?
+
+- ARM64 uses `/lib/ld-linux-aarch64.so.1` dynamic linker
+- Built from source (no pre-built ARM64 Linux binaries available)
+- Same LLVM 21.1.5 version as x86_64
+- Same library bundling strategy (LLVM libs only, no system libs)
+
+### Verification
+
+```bash
+# Check binary type
+file downloads-bins/assets/iwyu/linux/arm64/bin/include-what-you-use
+# Should show: ARM aarch64, interpreter /lib/ld-linux-aarch64.so.1
+
+# Check RPATH
+readelf -d downloads-bins/assets/iwyu/linux/arm64/bin/include-what-you-use | grep RPATH
+# Should show: $ORIGIN/../lib
+
+# Test (requires ARM64 Docker or native ARM64)
+docker run --platform linux/arm64 --rm \
+    -v "$(pwd)/downloads-bins/assets/iwyu/linux/arm64:/iwyu" \
+    ubuntu:24.04 \
+    /iwyu/bin/include-what-you-use --version
+# Should print: include-what-you-use 0.25 based on clang version 21.1.5
+```
+
 ### Future Improvements
 
 Consider adding:
@@ -101,3 +194,4 @@ Consider adding:
 - Cached Docker layers for faster builds
 - Additional platform-specific test scenarios
 - x86_64 Docker test environment for consistency
+- IWYU builder for other architectures (if needed)

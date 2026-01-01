@@ -3,7 +3,9 @@
     "allow": [
       "Bash(python3:*)",
       "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(sha256sum:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []

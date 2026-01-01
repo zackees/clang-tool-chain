@@ -1,6 +1,12 @@
 # IWYU Linux ARM64 Fix Task
 
-## Status: TODO
+## Status: READY TO EXECUTE
+
+**Implementation Guide**: See `docs/IWYU_ARM64_FIX_GUIDE.md`
+
+**Build Scripts**:
+- `docker/Dockerfile.iwyu-arm64-builder` - Docker build for ARM64 IWYU
+- `docker/build-iwyu-arm64.sh` - Automated build script
 
 The Linux ARM64 IWYU tests are failing because the archive has the same issues as x86_64 had:
 1. Includes bundled system libraries (libc, libstdc++, etc.) that should not be distributed
@@ -89,8 +95,66 @@ The Linux x86_64 IWYU binary was crashing with SIGSEGV (signal 11) immediately u
   - 35e46dc: Updated submodule for corrected hash
   - fb55057: Updated submodule for properly compressed archive
 
+## Solution Implementation
+
+### Root Cause Analysis
+
+The ARM64 binary in `downloads-bins/assets/iwyu/linux/arm64/` is actually a **Homebrew build for macOS**, not a proper Linux binary:
+
+```
+$ file bin/include-what-you-use
+ELF 64-bit LSB pie executable, ARM aarch64, dynamically linked,
+interpreter @@HOMEBREW_PREFIX@@/lib/ld.so
+```
+
+This is completely wrong - it has a macOS Homebrew dynamic linker path, not the Linux `/lib/ld-linux-aarch64.so.1`.
+
+### Solution: Build from Source
+
+Since the existing binary is fundamentally wrong, we must build IWYU 0.25 from source for Linux ARM64 with proper LLVM 21.1.5 libraries.
+
+**Implementation files created**:
+1. `docker/Dockerfile.iwyu-arm64-builder` - Multi-stage Docker build
+   - Builds LLVM 21.1.5 shared libraries
+   - Builds IWYU 0.25 against LLVM
+   - Bundles only LLVM-specific libraries
+   - Sets RPATH to `$ORIGIN/../lib`
+
+2. `docker/build-iwyu-arm64.sh` - Automated build script
+   - Runs Docker build
+   - Cleans system libraries
+   - Extracts to `downloads-bins/assets/iwyu/linux/arm64/`
+   - Provides verification steps
+
+3. `docs/IWYU_ARM64_FIX_GUIDE.md` - Complete step-by-step guide
+   - Problem analysis
+   - Build instructions
+   - Testing procedures
+   - Troubleshooting
+
+### Quick Start
+
+```bash
+# From clang-tool-chain root
+./docker/build-iwyu-arm64.sh
+
+# Then create archive
+cd downloads-bins
+uv run create-iwyu-archives --platform linux --arch arm64 --zstd-level 10
+
+# Update manifest and commit (see guide for details)
+```
+
+### Expected Results
+
+- Archive size: ~200 MB (currently 749 KB)
+- Binary: Proper Linux ARM64 ELF with `/lib/ld-linux-aarch64.so.1`
+- Libraries: LLVM-specific only (no system libs)
+- Tests: All IWYU tests pass on ARM64 runners
+
 ---
 
-**Created**: 2025-12-31
-**Status**: Ready for implementation
-**Reference**: Linux x86_64 IWYU fix
+**Created**: 2024-12-31
+**Updated**: 2024-12-31
+**Status**: Ready for execution
+**Reference**: Linux x86_64 IWYU fix (commits 4a2f344, 55468c4, 1b24d21)

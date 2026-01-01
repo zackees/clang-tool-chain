@@ -1,0 +1,119 @@
+# Dockerfile for building IWYU 0.25 on Linux ARM64
+# This builds Include-What-You-Use from source with proper LLVM 21.1.5 dependencies
+#
+# Usage:
+#   docker build --platform linux/arm64 -t iwyu-arm64-builder -f docker/Dockerfile.iwyu-arm64-builder .
+#   docker run --platform linux/arm64 --rm -v "$(pwd)/output:/output" iwyu-arm64-builder
+#
+# Output: /output/iwyu-arm64/ directory containing bin/, lib/, share/
+
+FROM ubuntu:24.04
+
+# Set non-interactive to avoid prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    wget \
+    python3 \
+    ninja-build \
+    libz-dev \
+    libtinfo-dev \
+    libxml2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /build
+
+# Download and extract LLVM 21.1.5 source
+RUN wget -q https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.5/llvm-project-21.1.5.src.tar.xz && \
+    tar -xf llvm-project-21.1.5.src.tar.xz && \
+    rm llvm-project-21.1.5.src.tar.xz && \
+    mv llvm-project-21.1.5.src llvm-project
+
+# Clone IWYU 0.25
+RUN git clone --branch 0.25 --depth 1 https://github.com/include-what-you-use/include-what-you-use.git /build/iwyu
+
+# Build LLVM libraries first (we need libclang-cpp and libLLVM)
+# This builds only the necessary LLVM libraries, not the full toolchain
+WORKDIR /build/llvm-build
+RUN cmake -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_ENABLE_PROJECTS="clang" \
+    -DLLVM_TARGETS_TO_BUILD="AArch64" \
+    -DLLVM_BUILD_TOOLS=OFF \
+    -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_INCLUDE_EXAMPLES=OFF \
+    -DLLVM_INCLUDE_BENCHMARKS=OFF \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_INSTALL_PREFIX=/build/llvm-install \
+    ../llvm-project/llvm && \
+    ninja && \
+    ninja install
+
+# Build IWYU against the built LLVM
+WORKDIR /build/iwyu-build
+RUN cmake -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH=/build/llvm-install \
+    -DCMAKE_INSTALL_PREFIX=/build/iwyu-install \
+    -DCMAKE_INSTALL_RPATH='$ORIGIN/../lib' \
+    ../iwyu && \
+    ninja && \
+    ninja install
+
+# Copy Python helper scripts from IWYU source
+RUN cp /build/iwyu/*.py /build/iwyu-install/bin/ && \
+    chmod +x /build/iwyu-install/bin/*.py
+
+# Create lib directory and copy only LLVM-specific libraries (NOT system libraries)
+RUN mkdir -p /build/iwyu-install/lib && \
+    # Copy LLVM libraries \
+    cp -P /build/llvm-install/lib/libLLVM*.so* /build/iwyu-install/lib/ 2>/dev/null || true && \
+    cp -P /build/llvm-install/lib/libclang*.so* /build/iwyu-install/lib/ 2>/dev/null || true && \
+    # Copy third-party dependencies that LLVM needs \
+    cp -P /build/llvm-install/lib/libz.so* /build/iwyu-install/lib/ 2>/dev/null || true && \
+    cp -P /build/llvm-install/lib/libxml2.so* /build/iwyu-install/lib/ 2>/dev/null || true && \
+    cp -P /build/llvm-install/lib/libicu*.so* /build/iwyu-install/lib/ 2>/dev/null || true && \
+    cp -P /build/llvm-install/lib/liblzma.so* /build/iwyu-install/lib/ 2>/dev/null || true
+
+# Find and copy additional dependencies from system (if LLVM linked against them)
+# We need to be selective - only copy libraries that are NOT standard system libraries
+RUN for lib in libxml2 libz libicu liblzma; do \
+        find /usr/lib/aarch64-linux-gnu -name "${lib}*.so*" -exec cp -P {} /build/iwyu-install/lib/ \; 2>/dev/null || true; \
+    done
+
+# Set RPATH in the IWYU binary to look for libraries in ../lib
+RUN apt-get update && apt-get install -y patchelf && rm -rf /var/lib/apt/lists/* && \
+    patchelf --set-rpath '$ORIGIN/../lib' /build/iwyu-install/bin/include-what-you-use
+
+# Verify the binary has correct RPATH and dependencies
+RUN echo "=== Binary Info ===" && \
+    file /build/iwyu-install/bin/include-what-you-use && \
+    echo "\n=== RPATH ===" && \
+    readelf -d /build/iwyu-install/bin/include-what-you-use | grep -E "(RUNPATH|RPATH)" && \
+    echo "\n=== Dependencies ===" && \
+    readelf -d /build/iwyu-install/bin/include-what-you-use | grep NEEDED
+
+# Create output script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "Copying IWYU build to /output/iwyu-arm64/..."\n\
+mkdir -p /output/iwyu-arm64\n\
+cp -r /build/iwyu-install/* /output/iwyu-arm64/\n\
+echo ""\n\
+echo "=== Build complete ==="\n\
+echo "Output directory: /output/iwyu-arm64/"\n\
+echo ""\n\
+ls -lh /output/iwyu-arm64/bin/\n\
+echo ""\n\
+ls -lh /output/iwyu-arm64/lib/ | head -20\n\
+echo ""\n\
+echo "Total size:"\n\
+du -sh /output/iwyu-arm64/\n\
+' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
