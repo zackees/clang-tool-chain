@@ -54,6 +54,10 @@ RUN cmake -G Ninja \
     ninja && \
     ninja install
 
+# Patch IWYU CMakeLists.txt to include TargetParser component (needed for LLVM 21+)
+# Add it to the LLVM_LINK_COMPONENTS list
+RUN sed -i '/^set(LLVM_LINK_COMPONENTS/a\  TargetParser' /build/iwyu/CMakeLists.txt
+
 # Build IWYU against the built LLVM
 WORKDIR /build/iwyu-build
 RUN cmake -G Ninja \
@@ -91,9 +95,7 @@ RUN apt-get update && apt-get install -y patchelf && rm -rf /var/lib/apt/lists/*
     patchelf --set-rpath '$ORIGIN/../lib' /build/iwyu-install/bin/include-what-you-use
 
 # Verify the binary has correct RPATH and dependencies
-RUN echo "=== Binary Info ===" && \
-    file /build/iwyu-install/bin/include-what-you-use && \
-    echo "\n=== RPATH ===" && \
+RUN echo "=== RPATH ===" && \
     readelf -d /build/iwyu-install/bin/include-what-you-use | grep -E "(RUNPATH|RPATH)" && \
     echo "\n=== Dependencies ===" && \
     readelf -d /build/iwyu-install/bin/include-what-you-use | grep NEEDED

@@ -1,0 +1,34 @@
+# Dockerfile for collecting IWYU dependencies
+# This analyzes IWYU binaries and collects only necessary runtime dependencies
+#
+# Usage:
+#   docker build --platform linux/arm64 -t iwyu-deps-collector -f docker/Dockerfile.iwyu-deps-collector .
+#   docker run --platform linux/arm64 --rm \
+#     -v "$(pwd)/docker/output/iwyu-arm64:/input:ro" \
+#     -v "$(pwd)/downloads-bins/assets/iwyu/linux/arm64:/output" \
+#     iwyu-deps-collector /input /output
+#
+# Input:  /input directory containing IWYU build (bin/, lib/)
+# Output: /output directory with filtered dependencies and report
+
+FROM ubuntu:24.04
+
+# Set non-interactive to avoid prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install analysis tools
+RUN apt-get update && apt-get install -y \
+    file \
+    binutils \
+    patchelf \
+    findutils \
+    coreutils \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Copy dependency analysis script
+COPY docker/collect-iwyu-deps.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/collect-iwyu-deps.sh
+
+ENTRYPOINT ["/usr/local/bin/collect-iwyu-deps.sh"]

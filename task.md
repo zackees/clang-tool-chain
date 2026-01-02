@@ -1,160 +1,280 @@
-# IWYU Linux ARM64 Fix Task
+# IWYU Dependency Collection Task
 
-## Status: READY TO EXECUTE
+## Objective
 
-**Implementation Guide**: See `docs/IWYU_ARM64_FIX_GUIDE.md`
+Create a Docker-based system that:
+1. Launches an ARM64 Linux environment
+2. Extracts the IWYU binary and its dependencies
+3. Identifies all required shared libraries
+4. Collects only the necessary runtime dependencies (excluding system libraries)
+5. Outputs the collected dependencies to the host filesystem
 
-**Build Scripts**:
-- `docker/Dockerfile.iwyu-arm64-builder` - Docker build for ARM64 IWYU
-- `docker/build-iwyu-arm64.sh` - Automated build script
+## Background
 
-The Linux ARM64 IWYU tests are failing because the archive has the same issues as x86_64 had:
-1. Includes bundled system libraries (libc, libstdc++, etc.) that should not be distributed
-2. Small archive size (766KB) suggests it may be missing LLVM libraries or corrupted
-3. Possibly has the same compression corruption issue as x86_64
+The current IWYU ARM64 build process compiles LLVM and IWYU from source, but we need a systematic way to:
+- Identify which shared libraries IWYU actually needs at runtime
+- Separate LLVM-specific libraries from system libraries
+- Package only the portable dependencies (not libc, libstdc++, etc.)
 
-## Background: What We Fixed for Linux x86_64
+## Requirements
 
-### Original Problem
-The Linux x86_64 IWYU binary was crashing with SIGSEGV (signal 11) immediately upon execution.
+### 1. Docker Environment Setup
+- **Platform**: `linux/arm64`
+- **Base Image**: `ubuntu:24.04` (matching the build environment)
+- **Mounted Volume**: Host directory for output
 
-### Root Causes Identified
+### 2. Dependency Analysis Tools
+The Docker environment should include:
+- `ldd` - List dynamic dependencies
+- `readelf` - Read ELF binary information
+- `patchelf` - Modify RPATH if needed
+- `file` - Identify binary types
 
-1. **Bundled System Libraries (Primary Issue)**
-   - The archive incorrectly included system libraries:
-     - `libc.so.6` (glibc)
-     - `libm.so.6` (math library)
-     - `libgcc_s.so.1` (GCC runtime)
-     - `libstdc++.so.6` (C++ standard library)
+### 3. Dependency Collection Logic
 
-   - **Why this is wrong**: On Linux, these libraries should NEVER be bundled with applications
-     - They must come from the host system
-     - The bundled `libc.so.6` was itself dynamically linked (invalid - real glibc is not dynamically linked)
-     - This caused the dynamic linker to fail with SIGSEGV
-     - Even if not corrupted, would cause ABI incompatibilities
+**Identify dependencies:**
+```bash
+# Get list of all shared libraries the binary needs
+ldd /path/to/include-what-you-use
 
-2. **Compression Corruption (Secondary Issue)**
-   - First fix attempt used zstd level 22 compression
-   - Created a 54MB archive with SHA256: `519f13c0102af406669316d76bf1348cf6f23a6c9650065f3b4cd964517e1f93`
-   - Archive was corrupted/truncated during compression
-   - Error: "zstd data ends in an incomplete frame, maybe the input data was truncated"
-
-   - **Solution**: Recreated with zstd level 10 instead
-   - Produced working 202MB archive
-   - Decompresses successfully to 758MB
-
-### What We Kept in the Archive
-
-**LLVM-specific libraries (correct to bundle):**
-- `libclang-cpp.so.21.1` - Clang C++ API
-- `libLLVM.so.21.1` - LLVM core
-- `libLLVM-21.so` - LLVM version link
-- `libxml2.so.2.9.13` - XML parsing (LLVM dependency)
-- `libz.so.1.2.11` - Compression (LLVM dependency)
-- `libicu*.so.70.1` - Unicode support (LLVM dependency)
-- `liblzma.so.5.2.5` - LZMA compression (LLVM dependency)
-
-**Python helper scripts:**
-- `include-what-you-use` binary
-- `iwyu_tool.py`
-- `fix_includes.py`
-
-### Final Working x86_64 Configuration
-
-**Archive Details:**
-- Filename: `iwyu-0.25-linux-x86_64-fixed.tar.zst`
-- Size: 202MB compressed → 758MB uncompressed
-- SHA256: `b731a01834d7390023a2e30a2b6f644e98054fa07232f7cf056c0249fba7aa8d`
-- Compression: zstd level 10
-- Location: `downloads-bins/assets/iwyu/linux/x86_64/`
-
-**Binary Configuration:**
-- RUNPATH: `$ORIGIN/../lib` (correct - searches relative to binary)
-- Dynamic linker: `/lib64/ld-linux-x86-64.so.2` (standard)
-- Uses system libc/libstdc++/libm (correct)
-- Bundles only LLVM libraries (correct)
-
-## Key Lessons from x86_64 Fix
-
-1. **Never bundle system libraries on Linux** (libc, libstdc++, libm, libgcc_s)
-2. **Only bundle application-specific libraries** (LLVM, ICU, libxml2, etc.)
-3. **Use zstd level 10, not 22** for large archives to avoid corruption
-4. **Verify decompression** before pushing
-5. **Test with `readelf -d`** to check dependencies
-6. **Add diagnostic logging** for future debugging (LD_DEBUG=libs)
-
-## Reference: x86_64 Fix Commits
-
-- **downloads-bins repo:**
-  - 4a2f344: Initial fix removing system libraries (had wrong SHA256)
-  - 55468c4: Corrected SHA256 hash
-  - 1b24d21: Replaced with properly compressed archive (zstd level 10)
-
-- **clang-tool-chain repo:**
-  - 4c3d6c5: Added verbose crash diagnostics to tests
-  - 35e46dc: Updated submodule for corrected hash
-  - fb55057: Updated submodule for properly compressed archive
-
-## Solution Implementation
-
-### Root Cause Analysis
-
-The ARM64 binary in `downloads-bins/assets/iwyu/linux/arm64/` is actually a **Homebrew build for macOS**, not a proper Linux binary:
-
-```
-$ file bin/include-what-you-use
-ELF 64-bit LSB pie executable, ARM aarch64, dynamically linked,
-interpreter @@HOMEBREW_PREFIX@@/lib/ld.so
+# Get NEEDED entries from ELF header
+readelf -d /path/to/include-what-you-use | grep NEEDED
 ```
 
-This is completely wrong - it has a macOS Homebrew dynamic linker path, not the Linux `/lib/ld-linux-aarch64.so.1`.
+**Categorize libraries:**
+- **LLVM-specific** (must bundle):
+  - `libclang-cpp.so.*`
+  - `libLLVM*.so.*`
+  - `libLLVM-*.so`
 
-### Solution: Build from Source
+- **Third-party dependencies** (bundle if not universally available):
+  - `libxml2.so.*`
+  - `libz.so.*` (zlib)
+  - `libicu*.so.*` (ICU Unicode)
+  - `liblzma.so.*` (XZ Utils)
+  - `libtinfo.so.*` (ncurses terminfo)
 
-Since the existing binary is fundamentally wrong, we must build IWYU 0.25 from source for Linux ARM64 with proper LLVM 21.1.5 libraries.
+- **System libraries** (NEVER bundle):
+  - `libc.so.6` (glibc)
+  - `libm.so.6` (math library)
+  - `libgcc_s.so.1` (GCC runtime)
+  - `libstdc++.so.6` (C++ standard library)
+  - `libpthread.so.0` (POSIX threads)
+  - `libdl.so.2` (dynamic linker)
+  - `ld-linux-aarch64.so.1` (dynamic linker itself)
 
-**Implementation files created**:
-1. `docker/Dockerfile.iwyu-arm64-builder` - Multi-stage Docker build
-   - Builds LLVM 21.1.5 shared libraries
-   - Builds IWYU 0.25 against LLVM
-   - Bundles only LLVM-specific libraries
-   - Sets RPATH to `$ORIGIN/../lib`
+### 4. Output Structure
 
-2. `docker/build-iwyu-arm64.sh` - Automated build script
-   - Runs Docker build
-   - Cleans system libraries
-   - Extracts to `downloads-bins/assets/iwyu/linux/arm64/`
-   - Provides verification steps
+The Docker container should output to `/output/` (mounted to host):
 
-3. `docs/IWYU_ARM64_FIX_GUIDE.md` - Complete step-by-step guide
-   - Problem analysis
-   - Build instructions
-   - Testing procedures
-   - Troubleshooting
+```
+/output/
+├── bin/
+│   └── include-what-you-use          # The IWYU binary
+├── lib/
+│   ├── libclang-cpp.so.21.1          # LLVM C++ API
+│   ├── libLLVM.so.21.1               # LLVM core
+│   ├── libLLVM-21.so -> libLLVM.so.21.1
+│   ├── libxml2.so.2.*                # XML parser
+│   ├── libz.so.1.*                   # zlib
+│   ├── libicu*.so.*                  # ICU libs
+│   └── liblzma.so.5.*                # XZ compression
+├── share/
+│   └── man/...                       # Man pages (if any)
+└── dependency_report.txt             # Analysis report
+```
 
-### Quick Start
+### 5. Dependency Report Format
+
+The `dependency_report.txt` should contain:
+
+```
+=== IWYU Binary Analysis ===
+Binary: /path/to/include-what-you-use
+Type: ELF 64-bit LSB pie executable, ARM aarch64
+Interpreter: /lib/ld-linux-aarch64.so.1
+RPATH: $ORIGIN/../lib
+
+=== Direct Dependencies (NEEDED) ===
+libclang-cpp.so.21
+libLLVM.so.21
+libstdc++.so.6
+libm.so.6
+libgcc_s.so.1
+libc.so.6
+
+=== Resolved Paths (ldd) ===
+libclang-cpp.so.21 => /build/llvm-install/lib/libclang-cpp.so.21.1
+libLLVM.so.21 => /build/llvm-install/lib/libLLVM.so.21.1
+libstdc++.so.6 => /lib/aarch64-linux-gnu/libstdc++.so.6.0.33 [SYSTEM - SKIP]
+libm.so.6 => /lib/aarch64-linux-gnu/libm.so.6 [SYSTEM - SKIP]
+...
+
+=== LLVM Library Dependencies ===
+libclang-cpp.so.21.1 requires:
+  - libxml2.so.2
+  - libz.so.1
+  - libicu*.so.70
+  - liblzma.so.5
+
+=== Bundled Libraries ===
+✓ libclang-cpp.so.21.1 (81 MB)
+✓ libLLVM.so.21.1 (163 MB)
+✓ libxml2.so.2.9.14 (687 KB)
+✓ libz.so.1.2.13 (95 KB)
+✓ libicuuc.so.70.1 (1.9 MB)
+✓ libicudata.so.70.1 (28 MB)
+✓ liblzma.so.5.4.1 (156 KB)
+
+=== Skipped System Libraries ===
+✗ libc.so.6 (system)
+✗ libm.so.6 (system)
+✗ libgcc_s.so.1 (system)
+✗ libstdc++.so.6 (system)
+✗ libpthread.so.0 (system)
+✗ libdl.so.2 (system)
+
+=== Total Size ===
+Binaries: 3.6 MB
+Libraries: 275 MB
+Total: 278.6 MB
+```
+
+## Implementation Plan
+
+### Step 1: Create Dockerfile.iwyu-deps-collector
+
+```dockerfile
+FROM ubuntu:24.04
+
+# Install analysis tools
+RUN apt-get update && apt-get install -y \
+    file \
+    binutils \
+    patchelf \
+    findutils \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Copy dependency analysis script
+COPY docker/collect-iwyu-deps.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/collect-iwyu-deps.sh
+
+ENTRYPOINT ["/usr/local/bin/collect-iwyu-deps.sh"]
+```
+
+### Step 2: Create docker/collect-iwyu-deps.sh
+
+The script should:
+1. Accept input path to IWYU installation (from builder)
+2. Analyze binary dependencies with `ldd` and `readelf`
+3. Recursively analyze LLVM library dependencies
+4. Filter out system libraries
+5. Copy bundled libraries to `/output/lib/`
+6. Copy binary to `/output/bin/`
+7. Generate dependency report
+8. Verify RPATH is set correctly
+9. Test that binary can load libraries
+
+### Step 3: Create wrapper script docker/collect-deps-arm64.sh
 
 ```bash
-# From clang-tool-chain root
+#!/bin/bash
+set -e
+
+echo "=== IWYU ARM64 Dependency Collector ==="
+echo ""
+
+# Check if IWYU was built
+if [ ! -d "docker/output/iwyu-arm64" ]; then
+    echo "Error: IWYU ARM64 build not found!"
+    echo "Run ./docker/build-iwyu-arm64.sh first"
+    exit 1
+fi
+
+# Create output directory
+mkdir -p downloads-bins/assets/iwyu/linux/arm64
+
+echo "Building dependency collector Docker image..."
+docker build --platform linux/arm64 \
+    -t iwyu-deps-collector \
+    -f docker/Dockerfile.iwyu-deps-collector \
+    .
+
+echo ""
+echo "Analyzing and collecting dependencies..."
+docker run --platform linux/arm64 --rm \
+    -v "$(pwd)/docker/output/iwyu-arm64:/input:ro" \
+    -v "$(pwd)/downloads-bins/assets/iwyu/linux/arm64:/output" \
+    iwyu-deps-collector \
+    /input /output
+
+echo ""
+echo "=== Dependency collection complete ==="
+echo ""
+echo "Output location: downloads-bins/assets/iwyu/linux/arm64/"
+echo ""
+echo "Next steps:"
+echo "1. Review dependency_report.txt"
+echo "2. Verify binary: docker run --platform linux/arm64 --rm -v \"\$(pwd)/downloads-bins/assets/iwyu/linux/arm64:/iwyu\" ubuntu:24.04 /iwyu/bin/include-what-you-use --version"
+echo "3. Create archive: cd downloads-bins && uv run create-iwyu-archives --platform linux --arch arm64 --zstd-level 10"
+echo ""
+```
+
+## Expected Workflow
+
+```bash
+# 1. Build IWYU from source (already done)
 ./docker/build-iwyu-arm64.sh
 
-# Then create archive
+# 2. Collect and filter dependencies (new task)
+./docker/collect-deps-arm64.sh
+
+# 3. Review the dependency report
+cat downloads-bins/assets/iwyu/linux/arm64/dependency_report.txt
+
+# 4. Verify the binary works
+docker run --platform linux/arm64 --rm \
+    -v "$(pwd)/downloads-bins/assets/iwyu/linux/arm64:/iwyu" \
+    ubuntu:24.04 \
+    /iwyu/bin/include-what-you-use --version
+
+# 5. Create the distribution archive
 cd downloads-bins
 uv run create-iwyu-archives --platform linux --arch arm64 --zstd-level 10
 
-# Update manifest and commit (see guide for details)
+# 6. Update manifest and commit
+# ... (existing process)
 ```
 
-### Expected Results
+## Benefits
 
-- Archive size: ~200 MB (currently 749 KB)
-- Binary: Proper Linux ARM64 ELF with `/lib/ld-linux-aarch64.so.1`
-- Libraries: LLVM-specific only (no system libs)
-- Tests: All IWYU tests pass on ARM64 runners
+1. **Reproducible**: Systematic dependency collection process
+2. **Transparent**: Clear report of what's included and why
+3. **Verifiable**: Can validate dependencies before packaging
+4. **Portable**: Docker-based, works on any platform
+5. **Maintainable**: Easy to adjust filtering rules
+
+## Files to Create
+
+1. `docker/Dockerfile.iwyu-deps-collector` - Dependency analysis environment
+2. `docker/collect-iwyu-deps.sh` - Dependency collection script
+3. `docker/collect-deps-arm64.sh` - Wrapper script for easy execution
+
+## Success Criteria
+
+- [ ] Dependency collector Docker image builds successfully
+- [ ] Script correctly identifies LLVM vs system libraries
+- [ ] All LLVM libraries are collected with proper symlinks
+- [ ] System libraries are excluded
+- [ ] RPATH is verified as `$ORIGIN/../lib`
+- [ ] Generated dependency report is accurate
+- [ ] Binary runs successfully in clean Ubuntu 24.04 container
+- [ ] Total size matches expected ~275-280 MB for libraries
 
 ---
 
-**Created**: 2024-12-31
-**Updated**: 2024-12-31
-**Status**: Ready for execution
-**Reference**: Linux x86_64 IWYU fix (commits 4a2f344, 55468c4, 1b24d21)
+**Status**: Ready to implement
+**Priority**: High (needed to complete ARM64 IWYU fix)
+**Estimated Time**: 1-2 hours
