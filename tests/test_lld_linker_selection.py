@@ -15,12 +15,12 @@ from clang_tool_chain.linker.lld import _add_lld_linker_if_needed  # noqa: E402
 class TestLLDLinkerSelection(unittest.TestCase):
     """Test cases for platform-specific lld linker flag injection."""
 
-    def test_macos_uses_ld64_lld(self):
-        """Test that macOS (darwin) uses -fuse-ld=ld64.lld."""
+    def test_macos_skips_lld_injection(self):
+        """Test that macOS (darwin) skips lld injection due to LLVM 19.1.7 limitation."""
         args = ["main.cpp", "-o", "main"]
         result = _add_lld_linker_if_needed("darwin", args)
-        self.assertEqual(result[0], "-fuse-ld=ld64.lld")
-        self.assertEqual(result[1:], args)
+        # Should not inject any linker flag - LLVM 19.1.7 doesn't support -fuse-ld
+        self.assertEqual(result, args)
 
     def test_linux_uses_lld(self):
         """Test that Linux uses -fuse-ld=lld."""
@@ -54,14 +54,12 @@ class TestLLDLinkerSelection(unittest.TestCase):
         result = _add_lld_linker_if_needed("darwin", args)
         self.assertEqual(result, args)
 
-    def test_macos_flag_translation_applied(self):
-        """Test that macOS also translates GNU ld flags."""
+    def test_macos_no_flag_translation(self):
+        """Test that macOS skips flag translation (lld not used due to LLVM 19.1.7)."""
         args = ["-Wl,--no-undefined", "main.cpp", "-o", "main"]
         result = _add_lld_linker_if_needed("darwin", args)
-        # Should have ld64.lld flag first, then translated flags
-        self.assertEqual(result[0], "-fuse-ld=ld64.lld")
-        self.assertEqual(result[1], "-Wl,-undefined,error")
-        self.assertEqual(result[2:], ["main.cpp", "-o", "main"])
+        # Should not inject lld or translate flags - system linker used
+        self.assertEqual(result, args)
 
     def test_linux_no_flag_translation(self):
         """Test that Linux doesn't translate flags (not needed for ELF lld)."""

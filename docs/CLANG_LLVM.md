@@ -47,36 +47,39 @@ clang-tool-chain-sccache --version        # Show sccache version
 - Requires sccache to be available in your PATH
 - If sccache is not found, the commands will fail with clear installation instructions
 
-## LLVM lld Linker (Automatic, macOS/Linux)
+## LLVM lld Linker (Linux Only, System Linker on macOS)
 
-Starting with v1.0.8+, clang-tool-chain automatically uses LLVM's `lld` linker on macOS and Linux for consistent cross-platform behavior. This replaces platform-specific system linkers:
-- **macOS**: `ld64.lld` (Mach-O variant) instead of Apple's `ld64`
+Starting with v1.0.8+, clang-tool-chain uses LLVM's `lld` linker on Linux for consistent cross-platform behavior. **macOS currently uses the system linker (ld64) due to LLVM 19.1.7 limitations.**
+
+**Platform-Specific Linker Behavior:**
+- **macOS**: System linker (`ld64`) - LLVM 19.1.7 doesn't support `-fuse-ld` flag
 - **Linux**: `lld` (ELF variant) instead of GNU `ld`
 - **Windows**: Already uses `lld` via GNU ABI setup
 
-**Why lld is Default:**
-- **Cross-platform consistency**: Same linker behavior on all platforms
+**Why lld is Used on Linux:**
+- **Cross-platform consistency**: Same linker behavior across Linux/Windows
 - **Better GNU flag support**: Accepts GNU-style linker flags (like `--no-undefined`)
 - **Faster linking**: lld is often 2-3x faster than system linkers
-- **Uniform toolchain**: Complete LLVM stack (clang + lld) on all platforms
+- **Uniform toolchain**: Complete LLVM stack (clang + lld)
 
 **Automatic lld Injection:**
 
 The wrapper automatically adds platform-specific lld flags when linking:
-- **macOS**: `-fuse-ld=ld64.lld` (explicit Mach-O variant required by LLVM 19.1.7+)
+- **macOS**: No injection (uses system linker due to LLVM 19.1.7 limitation)
 - **Linux**: `-fuse-ld=lld` (standard ELF linker)
 
 The injection is skipped when:
 - User sets `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` (opt-out)
 - User already specified `-fuse-ld=` in arguments
 - Compile-only operation (`-c` flag present, no linking)
+- Platform is macOS (LLVM 19.1.7 doesn't support `-fuse-ld` flag)
 
 **Environment Variables:**
 ```bash
-# Use system linker instead of lld (opt-out)
+# Use system linker instead of lld (opt-out on Linux)
 export CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1
 
-# Then compile normally - will use ld64 on macOS, GNU ld on Linux
+# Then compile normally - will use GNU ld on Linux
 clang-tool-chain-cpp main.cpp -o main
 
 # Override for specific compilation
@@ -88,15 +91,19 @@ CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1 clang-tool-chain-cpp main.cpp -o main
 - Platform-specific linker features not supported by lld
 - Compatibility testing with native toolchain
 
-**macOS Specifics:**
-- lld's Mach-O port (`ld64.lld`) is production-ready (used by Chromium)
+**macOS Specifics (IMPORTANT):**
+- **Currently uses system linker (ld64) exclusively**
+- LLVM 19.1.7 on macOS doesn't support the `-fuse-ld` flag
+- Attempted flags (`-fuse-ld=lld`, `-fuse-ld=ld64.lld`) both fail with "invalid linker name"
+- **Known limitation**: Thin archives may not work with system ld64
+- **Future**: Will use lld when macOS upgrades to LLVM 21.1.5+
 - System linker (ld64) doesn't support GNU flags like `--no-undefined`
-- Using lld improves cross-platform build system compatibility
 
 **Linux Specifics:**
 - lld's ELF support is mature and well-tested
 - Compatible with most GNU ld features
 - Significantly faster for large projects
+- Thin archive support works correctly
 
 ## macOS SDK Detection (Automatic)
 

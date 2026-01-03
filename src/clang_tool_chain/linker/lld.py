@@ -36,8 +36,16 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
         logger.debug("CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1, skipping lld injection")
         return False
 
-    # Only apply to macOS and Linux (Windows already handled in GNU ABI setup)
-    if platform_name not in ("darwin", "linux"):
+    # TEMPORARY: Disable LLD on macOS due to LLVM 19.1.7 limitation
+    # LLVM 19.1.7 on macOS doesn't support -fuse-ld flag (neither lld nor ld64.lld)
+    # This causes compilation failures with: "clang: error: invalid linker name in argument '-fuse-ld=...'"
+    # TODO: Re-enable when macOS upgrades to LLVM 21.1.5+ which supports -fuse-ld
+    if platform_name == "darwin":
+        logger.info("Skipping lld on macOS (LLVM 19.1.7 doesn't support -fuse-ld flag)")
+        return False
+
+    # Only apply to Linux (macOS disabled above, Windows already handled in GNU ABI setup)
+    if platform_name not in ("linux",):
         return False
 
     # Check if this is a compile-only operation (no linking)
