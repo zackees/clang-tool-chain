@@ -15,6 +15,7 @@ The main functions are:
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import NoReturn
 
 from ..abi import (
@@ -23,6 +24,7 @@ from ..abi import (
     _should_use_gnu_abi,
     _should_use_msvc_abi,
 )
+from ..deployment.dll_deployer import post_link_dll_deployment
 from ..linker import _add_lld_linker_if_needed
 from ..logging_config import configure_logging
 from ..platform.detection import get_platform_info
@@ -31,6 +33,60 @@ from ..sdk import _add_macos_sysroot_if_needed
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)
+
+
+def _extract_output_path(args: list[str], tool_name: str) -> Path | None:
+    """
+    Extract the output executable path from compiler/linker arguments.
+
+    Args:
+        args: Compiler/linker arguments
+        tool_name: Name of the tool being executed
+
+    Returns:
+        Path to output executable, or None if not a linking operation
+
+    Examples:
+        >>> _extract_output_path(["-o", "test.exe", "test.cpp"], "clang++")
+        Path('test.exe')
+        >>> _extract_output_path(["-otest.exe", "test.cpp"], "clang++")
+        Path('test.exe')
+        >>> _extract_output_path(["-c", "test.cpp"], "clang++")
+        None
+    """
+    # Skip if compile-only flag present
+    if "-c" in args:
+        return None
+
+    # Only process clang/clang++ commands
+    if tool_name not in ("clang", "clang++"):
+        return None
+
+    # Look for -o flag
+    i = 0
+    while i < len(args):
+        arg = args[i]
+
+        # Format: -o output.exe
+        if arg == "-o" and i + 1 < len(args):
+            output_path = Path(args[i + 1]).resolve()
+            # Only deploy for .exe files (Windows linking operation)
+            if output_path.suffix.lower() == ".exe":
+                return output_path
+            return None
+
+        # Format: -ooutput.exe
+        if arg.startswith("-o") and len(arg) > 2:
+            output_path = Path(arg[2:]).resolve()
+            if output_path.suffix.lower() == ".exe":
+                return output_path
+            return None
+
+        i += 1
+
+    # No -o flag: default output is a.exe on Windows (only for linking, not compiling)
+    # But we can't determine if it's a link operation without -o, so skip
+    return None
 
 
 def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = False) -> NoReturn:
@@ -117,6 +173,17 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
         # Windows: use subprocess
         try:
             result = subprocess.run(cmd)
+
+            # Post-link DLL deployment (Windows GNU ABI only)
+            if result.returncode == 0:
+                output_exe = _extract_output_path(args, tool_name)
+                if output_exe is not None:
+                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+                    try:
+                        post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                    except Exception as e:
+                        logger.warning(f"DLL deployment failed: {e}")
+
             sys.exit(result.returncode)
         except FileNotFoundError:
             print(f"\n{'='*60}", file=sys.stderr)
@@ -243,6 +310,17 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
     # Run the tool
     try:
         result = subprocess.run(cmd)
+
+        # Post-link DLL deployment (Windows GNU ABI only)
+        if result.returncode == 0 and platform_name == "win":
+            output_exe = _extract_output_path(args, tool_name)
+            if output_exe is not None:
+                use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+                try:
+                    post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                except Exception as e:
+                    logger.warning(f"DLL deployment failed: {e}")
+
         return result.returncode
     except FileNotFoundError as err:
         raise RuntimeError(f"Tool not found: {tool_path}") from err
@@ -315,6 +393,17 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
         # Windows: use subprocess
         try:
             result = subprocess.run(cmd)
+
+            # Post-link DLL deployment (Windows GNU ABI only)
+            if result.returncode == 0:
+                output_exe = _extract_output_path(args, "clang")
+                if output_exe is not None:
+                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+                    try:
+                        post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                    except Exception as e:
+                        logger.warning(f"DLL deployment failed: {e}")
+
             sys.exit(result.returncode)
         except Exception as e:
             print(f"\n{'='*60}", file=sys.stderr)
@@ -396,6 +485,17 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
         # Windows: use subprocess
         try:
             result = subprocess.run(cmd)
+
+            # Post-link DLL deployment (Windows GNU ABI only)
+            if result.returncode == 0:
+                output_exe = _extract_output_path(args, "clang++")
+                if output_exe is not None:
+                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+                    try:
+                        post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                    except Exception as e:
+                        logger.warning(f"DLL deployment failed: {e}")
+
             sys.exit(result.returncode)
         except Exception as e:
             print(f"\n{'='*60}", file=sys.stderr)

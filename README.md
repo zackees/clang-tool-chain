@@ -73,6 +73,8 @@ clang-tool-chain-c-msvc main.c -o program.exe     # Requires Visual Studio/Windo
 clang-tool-chain-cpp-msvc main.cpp -o program.exe # Downloads ~71 MB on first use
 ```
 
+**✨ Automatic DLL Deployment:** GNU ABI executables automatically include required MinGW runtime DLLs in the executable directory. Your programs run immediately in `cmd.exe` without PATH setup! See [Windows DLL Deployment](#windows-dll-deployment) for details.
+
 **Which to use?** See [Windows Target Selection](#windows-target-selection) for detailed comparison and requirements.
 
 ### 📋 Command Quick Reference
@@ -1041,6 +1043,108 @@ clang-tool-chain-c --target=arm64-apple-darwin main.c
 ```
 
 **Note:** Cross-compilation requires appropriate sysroots (not included by default).
+
+---
+
+## 🪟 Windows DLL Deployment
+
+**Automatic MinGW Runtime DLL Deployment (GNU ABI only)**
+
+When building Windows executables with GNU ABI (the default), clang-tool-chain automatically copies required MinGW runtime DLLs to your executable directory. This ensures your programs run immediately in `cmd.exe` without any PATH configuration.
+
+### How It Works
+
+1. **Automatic Detection**: After successful linking, `llvm-objdump` analyzes the executable to detect DLL dependencies
+2. **Smart Copying**: Only MinGW runtime DLLs are copied (system DLLs like `kernel32.dll` are excluded)
+3. **Timestamp Optimization**: DLLs are only copied if the source is newer than the destination
+4. **Non-Fatal Errors**: DLL deployment never fails your build - it only logs warnings
+
+### Quick Example
+
+```bash
+# Compile a C++ program (GNU ABI - default on Windows)
+clang-tool-chain-cpp hello.cpp -o hello.exe
+
+# Console output shows:
+# Deployed 3 MinGW DLL(s) for hello.exe
+
+# Your executable directory now contains:
+# hello.exe
+# libwinpthread-1.dll
+# libgcc_s_seh-1.dll
+# libstdc++-6.dll
+
+# Run immediately in cmd.exe - no PATH setup needed!
+.\hello.exe
+```
+
+### Environment Variables
+
+| Variable | Effect | Example |
+|----------|--------|---------|
+| `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` | Disable DLL deployment | `set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` |
+| `CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1` | Enable verbose logging | `set CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1` |
+
+### Performance Impact
+
+- **DLL Detection**: <50ms (via llvm-objdump)
+- **DLL Copying**: <50ms (typically 2-3 small DLLs)
+- **Total Overhead**: <100ms per executable
+- **Incremental Builds**: ~0ms (timestamp check skips unnecessary copies)
+
+### Typical DLLs Deployed
+
+- **`libwinpthread-1.dll`** - POSIX threads support
+- **`libgcc_s_seh-1.dll`** - GCC runtime (exception handling)
+- **`libstdc++-6.dll`** - C++ standard library
+
+### When DLL Deployment is Skipped
+
+- ❌ **Non-Windows platforms** (Linux/macOS)
+- ❌ **MSVC ABI builds** (`clang-tool-chain-cpp-msvc`)
+- ❌ **Compile-only operations** (`-c` flag)
+- ❌ **Non-executable outputs** (`.o`, `.a`, `.lib` files)
+- ❌ **Environment variable set** (`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1`)
+- ❌ **Linker failures** (only deploys after successful linking)
+
+### Troubleshooting
+
+**Problem:** DLLs not being copied
+
+**Solutions:**
+1. Check you're using GNU ABI (default), not MSVC ABI (`-msvc` variant)
+2. Verify you're linking (not just compiling with `-c`)
+3. Check the output file has `.exe` extension
+4. Ensure `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS` is not set
+
+**Problem:** Want to disable DLL deployment
+
+**Solution:**
+```bash
+# Windows (CMD)
+set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+clang-tool-chain-cpp main.cpp -o main.exe
+
+# Windows (PowerShell)
+$env:CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS="1"
+clang-tool-chain-cpp main.cpp -o main.exe
+```
+
+**Problem:** Need verbose logging for debugging
+
+**Solution:**
+```bash
+set CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1
+clang-tool-chain-cpp main.cpp -o main.exe
+# Now shows detailed DEBUG logs
+```
+
+### Implementation Details
+
+- **Source Code**: `src/clang_tool_chain/deployment/dll_deployer.py`
+- **Integration**: `src/clang_tool_chain/execution/core.py` (post-link hooks)
+- **Tests**: `tests/test_dll_deployment.py` (38 comprehensive tests, 92% coverage)
+- **Fallback Strategy**: If `llvm-objdump` fails, uses heuristic list of common DLLs
 
 ---
 

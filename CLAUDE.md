@@ -47,6 +47,7 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 - Python wrapper commands for all essential tools
 - Ultra-compressed archives using zstd level 22 (~94% size reduction)
 - **Windows GNU ABI support with integrated MinGW headers and sysroot** (no separate download)
+- **Automatic MinGW DLL deployment for Windows executables** (GNU ABI only)
 - Emscripten WebAssembly compilation
 - Bundled Node.js runtime
 
@@ -55,12 +56,85 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 Detailed documentation is organized into focused sub-documents:
 
 - **[Clang/LLVM Toolchain](docs/CLANG_LLVM.md)** - Clang/LLVM compiler wrappers, macOS SDK detection, Windows GNU/MSVC ABI, sccache integration
+- **[DLL Deployment](docs/DLL_DEPLOYMENT.md)** - Windows MinGW DLL automatic deployment (detailed guide)
 - **[Emscripten](docs/EMSCRIPTEN.md)** - WebAssembly compilation with Emscripten
 - **[Node.js Integration](docs/NODEJS.md)** - Bundled Node.js runtime for WebAssembly
 - **[Parallel Downloads](docs/PARALLEL_DOWNLOADS.md)** - High-speed downloads with multi-threaded range requests
 - **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture, manifest system, multi-part archives
 - **[Maintainer Tools](docs/MAINTAINER.md)** - Binary packaging, archive creation, troubleshooting
 - **[Testing Guide](docs/TESTING.md)** - Test infrastructure, running tests, CI/CD
+
+## Windows MinGW DLL Deployment
+
+**Automatic DLL Deployment for Windows Executables (GNU ABI)**
+
+When compiling Windows executables with the GNU ABI (default on Windows), clang-tool-chain automatically copies required MinGW runtime DLLs to the executable directory. This ensures your executables run immediately in `cmd.exe` without PATH modifications.
+
+### How It Works
+
+1. **Automatic Detection**: After successful linking, clang-tool-chain uses `llvm-objdump` to detect required MinGW DLLs
+2. **Smart Copying**: DLLs are copied from the MinGW sysroot to the executable directory
+3. **Timestamp Checking**: DLLs are only copied if source is newer (prevents unnecessary copies)
+4. **Non-Fatal**: DLL deployment never fails your build - warnings only
+
+### Environment Variables
+
+- **`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1`** - Disable automatic DLL deployment
+- **`CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1`** - Enable verbose logging (DEBUG level)
+
+### Example Usage
+
+```bash
+# Default behavior - DLLs automatically deployed
+clang-tool-chain-cpp main.cpp -o program.exe
+# Output: Deployed 3 MinGW DLL(s) for program.exe
+
+# Run without PATH setup required
+.\program.exe  # Works in cmd.exe immediately!
+
+# Disable DLL deployment
+set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+clang-tool-chain-cpp main.cpp -o program.exe
+# No DLLs copied
+
+# Verbose logging
+set CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1
+clang-tool-chain-cpp main.cpp -o program.exe
+# Output: Detailed DLL detection and copy logs
+```
+
+### Performance
+
+- **DLL Detection**: <50ms per executable (llvm-objdump overhead)
+- **DLL Copying**: <50ms total (2-3 small DLLs typically)
+- **Total Overhead**: <100ms per executable build
+- **Timestamp Check**: <5ms (skips copy if up-to-date)
+
+### Typical DLLs Deployed
+
+- `libwinpthread-1.dll` - Threading support
+- `libgcc_s_seh-1.dll` - GCC runtime support
+- `libstdc++-6.dll` - C++ standard library
+
+### When It's Skipped
+
+- **Non-Windows platforms**: Linux/macOS (no-op)
+- **MSVC ABI**: `clang-tool-chain-cpp-msvc` (uses MSVC runtime)
+- **Compile-only**: `-c` flag present (no executable produced)
+- **Non-.exe outputs**: `.o`, `.obj`, `.a`, `.lib` files
+- **Environment variable**: `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` set
+
+### Logging Levels
+
+- **INFO**: Summary of deployed DLLs (e.g., "Deployed 3 MinGW DLL(s) for program.exe")
+- **DEBUG**: Individual DLL operations (detection, copy, skip reasons)
+- **WARNING**: Missing DLLs, permission errors, detection failures
+
+### See Also
+
+- Implementation: `src/clang_tool_chain/deployment/dll_deployer.py`
+- Tests: `tests/test_dll_deployment.py` (38 comprehensive tests)
+- Integration: `src/clang_tool_chain/execution/core.py` (post-link hooks)
 
 ## Development Commands
 

@@ -152,7 +152,7 @@ class TestIWYUExecution(unittest.TestCase):
 
         return env
 
-    def _check_for_crash(self, result: subprocess.CompletedProcess, iwyu_path: Path, context: str = "") -> None:
+    def _check_for_crash(self, result: subprocess.CompletedProcess[str], iwyu_path: Path, context: str = "") -> None:
         """Check if IWYU crashed and provide detailed diagnostics.
 
         Args:

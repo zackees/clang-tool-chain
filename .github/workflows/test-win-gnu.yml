@@ -103,3 +103,138 @@ jobs:
       run: |
         uv run pytest tests/test_gnu_abi.py -v
       shell: bash
+
+    - name: Test DLL Deployment (Threading)
+      run: |
+        cat > test_threading.cpp << 'EOF'
+        #include <iostream>
+        #include <thread>
+        #include <chrono>
+
+        void worker(int id) {
+            std::cout << "Worker " << id << " running on thread "
+                      << std::this_thread::get_id() << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        int main() {
+            std::cout << "Testing DLL deployment with threading..." << std::endl;
+            std::thread t1(worker, 1);
+            std::thread t2(worker, 2);
+            t1.join();
+            t2.join();
+            std::cout << "Threading test successful!" << std::endl;
+            return 0;
+        }
+        EOF
+        echo "Building test_threading.exe..."
+        uv run clang-tool-chain-cpp test_threading.cpp -o test_threading.exe -pthread
+
+        echo "Checking for deployed DLLs..."
+        if [ -f "libwinpthread-1.dll" ]; then
+          echo "✓ libwinpthread-1.dll was deployed"
+        else
+          echo "✗ libwinpthread-1.dll was NOT deployed"
+          exit 1
+        fi
+
+        echo "Running executable in clean environment..."
+        # Run in a clean PATH environment (minimal Windows system paths only)
+        env -i SystemRoot="$SystemRoot" PATH="/c/Windows/System32:/c/Windows" ./test_threading.exe
+
+        echo "✓ DLL deployment test PASSED"
+      shell: bash
+
+    - name: Test DLL Deployment (Exceptions and STL)
+      run: |
+        cat > test_exceptions.cpp << 'EOF'
+        #include <iostream>
+        #include <vector>
+        #include <stdexcept>
+        #include <memory>
+
+        void test_function(int value) {
+            if (value < 0) {
+                throw std::runtime_error("Negative value not allowed");
+            }
+            std::cout << "Value: " << value << std::endl;
+        }
+
+        int main() {
+            try {
+                std::vector<int> numbers = {1, 2, 3, 4, 5};
+                auto ptr = std::make_unique<int>(42);
+
+                std::cout << "Testing exceptions and STL..." << std::endl;
+                test_function(10);
+                test_function(-1);  // Will throw
+            } catch (const std::exception& e) {
+                std::cout << "Caught exception: " << e.what() << std::endl;
+            }
+            std::cout << "Exception handling test successful!" << std::endl;
+            return 0;
+        }
+        EOF
+        echo "Building test_exceptions.exe..."
+        uv run clang-tool-chain-cpp test_exceptions.cpp -o test_exceptions.exe
+
+        echo "Checking for deployed DLLs..."
+        # Check for typical MinGW DLLs
+        dll_count=0
+        for dll in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll; do
+          if [ -f "$dll" ]; then
+            echo "✓ $dll was deployed"
+            dll_count=$((dll_count + 1))
+          fi
+        done
+
+        if [ $dll_count -eq 0 ]; then
+          echo "✗ No MinGW DLLs were deployed"
+          exit 1
+        fi
+
+        echo "✓ $dll_count MinGW DLL(s) deployed"
+
+        echo "Running executable in clean environment..."
+        env -i SystemRoot="$SystemRoot" PATH="/c/Windows/System32:/c/Windows" ./test_exceptions.exe
+
+        echo "✓ Exception handling test PASSED"
+      shell: bash
+
+    - name: Test DLL Deployment Opt-Out
+      run: |
+        cat > test_optout.cpp << 'EOF'
+        #include <iostream>
+        int main() {
+            std::cout << "Opt-out test" << std::endl;
+            return 0;
+        }
+        EOF
+
+        echo "Building with DLL deployment disabled..."
+        # Remove any existing DLLs from previous tests
+        rm -f libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll
+
+        export CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+        uv run clang-tool-chain-cpp test_optout.cpp -o test_optout.exe
+
+        echo "Checking that NO DLLs were deployed..."
+        dll_found=false
+        for dll in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll; do
+          if [ -f "$dll" ]; then
+            echo "✗ $dll was deployed (should not have been)"
+            dll_found=true
+          fi
+        done
+
+        if [ "$dll_found" = true ]; then
+          exit 1
+        fi
+
+        echo "✓ DLL deployment opt-out PASSED (no DLLs deployed)"
+      shell: bash
+
+    - name: Run DLL deployment tests
+      run: |
+        uv run pytest tests/test_dll_deployment.py -v
+      shell: bash

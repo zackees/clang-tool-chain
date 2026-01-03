@@ -79,3 +79,34 @@ jobs:
       run: |
         uv run pytest tests/test_integration.py -v
       shell: bash
+
+    - name: Verify DLL Deployment
+      run: |
+        echo "Testing automatic DLL deployment..."
+        cat > test_dll.cpp << 'EOF'
+        #include <iostream>
+        #include <thread>
+
+        int main() {
+            std::cout << "Testing DLL deployment" << std::endl;
+            auto t = std::thread([]() {
+                std::cout << "Thread running" << std::endl;
+            });
+            t.join();
+            return 0;
+        }
+        EOF
+
+        uv run clang-tool-chain-cpp test_dll.cpp -o test_dll.exe -pthread
+
+        # Verify DLLs were deployed
+        if [ -f "libwinpthread-1.dll" ]; then
+          echo "✓ DLL deployment verified (libwinpthread-1.dll found)"
+        else
+          echo "Warning: libwinpthread-1.dll not found (DLL deployment may not be working)"
+        fi
+
+        # Run the executable
+        ./test_dll.exe
+        echo "✓ Executable runs successfully"
+      shell: bash
