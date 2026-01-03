@@ -46,6 +46,7 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 - Manifest-based distribution system with checksum verification
 - Python wrapper commands for all essential tools
 - Ultra-compressed archives using zstd level 22 (~94% size reduction)
+- **Platform-specific LLVM lld linker** (ld64.lld on macOS, lld on Linux)
 - **Windows GNU ABI support with integrated MinGW headers and sysroot** (no separate download)
 - **Automatic MinGW DLL deployment for Windows executables** (GNU ABI only)
 - Emscripten WebAssembly compilation

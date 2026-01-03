@@ -50,8 +50,8 @@ clang-tool-chain-sccache --version        # Show sccache version
 ## LLVM lld Linker (Automatic, macOS/Linux)
 
 Starting with v1.0.8+, clang-tool-chain automatically uses LLVM's `lld` linker on macOS and Linux for consistent cross-platform behavior. This replaces platform-specific system linkers:
-- **macOS**: `lld` instead of Apple's `ld64`
-- **Linux**: `lld` instead of GNU `ld`
+- **macOS**: `ld64.lld` (Mach-O variant) instead of Apple's `ld64`
+- **Linux**: `lld` (ELF variant) instead of GNU `ld`
 - **Windows**: Already uses `lld` via GNU ABI setup
 
 **Why lld is Default:**
@@ -62,7 +62,11 @@ Starting with v1.0.8+, clang-tool-chain automatically uses LLVM's `lld` linker o
 
 **Automatic lld Injection:**
 
-The wrapper automatically adds `-fuse-ld=lld` when linking on macOS and Linux, unless:
+The wrapper automatically adds platform-specific lld flags when linking:
+- **macOS**: `-fuse-ld=ld64.lld` (explicit Mach-O variant required by LLVM 19.1.7+)
+- **Linux**: `-fuse-ld=lld` (standard ELF linker)
+
+The injection is skipped when:
 - User sets `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` (opt-out)
 - User already specified `-fuse-ld=` in arguments
 - Compile-only operation (`-c` flag present, no linking)
