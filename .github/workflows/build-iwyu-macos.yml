@@ -37,7 +37,7 @@ jobs:
       - name: Create archive
         run: |
           cd downloads-bins/tools
-          python3 create_iwyu_archives.py --platform darwin --arch x86_64 --version 0.22
+          python3 create_iwyu_archives.py --platform darwin --arch x86_64 --version 0.22 --iwyu-root ../assets/iwyu
 
       - name: Display build results
         run: |
@@ -80,7 +80,7 @@ jobs:
       - name: Create archive
         run: |
           cd downloads-bins/tools
-          python3 create_iwyu_archives.py --platform darwin --arch arm64 --version 0.25
+          python3 create_iwyu_archives.py --platform darwin --arch arm64 --version 0.25 --iwyu-root ../assets/iwyu
 
       - name: Display build results
         run: |
