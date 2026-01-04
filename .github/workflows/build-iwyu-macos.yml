@@ -1,5 +1,9 @@
 name: Build IWYU macOS Archives
 
+# IMPORTANT: This workflow uses macOS runners which are expensive (~10x Linux costs)
+# Total runtime: ~15-20 minutes (both architectures in parallel)
+# Estimated cost: ~$0.16-0.32 USD per run (based on GitHub Actions pricing)
+
 on:
   workflow_dispatch:
     inputs:
@@ -11,6 +15,11 @@ on:
         options:
           - 'true'
           - 'false'
+
+# Prevent accidental concurrent runs
+concurrency:
+  group: iwyu-macos-build
+  cancel-in-progress: false
 
 jobs:
   build-iwyu-macos-x64:
