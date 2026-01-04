@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   build-iwyu-macos-x64:
-    runs-on: macos-13  # Intel Mac for x86_64
+    runs-on: macos-15-large  # Intel Mac for x86_64 (macos-13 is retired)
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,7 +35,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyzstd
+          pip install zstandard
           brew install cmake
 
       - name: Build IWYU 0.22 for x86_64
@@ -78,7 +78,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyzstd
+          pip install zstandard
           brew install cmake
 
       - name: Build IWYU 0.25 for ARM64
