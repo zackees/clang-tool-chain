@@ -38,7 +38,7 @@ jobs:
           pip install zstandard
           brew install cmake
 
-      - name: Build IWYU 0.22 for x86_64
+      - name: Build IWYU 0.25 for x86_64
         run: |
           cd downloads-bins/tools
           python3 build_iwyu_macos.py --arch x86_64
@@ -46,7 +46,7 @@ jobs:
       - name: Create archive
         run: |
           cd downloads-bins/tools
-          python3 create_iwyu_archives.py --platform darwin --arch x86_64 --version 0.22 --iwyu-root ../assets/iwyu
+          python3 create_iwyu_archives.py --platform darwin --arch x86_64 --version 0.25 --iwyu-root ../assets/iwyu
 
       - name: Display build results
         run: |
