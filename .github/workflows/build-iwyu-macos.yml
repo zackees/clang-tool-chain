@@ -1,0 +1,118 @@
+name: Build IWYU macOS Archives
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_repo:
+        description: 'Upload artifacts to downloads-bins repository (requires write access)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  build-iwyu-macos-x64:
+    runs-on: macos-13  # Intel Mac for x86_64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyzstd
+          brew install cmake
+
+      - name: Install clang-tool-chain
+        run: |
+          pip install -e .
+
+      - name: Pre-download LLVM 19.1.7
+        run: |
+          python -c "from clang_tool_chain import get_clang_tool_chain; get_clang_tool_chain()"
+        timeout-minutes: 20
+
+      - name: Build IWYU 0.22 for x86_64
+        run: |
+          cd downloads-bins/tools
+          python3 build_iwyu_macos.py --arch x86_64
+
+      - name: Create archive
+        run: |
+          cd downloads-bins/tools
+          python3 create_iwyu_archives.py --platform darwin --arch x86_64 --version 0.22
+
+      - name: Display build results
+        run: |
+          echo "=== Build Complete ==="
+          cd downloads-bins/assets/iwyu/darwin/x86_64
+          ls -lh iwyu-*-darwin-x86_64.tar.zst* 2>/dev/null || echo "Archive not found"
+          echo ""
+          echo "=== Checksums ==="
+          cat iwyu-*-darwin-x86_64.tar.zst.sha256 2>/dev/null || echo "SHA256 not found"
+
+      - name: Upload macOS x86_64 archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: iwyu-darwin-x86_64
+          path: |
+            downloads-bins/assets/iwyu/darwin/x86_64/iwyu-*.tar.zst
+            downloads-bins/assets/iwyu/darwin/x86_64/iwyu-*.tar.zst.sha256
+
+  build-iwyu-macos-arm64:
+    runs-on: macos-latest  # Apple Silicon Mac (macos-14 or later)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyzstd
+          brew install cmake
+
+      - name: Install clang-tool-chain
+        run: |
+          pip install -e .
+
+      - name: Pre-download LLVM 21.1.6
+        run: |
+          python -c "from clang_tool_chain import get_clang_tool_chain; get_clang_tool_chain()"
+        timeout-minutes: 20
+
+      - name: Build IWYU 0.25 for ARM64
+        run: |
+          cd downloads-bins/tools
+          python3 build_iwyu_macos.py --arch arm64
+
+      - name: Create archive
+        run: |
+          cd downloads-bins/tools
+          python3 create_iwyu_archives.py --platform darwin --arch arm64 --version 0.25
+
+      - name: Display build results
+        run: |
+          echo "=== Build Complete ==="
+          cd downloads-bins/assets/iwyu/darwin/arm64
+          ls -lh iwyu-*-darwin-arm64.tar.zst* 2>/dev/null || echo "Archive not found"
+          echo ""
+          echo "=== Checksums ==="
+          cat iwyu-*-darwin-arm64.tar.zst.sha256 2>/dev/null || echo "SHA256 not found"
+
+      - name: Upload macOS ARM64 archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: iwyu-darwin-arm64
+          path: |
+            downloads-bins/assets/iwyu/darwin/arm64/iwyu-*.tar.zst
+            downloads-bins/assets/iwyu/darwin/arm64/iwyu-*.tar.zst.sha256
