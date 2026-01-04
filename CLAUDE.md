@@ -17,17 +17,18 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 | Platform | Architecture | Clang/LLVM Version | Linker Used | Additional Components |
 |----------|-------------|-------------------|-------------|----------------------|
 | macOS    | x86_64      | 19.1.7            | System ld64 | -                    |
-| macOS    | arm64       | 19.1.7            | System ld64 | -                    |
+| macOS    | arm64       | 21.1.6            | System ld64 | -                    |
 | Windows  | x86_64      | 21.1.5            | lld         | MinGW-w64 (integrated) |
 | Linux    | x86_64      | 21.1.5            | lld         | -                    |
 | Linux    | arm64       | 21.1.5            | lld         | -                    |
 
-*Version information as of November 11, 2025*
+*Version information as of January 3, 2026*
 
 **Linker Notes:**
-- **macOS**: Uses system linker (ld64) because LLVM 19.1.7 doesn't support `-fuse-ld` flag
+- **macOS ARM64**: Upgraded to LLVM 21.1.6 (supports `-fuse-ld` flag), but system linker still used until x86_64 upgrade
+- **macOS x86_64**: Uses system linker (ld64) - LLVM 19.1.7 doesn't support `-fuse-ld` flag
 - **Linux/Windows**: Uses LLVM lld for faster linking and cross-platform consistency
-- **Future**: macOS will use lld when upgraded to LLVM 21.1.5+
+- **Future**: macOS will use lld when both architectures are on LLVM 21.1.6+ (x86_64 blocked: no pre-built binary available)
 
 **Note:** The LLVM versions listed above are for the main clang-tool-chain toolchain. Emscripten uses its own bundled LLVM (LLVM 22 for Emscripten 4.0.19), which is installed separately and does not share binaries with the main toolchain.
 

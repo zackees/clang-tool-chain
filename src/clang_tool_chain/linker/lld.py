@@ -17,8 +17,8 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
     Determine if we should force the use of LLVM's lld linker.
 
     This provides consistent cross-platform behavior by using LLVM's lld
-    on all platforms instead of platform-specific system linkers:
-    - macOS: lld instead of Apple's ld64
+    on supported platforms instead of platform-specific system linkers:
+    - macOS: Uses system ld64 (temporarily disabled - ARM64 on 21.1.6 ready, x86_64 on 19.1.7 not ready)
     - Linux: lld instead of GNU ld
     - Windows: Already uses lld via -fuse-ld=lld in GNU ABI setup
 
@@ -36,12 +36,14 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
         logger.debug("CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1, skipping lld injection")
         return False
 
-    # TEMPORARY: Disable LLD on macOS due to LLVM 19.1.7 limitation
-    # LLVM 19.1.7 on macOS doesn't support -fuse-ld flag (neither lld nor ld64.lld)
-    # This causes compilation failures with: "clang: error: invalid linker name in argument '-fuse-ld=...'"
-    # TODO: Re-enable when macOS upgrades to LLVM 21.1.5+ which supports -fuse-ld
+    # TEMPORARY: Disable LLD on macOS due to mixed LLVM versions across architectures
+    # - macOS ARM64: LLVM 21.1.6 (supports -fuse-ld flag) ✅
+    # - macOS x86_64: LLVM 19.1.7 (doesn't support -fuse-ld flag) ❌
+    # Cannot enable lld until both architectures support it to maintain consistent behavior
+    # This causes compilation failures on x86_64 with: "clang: error: invalid linker name in argument '-fuse-ld=...'"
+    # TODO: Re-enable when x86_64 upgrades to LLVM 21.1.6+ (blocked: no pre-built binary available)
     if platform_name == "darwin":
-        logger.info("Skipping lld on macOS (LLVM 19.1.7 doesn't support -fuse-ld flag)")
+        logger.info("Skipping lld on macOS (x86_64 LLVM 19.1.7 doesn't support -fuse-ld flag)")
         return False
 
     # Only apply to Linux (macOS disabled above, Windows already handled in GNU ABI setup)
