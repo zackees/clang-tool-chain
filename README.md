@@ -53,7 +53,7 @@ clang-tool-chain-test  # Runs 7 diagnostic tests
 
 > **Note:** This package currently uses:
 > - **LLVM 21.1.5** for Windows, Linux (x86_64/ARM64)
-> - **LLVM 19.1.7** for macOS (x86_64/ARM64)
+> - **LLVM 21.1.6** for macOS (x86_64/ARM64)
 >
 > See [Platform Support Matrix](#platform-support-matrix) for details.
 
@@ -251,7 +251,7 @@ Installing Clang/LLVM traditionally requires:
 - **Cross-Platform Support** - Windows x86_64, macOS x86_64/ARM64, Linux x86_64/ARM64
 - **Concurrent-Safe Installation** - File locking prevents race conditions in parallel builds
 - **Python Wrapper Commands** - 35 entry points for all essential LLVM tools
-- **Pre-Built Binaries** - Clang 21.1.5 (Windows, Linux) and Clang 19.1.7 (macOS)
+- **Pre-Built Binaries** - Clang 21.1.5 (Windows, Linux) and Clang 21.1.6 (macOS)
 - **Essential Toolchain Utilities** - Compilers, linkers, binary utilities, and code formatters
 - **Automatic macOS SDK Detection** - Seamlessly finds system headers on macOS without configuration
 
@@ -887,14 +887,14 @@ steps:
 | Windows  | x86_64       | 21.1.5       | ~71 MB*      | ~350 MB        | ✅ Stable |
 | Linux    | x86_64       | 21.1.5       | ~87 MB       | ~350 MB        | ✅ Stable |
 | Linux    | ARM64        | 21.1.5       | ~91 MB       | ~340 MB        | ✅ Stable |
-| macOS    | x86_64       | 19.1.7       | ~77 MB       | ~300 MB        | ✅ Stable |
-| macOS    | ARM64        | 19.1.7       | ~71 MB       | ~285 MB        | ✅ Stable |
+| macOS    | x86_64       | 21.1.6       | ~77 MB       | ~300 MB        | ✅ Stable |
+| macOS    | ARM64        | 21.1.6       | ~71 MB       | ~285 MB        | ✅ Stable |
 
 \* **Windows Downloads:**
   - **GNU target (default):** ~90 MB (71 MB LLVM + 19 MB MinGW-w64 sysroot)
   - **MSVC target (opt-in):** ~71 MB (LLVM only, requires Visual Studio SDK)
 
-**Note:** macOS currently uses LLVM 19.1.7.
+**Note:** macOS uses LLVM 21.1.6 (Homebrew build for x86_64).
 
 ### Requirements
 
@@ -1432,7 +1432,7 @@ Every archive download is verified against SHA256 checksums stored in the platfo
 
 ### Does macOS support LLVM 21.1.5?
 
-No. macOS currently uses LLVM 19.1.7 for both x86_64 and ARM64 architectures, which is the latest stable version optimized for macOS platforms.
+macOS uses LLVM 21.1.6 for both x86_64 and ARM64 architectures. The x86_64 build uses Homebrew's LLVM since no official binary is available from the LLVM project.
 
 ### Can I contribute new platforms or architectures?
 
@@ -1904,7 +1904,7 @@ xz level 9:    Size: 89 MB,  Time: 67.3s
 - Original: ~850 MB
 - After optimization: **88 MB archive**
 
-**macOS ARM64 (LLVM 19.1.7):**
+**macOS ARM64 (LLVM 21.1.6):**
 - Original: ~750 MB
 - After optimization: **71 MB archive**
 
@@ -1978,7 +1978,7 @@ The bundled Clang/LLVM binaries are licensed under the **Apache License 2.0 with
 - ✅ Cross-platform support (Windows x86_64, macOS x86_64/ARM64, Linux x86_64/ARM64)
 - ✅ File locking for concurrent-safe downloads
 - ✅ Ultra-compressed archives (zstd level 22, 94.3% size reduction)
-- ✅ LLVM 21.1.5 for Windows and Linux; LLVM 19.1.7 for macOS
+- ✅ LLVM 21.1.5 for Windows and Linux; LLVM 21.1.6 for macOS
 - ✅ Comprehensive test suite with CI/CD integration
 
 ---
