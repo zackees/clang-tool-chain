@@ -35,7 +35,7 @@ jobs:
 
       - name: Pre-download LLVM 19.1.7
         run: |
-          python -c "from clang_tool_chain import get_clang_tool_chain; get_clang_tool_chain()"
+          clang-tool-chain-cpp --version
         timeout-minutes: 20
 
       - name: Build IWYU 0.22 for x86_64
@@ -87,7 +87,7 @@ jobs:
 
       - name: Pre-download LLVM 21.1.6
         run: |
-          python -c "from clang_tool_chain import get_clang_tool_chain; get_clang_tool_chain()"
+          clang-tool-chain-cpp --version
         timeout-minutes: 20
 
       - name: Build IWYU 0.25 for ARM64
