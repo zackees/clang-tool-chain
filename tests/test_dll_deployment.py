@@ -991,5 +991,232 @@ int main() {
             assert exe_path.exists(), "Executable should exist in deep directory"
 
 
+class TestAtomicDllCopy:
+    """Test atomic DLL copy implementation to prevent race conditions."""
+
+    def test_atomic_copy_basic(self):
+        """Test basic atomic copy operation."""
+        from clang_tool_chain.deployment.dll_deployer import _atomic_copy_dll
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create source DLL
+            src_dll = tmpdir_path / "src" / "test.dll"
+            src_dll.parent.mkdir()
+            src_dll.write_bytes(b"DLL content")
+
+            # Destination directory
+            dest_dir = tmpdir_path / "dest"
+            dest_dir.mkdir()
+            dest_dll = dest_dir / "test.dll"
+
+            # Copy should succeed
+            was_copied = _atomic_copy_dll(src_dll, dest_dll)
+            assert was_copied is True, "First copy should succeed"
+            assert dest_dll.exists(), "Destination DLL should exist"
+            assert dest_dll.read_bytes() == b"DLL content", "Content should match"
+
+            # Verify no temp files left behind
+            temp_files = list(dest_dir.glob(".test.dll.*.tmp"))
+            assert len(temp_files) == 0, "No temp files should be left behind"
+
+    def test_atomic_copy_skips_up_to_date(self):
+        """Test that up-to-date DLLs are skipped based on timestamp."""
+        from clang_tool_chain.deployment.dll_deployer import _atomic_copy_dll
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create source DLL
+            src_dll = tmpdir_path / "src" / "test.dll"
+            src_dll.parent.mkdir()
+            src_dll.write_bytes(b"DLL content")
+
+            # Create destination DLL with newer timestamp
+            dest_dir = tmpdir_path / "dest"
+            dest_dir.mkdir()
+            dest_dll = dest_dir / "test.dll"
+            dest_dll.write_bytes(b"DLL content")
+
+            # Make destination newer than source
+            os.utime(dest_dll, (dest_dll.stat().st_atime, src_dll.stat().st_mtime + 10))
+
+            # Copy should be skipped
+            was_copied = _atomic_copy_dll(src_dll, dest_dll)
+            assert was_copied is False, "Copy should be skipped (up-to-date)"
+
+    def test_atomic_copy_concurrent_stress(self):
+        """Stress test for concurrent DLL deployment (race condition handling)."""
+        import concurrent.futures
+        import time
+
+        from clang_tool_chain.deployment.dll_deployer import _atomic_copy_dll
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create source DLL
+            src_dll = tmpdir_path / "src" / "test.dll"
+            src_dll.parent.mkdir()
+            src_dll.write_bytes(b"X" * 1024 * 100)  # 100 KB
+
+            # Destination directory (shared by all workers)
+            dest_dir = tmpdir_path / "dest"
+            dest_dir.mkdir()
+            dest_dll = dest_dir / "test.dll"
+
+            # Function to simulate concurrent compilation
+            def worker_copy(worker_id: int) -> tuple[int, bool, bool]:
+                """
+                Simulate a worker process copying a DLL.
+
+                Returns:
+                    (worker_id, success, was_copied)
+                """
+                try:
+                    # Add small random delay to increase race condition likelihood
+                    time.sleep(0.001 * (worker_id % 3))
+                    was_copied = _atomic_copy_dll(src_dll, dest_dll)
+                    return (worker_id, True, was_copied)
+                except Exception as e:
+                    # Should not happen with atomic copy
+                    print(f"Worker {worker_id} failed: {e}")
+                    return (worker_id, False, False)
+
+            # Run 20 concurrent workers all trying to copy the same DLL
+            num_workers = 20
+            with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+                # Remove destination DLL before test
+                dest_dll.unlink(missing_ok=True)
+
+                # Submit all workers
+                futures = [executor.submit(worker_copy, i) for i in range(num_workers)]
+
+                # Wait for all to complete
+                results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+            # Verify results
+            assert len(results) == num_workers, f"Expected {num_workers} results"
+
+            # All workers should succeed (no exceptions)
+            all_success = all(success for _, success, _ in results)
+            assert all_success, "All workers should succeed without exceptions"
+
+            # At least one worker should have copied the DLL
+            copy_count = sum(1 for _, _, was_copied in results if was_copied)
+            assert copy_count >= 1, "At least one worker should have copied the DLL"
+
+            # Destination DLL should exist and be valid
+            assert dest_dll.exists(), "Destination DLL should exist after concurrent copies"
+            assert dest_dll.read_bytes() == b"X" * 1024 * 100, "DLL content should be intact (not corrupted)"
+
+            # No temp files should be left behind
+            temp_files = list(dest_dir.glob(".test.dll.*.tmp"))
+            assert len(temp_files) == 0, f"No temp files should remain, found: {temp_files}"
+
+            # Verify file is not corrupted (check size)
+            assert dest_dll.stat().st_size == 1024 * 100, "DLL size should match source"
+
+    def test_atomic_copy_updates_outdated(self):
+        """Test that outdated DLLs are updated."""
+        from clang_tool_chain.deployment.dll_deployer import _atomic_copy_dll
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create source DLL with newer content
+            src_dll = tmpdir_path / "src" / "test.dll"
+            src_dll.parent.mkdir()
+            src_dll.write_bytes(b"New DLL content")
+
+            # Create old destination DLL
+            dest_dir = tmpdir_path / "dest"
+            dest_dir.mkdir()
+            dest_dll = dest_dir / "test.dll"
+            dest_dll.write_bytes(b"Old DLL content")
+
+            # Make source newer than destination
+            os.utime(src_dll, (src_dll.stat().st_atime, dest_dll.stat().st_mtime + 10))
+
+            # Copy should update the file
+            was_copied = _atomic_copy_dll(src_dll, dest_dll)
+            assert was_copied is True, "Outdated DLL should be updated"
+            assert dest_dll.read_bytes() == b"New DLL content", "Content should be updated"
+
+    @pytest.mark.skipif(os.name != "nt", reason="Windows-specific test")
+    def test_atomic_copy_uses_replace_on_windows(self):
+        """Test that atomic copy uses Path.replace() on Windows."""
+        from clang_tool_chain.deployment.dll_deployer import _atomic_copy_dll
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create source DLL
+            src_dll = tmpdir_path / "src" / "test.dll"
+            src_dll.parent.mkdir()
+            src_dll.write_bytes(b"DLL content")
+
+            # Create destination with old content
+            dest_dir = tmpdir_path / "dest"
+            dest_dir.mkdir()
+            dest_dll = dest_dir / "test.dll"
+            dest_dll.write_bytes(b"Old content")
+
+            # Update source timestamp to be newer
+            os.utime(src_dll, (src_dll.stat().st_atime, dest_dll.stat().st_mtime + 10))
+
+            # Copy should replace existing file
+            was_copied = _atomic_copy_dll(src_dll, dest_dll)
+            assert was_copied is True, "Should replace existing file on Windows"
+            assert dest_dll.read_bytes() == b"DLL content", "Content should be replaced"
+
+    def test_atomic_copy_parallel_with_multiple_dlls(self):
+        """Test concurrent deployment of multiple different DLLs."""
+        import concurrent.futures
+
+        from clang_tool_chain.deployment.dll_deployer import _atomic_copy_dll
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create source directory with 3 different DLLs
+            src_dir = tmpdir_path / "src"
+            src_dir.mkdir()
+            dlls = ["libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll"]
+
+            for dll_name in dlls:
+                dll_path = src_dir / dll_name
+                dll_path.write_bytes(dll_name.encode() * 1000)  # Unique content per DLL
+
+            # Destination directory
+            dest_dir = tmpdir_path / "dest"
+            dest_dir.mkdir()
+
+            # Function to copy a DLL
+            def copy_dll(dll_name: str) -> bool:
+                src = src_dir / dll_name
+                dest = dest_dir / dll_name
+                return _atomic_copy_dll(src, dest)
+
+            # Copy all DLLs in parallel (simulating parallel compilation)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                futures = {executor.submit(copy_dll, dll): dll for dll in dlls}
+                results = {futures[f]: f.result() for f in concurrent.futures.as_completed(futures)}
+
+            # All DLLs should be copied successfully
+            assert all(results.values()), "All DLLs should be copied"
+
+            # Verify all DLLs exist with correct content
+            for dll_name in dlls:
+                dest_dll = dest_dir / dll_name
+                assert dest_dll.exists(), f"{dll_name} should exist"
+                assert dest_dll.read_bytes() == dll_name.encode() * 1000, f"{dll_name} content should match"
+
+            # No temp files should remain
+            temp_files = list(dest_dir.glob(".*.tmp"))
+            assert len(temp_files) == 0, "No temp files should remain"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

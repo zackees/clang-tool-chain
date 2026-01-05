@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -153,6 +154,100 @@ def detect_required_dlls(exe_path: Path) -> list[str]:
         return HEURISTIC_MINGW_DLLS.copy()
 
 
+def _atomic_copy_dll(src_dll: Path, dest_dll: Path) -> bool:
+    """
+    Atomically copy a DLL using temp file + rename pattern to avoid race conditions.
+
+    This function ensures that concurrent compilations writing to the same directory
+    don't corrupt DLL files. Uses the following algorithm:
+    1. Copy source to a temporary file (unique name)
+    2. Attempt atomic rename to destination
+    3. If rename fails due to existing file (race condition), clean up temp and return success
+    4. If other errors occur, clean up temp and raise
+
+    Args:
+        src_dll: Source DLL path in MinGW sysroot
+        dest_dll: Destination DLL path in executable directory
+
+    Returns:
+        True if DLL was copied/updated, False if skipped (already up-to-date)
+
+    Raises:
+        OSError: If copy or rename fails (other than race condition)
+
+    Examples:
+        >>> _atomic_copy_dll(Path("/src/libwinpthread-1.dll"), Path("/dest/libwinpthread-1.dll"))
+        True  # DLL copied successfully
+    """
+    # Check if destination exists and compare timestamps
+    if dest_dll.exists():
+        src_stat = src_dll.stat()
+        dest_stat = dest_dll.stat()
+
+        # Skip if destination is up-to-date
+        if src_stat.st_mtime <= dest_stat.st_mtime:
+            logger.debug(f"Skipped (up-to-date): {dest_dll.name}")
+            return False
+
+    # Create temporary file in destination directory with unique name
+    # Format: .{dll_name}.{uuid}.tmp
+    temp_name = f".{dest_dll.name}.{uuid.uuid4().hex[:8]}.tmp"
+    temp_dll = dest_dll.parent / temp_name
+
+    try:
+        # Copy source to temporary file
+        shutil.copy2(src_dll, temp_dll)
+        logger.debug(f"Copied to temp: {temp_name}")
+
+        # Atomic rename (on Windows, this may fail if destination exists)
+        try:
+            # On POSIX, this is atomic and replaces existing files
+            # On Windows, this fails if destination exists (need to handle)
+            if os.name == "nt":
+                # Windows: use os.replace() which is atomic if supported by filesystem
+                # If destination exists, replace will succeed atomically (Python 3.3+)
+                temp_dll.replace(dest_dll)
+            else:
+                # POSIX: rename is atomic and replaces existing files
+                temp_dll.rename(dest_dll)
+
+            logger.debug(f"Deployed (atomic): {dest_dll.name}")
+            return True
+
+        except FileExistsError:
+            # Race condition: another process already created the file
+            # This is OK - just clean up our temp file
+            logger.debug(f"Skipped (race condition): {dest_dll.name} - another process deployed it")
+            temp_dll.unlink(missing_ok=True)
+            return False
+
+        except OSError as e:
+            # On Windows, replace() might fail if file is in use
+            # Try to compare temp with destination - if identical, it's OK
+            if dest_dll.exists():
+                # Check if files are identical by size and mtime
+                try:
+                    temp_stat = temp_dll.stat()
+                    dest_stat = dest_dll.stat()
+                    if temp_stat.st_size == dest_stat.st_size:
+                        # Files are same size, likely identical - clean up and succeed
+                        logger.debug(
+                            f"Skipped (file in use but same size): {dest_dll.name} - " f"assuming identical, error: {e}"
+                        )
+                        temp_dll.unlink(missing_ok=True)
+                        return False
+                except OSError:
+                    pass  # Ignore stat errors, will re-raise original error below
+
+            # Re-raise if we couldn't handle it
+            raise
+
+    except Exception:
+        # Clean up temp file on any error
+        temp_dll.unlink(missing_ok=True)
+        raise
+
+
 def get_mingw_sysroot_bin_dir(platform_name: str, arch: str) -> Path:
     """
     Get the MinGW sysroot bin directory containing runtime DLLs.
@@ -284,22 +379,13 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
                 logger.warning(f"Source DLL not found, skipping: {dll_name}")
                 continue
 
-            # Check if destination exists and compare timestamps
-            if dest_dll.exists():
-                src_stat = src_dll.stat()
-                dest_stat = dest_dll.stat()
-
-                # Skip if destination is up-to-date
-                if src_stat.st_mtime <= dest_stat.st_mtime:
-                    logger.debug(f"Skipped (up-to-date): {dll_name}")
-                    skipped_count += 1
-                    continue
-
-            # Copy DLL (preserves metadata with copy2)
+            # Atomically copy DLL (handles race conditions)
             try:
-                shutil.copy2(src_dll, dest_dll)
-                deployed_count += 1
-                logger.debug(f"Deployed: {dll_name}")
+                was_copied = _atomic_copy_dll(src_dll, dest_dll)
+                if was_copied:
+                    deployed_count += 1
+                else:
+                    skipped_count += 1
             except PermissionError:
                 logger.warning(f"Permission denied copying {dll_name}, skipping")
                 continue
