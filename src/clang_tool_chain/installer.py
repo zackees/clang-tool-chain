@@ -198,6 +198,8 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
     Raises:
         RuntimeError: If download or installation fails
     """
+    import sys
+
     if verbose:
         print(f"Downloading clang-tool-chain for {platform}/{arch}...")
 
@@ -224,10 +226,24 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         archive_path = Path(tmp.name)
 
     try:
+        # Get file size information and print to stderr before download
+        # This helps users understand that downloading is in progress and not stalled
+        from .parallel_download import check_server_capabilities
+
+        print("Downloading Clang/LLVM toolchain for first-time installation...", file=sys.stderr, flush=True)
+        capabilities = check_server_capabilities(version_info.href, timeout=10)
+        if capabilities.content_length:
+            size_mb = capabilities.content_length / (1024 * 1024)
+            print(f"Download size: {size_mb:.1f} MB", file=sys.stderr, flush=True)
+        else:
+            print("Download size: (size unknown, checking...)", file=sys.stderr, flush=True)
+
         if verbose:
             print(f"Downloading to {archive_path}...")
 
         download_archive(version_info, archive_path)
+
+        print("Download complete. Extracting toolchain...", file=sys.stderr, flush=True)
 
         if verbose:
             print("Download complete. Verifying checksum...")
@@ -342,6 +358,8 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         done_file.write_text(
             f"Installation completed successfully\n" f"Version: {latest_version}\n" f"SHA256: {version_info.sha256}\n"
         )
+
+        print("Clang/LLVM toolchain installation complete!", file=sys.stderr, flush=True)
 
     finally:
         # Clean up downloaded archive
