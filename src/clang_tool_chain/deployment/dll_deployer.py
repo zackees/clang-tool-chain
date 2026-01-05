@@ -132,18 +132,30 @@ def detect_required_dlls(exe_path: Path) -> list[str]:
         # Pattern: "DLL Name: <dll_name>"
         dll_pattern = re.compile(r"DLL Name:\s+(\S+)", re.IGNORECASE)
         detected_dlls = []
+        total_dlls_found = 0
 
         for match in dll_pattern.finditer(result.stdout):
             dll_name = match.group(1)
+            total_dlls_found += 1
             if _is_mingw_dll(dll_name):
                 detected_dlls.append(dll_name)
                 logger.debug(f"Detected MinGW DLL dependency: {dll_name}")
 
-        if not detected_dlls:
-            logger.debug("No MinGW DLLs detected by llvm-objdump, using heuristic list")
+        # If llvm-objdump succeeded and detected MinGW DLLs, use that result
+        if detected_dlls:
+            logger.debug(f"Found {len(detected_dlls)} MinGW DLL(s) via llvm-objdump")
+            return detected_dlls
+
+        # If llvm-objdump found DLL imports but no MinGW DLLs, still use heuristic fallback
+        # This covers the case where the executable was compiled but objdump may have
+        # missed MinGW DLLs in its output (parsing issues, etc.)
+        if total_dlls_found > 0:
+            logger.debug("llvm-objdump found DLL imports but no MinGW DLLs, using heuristic list")
             return HEURISTIC_MINGW_DLLS.copy()
 
-        return detected_dlls
+        # No DLL imports found at all - likely means PE import table couldn't be parsed
+        logger.debug("No DLL imports found by llvm-objdump, using heuristic list")
+        return HEURISTIC_MINGW_DLLS.copy()
 
     except subprocess.TimeoutExpired:
         logger.warning("llvm-objdump timed out after 10 seconds, using heuristic DLL list")

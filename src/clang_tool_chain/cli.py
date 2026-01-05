@@ -10,6 +10,7 @@ import sys
 from typing import Any, NoReturn
 
 from . import sccache_runner, wrapper
+from .abi.windows_gnu import _get_gnu_target_args, _should_use_gnu_abi
 from .linker import _add_lld_linker_if_needed
 from .platform.detection import get_platform_info
 from .sdk import _add_macos_sysroot_if_needed
@@ -971,7 +972,7 @@ def sccache_c_main() -> int:
         return 1
 
     # Add platform-specific arguments (same logic as execute_tool)
-    platform_name, _arch = get_platform_info()
+    platform_name, arch = get_platform_info()
 
     # Add macOS SDK path automatically if needed
     if platform_name == "darwin":
@@ -979,6 +980,15 @@ def sccache_c_main() -> int:
 
     # Force lld linker on macOS and Linux for cross-platform consistency
     args = _add_lld_linker_if_needed(platform_name, args)
+
+    # Add Windows GNU ABI target automatically (to force ld.lld instead of MSVC link.exe)
+    if _should_use_gnu_abi(platform_name, args):
+        try:
+            gnu_args = _get_gnu_target_args(platform_name, arch, args)
+            args = gnu_args + args
+        except Exception as e:
+            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may use MSVC linker)...\n", file=sys.stderr)
 
     return sccache_runner.run_sccache_with_compiler(str(clang_path), args)
 
@@ -1006,7 +1016,7 @@ def sccache_cpp_main() -> int:
         return 1
 
     # Add platform-specific arguments (same logic as execute_tool)
-    platform_name, _arch = get_platform_info()
+    platform_name, arch = get_platform_info()
 
     # Add macOS SDK path automatically if needed
     if platform_name == "darwin":
@@ -1014,6 +1024,15 @@ def sccache_cpp_main() -> int:
 
     # Force lld linker on macOS and Linux for cross-platform consistency
     args = _add_lld_linker_if_needed(platform_name, args)
+
+    # Add Windows GNU ABI target automatically (to force ld.lld instead of MSVC link.exe)
+    if _should_use_gnu_abi(platform_name, args):
+        try:
+            gnu_args = _get_gnu_target_args(platform_name, arch, args)
+            args = gnu_args + args
+        except Exception as e:
+            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may use MSVC linker)...\n", file=sys.stderr)
 
     return sccache_runner.run_sccache_with_compiler(str(clang_cpp_path), args)
 

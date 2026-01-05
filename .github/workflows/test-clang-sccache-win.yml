@@ -85,3 +85,8 @@ jobs:
       run: |
         uv run pytest tests/test_integration.py -v
       shell: bash
+
+    - name: Test sccache with thin archives (regression test for LNK1136)
+      run: |
+        uv run pytest tests/test_sccache_thin_archive.py -v
+      shell: bash

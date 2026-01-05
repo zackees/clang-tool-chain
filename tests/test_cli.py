@@ -312,8 +312,12 @@ class TestSccacheWrappers(unittest.TestCase):
     @patch("clang_tool_chain.sccache_runner.subprocess.run")
     @patch("clang_tool_chain.wrapper.find_tool_binary")
     @patch("clang_tool_chain.sccache_runner.get_sccache_path")
-    def test_sccache_c_main_success_windows(self, mock_which: Mock, mock_find: Mock, mock_run: Mock) -> None:
+    @patch("clang_tool_chain.cli.get_platform_info")
+    def test_sccache_c_main_success_windows(
+        self, mock_platform: Mock, mock_which: Mock, mock_find: Mock, mock_run: Mock
+    ) -> None:
         """Test sccache_c_main on Windows with successful execution."""
+        mock_platform.return_value = ("win", "x86_64")
         mock_which.return_value = "C:\\path\\to\\sccache.exe"
         mock_find.return_value = Path("C:\\path\\to\\clang.exe")
         mock_run.return_value = MagicMock(returncode=0)
@@ -325,14 +329,23 @@ class TestSccacheWrappers(unittest.TestCase):
         call_args = mock_run.call_args[0][0]
         self.assertEqual(call_args[0], "C:\\path\\to\\sccache.exe")
         self.assertIn("clang.exe", str(call_args[1]))
-        self.assertEqual(call_args[2:], ["main.c", "-o", "main"])
+        # On Windows, GNU ABI flags are added, so check for them
+        args_list = list(call_args[2:])
+        self.assertIn("--target=x86_64-w64-windows-gnu", args_list)
+        self.assertIn("main.c", args_list)
+        self.assertIn("-o", args_list)
+        self.assertIn("main", args_list)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-c", "main.c", "-o", "main"])
     @patch("clang_tool_chain.sccache_runner.subprocess.run")
     @patch("clang_tool_chain.wrapper.find_tool_binary")
     @patch("clang_tool_chain.sccache_runner.get_sccache_path")
-    def test_sccache_c_main_success_unix(self, mock_which: Mock, mock_find: Mock, mock_run: Mock) -> None:
+    @patch("clang_tool_chain.cli.get_platform_info")
+    def test_sccache_c_main_success_unix(
+        self, mock_platform: Mock, mock_which: Mock, mock_find: Mock, mock_run: Mock
+    ) -> None:
         """Test sccache_c_main on Unix with successful execution."""
+        mock_platform.return_value = ("linux", "x86_64")
         mock_which.return_value = "/usr/bin/sccache"
         mock_find.return_value = Path("/home/.clang-tool-chain/clang/linux/x86_64/bin/clang")
         mock_run.return_value = MagicMock(returncode=0)
@@ -344,7 +357,12 @@ class TestSccacheWrappers(unittest.TestCase):
         call_args = mock_run.call_args[0][0]
         self.assertEqual(call_args[0], "/usr/bin/sccache")
         self.assertIn("clang", str(call_args[1]))
-        self.assertEqual(call_args[2:], ["main.c", "-o", "main"])
+        # On Linux, lld linker flags are added
+        args_list = list(call_args[2:])
+        self.assertIn("-fuse-ld=lld", args_list)
+        self.assertIn("main.c", args_list)
+        self.assertIn("-o", args_list)
+        self.assertIn("main", args_list)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-c", "main.c"])
     @patch("clang_tool_chain.wrapper.find_tool_binary")
@@ -404,8 +422,12 @@ class TestSccacheWrappers(unittest.TestCase):
     @patch("clang_tool_chain.sccache_runner.subprocess.run")
     @patch("clang_tool_chain.wrapper.find_tool_binary")
     @patch("clang_tool_chain.sccache_runner.get_sccache_path")
-    def test_sccache_cpp_main_success_windows(self, mock_which: Mock, mock_find: Mock, mock_run: Mock) -> None:
+    @patch("clang_tool_chain.cli.get_platform_info")
+    def test_sccache_cpp_main_success_windows(
+        self, mock_platform: Mock, mock_which: Mock, mock_find: Mock, mock_run: Mock
+    ) -> None:
         """Test sccache_cpp_main on Windows with successful execution."""
+        mock_platform.return_value = ("win", "x86_64")
         mock_which.return_value = "C:\\path\\to\\sccache.exe"
         mock_find.return_value = Path("C:\\path\\to\\clang++.exe")
         mock_run.return_value = MagicMock(returncode=0)
@@ -417,14 +439,24 @@ class TestSccacheWrappers(unittest.TestCase):
         call_args = mock_run.call_args[0][0]
         self.assertEqual(call_args[0], "C:\\path\\to\\sccache.exe")
         self.assertIn("clang++.exe", str(call_args[1]))
-        self.assertEqual(call_args[2:], ["main.cpp", "-o", "main", "-std=c++17"])
+        # On Windows, GNU ABI flags are added, so check for them
+        args_list = list(call_args[2:])
+        self.assertIn("--target=x86_64-w64-windows-gnu", args_list)
+        self.assertIn("main.cpp", args_list)
+        self.assertIn("-o", args_list)
+        self.assertIn("main", args_list)
+        self.assertIn("-std=c++17", args_list)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-cpp", "main.cpp"])
     @patch("clang_tool_chain.sccache_runner.subprocess.run")
     @patch("clang_tool_chain.wrapper.find_tool_binary")
     @patch("clang_tool_chain.sccache_runner.get_sccache_path")
-    def test_sccache_cpp_main_success_unix(self, mock_which: Mock, mock_find: Mock, mock_run: Mock) -> None:
+    @patch("clang_tool_chain.cli.get_platform_info")
+    def test_sccache_cpp_main_success_unix(
+        self, mock_platform: Mock, mock_which: Mock, mock_find: Mock, mock_run: Mock
+    ) -> None:
         """Test sccache_cpp_main on Unix with successful execution."""
+        mock_platform.return_value = ("linux", "x86_64")
         mock_which.return_value = "/usr/bin/sccache"
         mock_find.return_value = Path("/home/.clang-tool-chain/clang/linux/x86_64/bin/clang++")
         mock_run.return_value = MagicMock(returncode=0)
@@ -436,6 +468,10 @@ class TestSccacheWrappers(unittest.TestCase):
         call_args = mock_run.call_args[0][0]
         self.assertEqual(call_args[0], "/usr/bin/sccache")
         self.assertIn("clang++", str(call_args[1]))
+        # On Linux, lld linker flags are added
+        args_list = list(call_args[2:])
+        self.assertIn("-fuse-ld=lld", args_list)
+        self.assertIn("main.cpp", args_list)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-cpp", "main.cpp"])
     @patch("clang_tool_chain.wrapper.find_tool_binary")
