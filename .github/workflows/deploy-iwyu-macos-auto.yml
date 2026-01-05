@@ -52,9 +52,9 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            os: macos-latest    # Apple Silicon
+            os: macos-latest      # Apple Silicon
           - arch: x86_64
-            os: macos-13        # Intel
+            os: macos-15-large    # Intel (macos-13 retired)
 
     steps:
       - name: Checkout main repository
@@ -332,7 +332,7 @@ Testing:
           - arch: arm64
             os: macos-latest
           - arch: x86_64
-            os: macos-13
+            os: macos-15-large
 
     steps:
       - name: Checkout main repository
