@@ -37,6 +37,9 @@ class TestMingwDllPatternMatching:
             "libgcc_s_seh-1.dll",
             "libgcc_s_dw2-1.dll",
             "libstdc++-6.dll",
+            "libc++.dll",  # LLVM C++ standard library
+            "libc++abi.dll",  # LLVM C++ ABI library
+            "libunwind.dll",  # LLVM unwinding library
             "libgomp-1.dll",
             "libssp-0.dll",
             "libquadmath-0.dll",

@@ -21,6 +21,8 @@ MINGW_DLL_PATTERNS = [
     r"libwinpthread.*\.dll",
     r"libgcc_s_.*\.dll",
     r"libstdc\+\+.*\.dll",
+    r"libc\+\+.*\.dll",  # LLVM C++ standard library
+    r"libunwind.*\.dll",  # LLVM unwinding library
     r"libgomp.*\.dll",
     r"libssp.*\.dll",
     r"libquadmath.*\.dll",
