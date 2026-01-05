@@ -502,7 +502,19 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                 if len(candidates) == 1 and len(extracted_files) == 0:
                     actual_dir = candidates[0]
                     logger.info(f"Renaming extracted directory {actual_dir} to {dest_dir}")
-                    shutil.move(str(actual_dir), str(dest_dir))
+                    # Use try-except to handle concurrent extraction race condition
+                    try:
+                        shutil.move(str(actual_dir), str(dest_dir))
+                    except (OSError, shutil.Error):
+                        # If dest_dir was created by another concurrent extraction, clean up and skip
+                        if dest_dir.exists():
+                            logger.info(
+                                f"Concurrent extraction detected: {dest_dir} already exists, cleaning up temp dir"
+                            )
+                            _robust_rmtree(actual_dir)
+                        else:
+                            # Re-raise if it's a different error
+                            raise
                 # Case 2: Archive has flat structure with bin/, share/, etc. (e.g., IWYU archives)
                 # Also handles MinGW archives which have multi-root structure that must be preserved
                 elif extracted_dirs or extracted_files:
@@ -516,7 +528,20 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                         if item.is_dir() or (item.is_file() and item.name != "done.txt"):
                             target = dest_dir / item.name
                             logger.info(f"Moving {item.name} to {target}")
-                            shutil.move(str(item), str(target))
+                            # Use try-except to handle concurrent extraction race condition
+                            try:
+                                shutil.move(str(item), str(target))
+                            except (OSError, shutil.Error):
+                                # If target was created by another concurrent extraction, clean up and skip
+                                if target.exists():
+                                    logger.info(
+                                        f"Concurrent extraction detected: {target} already exists, cleaning up temp item"
+                                    )
+                                    if item.exists():
+                                        _robust_rmtree(item)
+                                else:
+                                    # Re-raise if it's a different error
+                                    raise
                 else:
                     logger.warning(f"No extracted content found to move to {dest_dir}")
 

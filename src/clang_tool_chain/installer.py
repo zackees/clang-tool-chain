@@ -370,17 +370,73 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         print("Installation complete!")
 
 
-def ensure_toolchain(platform: str, arch: str) -> None:
+def _subprocess_install_toolchain(platform: str, arch: str) -> int:  # pyright: ignore[reportUnusedFunction]
     """
-    Ensure the toolchain is installed for the given platform/arch.
+    Install toolchain in a subprocess with proper process-level locking.
 
-    This function uses file locking to prevent concurrent downloads.
-    If the toolchain is not installed, it will be downloaded and installed.
+    This function is called as a subprocess to ensure fasteners.InterProcessLock
+    works correctly. InterProcessLock only synchronizes across processes, not threads,
+    so we must use subprocess to get proper locking behavior.
 
     Args:
         platform: Platform name (e.g., "win", "linux", "darwin")
         arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Exit code (0 for success, non-zero for failure)
     """
+
+    try:
+        logger.info(f"[Subprocess] Installing toolchain for {platform}/{arch}")
+        lock_path = get_lock_path(platform, arch)
+        logger.debug(f"[Subprocess] Lock path: {lock_path}")
+        lock = fasteners.InterProcessLock(str(lock_path))
+
+        logger.info("[Subprocess] Waiting to acquire installation lock...")
+        with lock:
+            logger.info("[Subprocess] Lock acquired")
+
+            # Check again inside lock in case another process just finished installing
+            if is_toolchain_installed(platform, arch):
+                logger.info("[Subprocess] Another process installed the toolchain while we waited")
+                return 0
+
+            # Download and install
+            logger.info("[Subprocess] Starting toolchain download and installation")
+            download_and_install_toolchain(platform, arch)
+            logger.info(f"[Subprocess] Toolchain installation complete for {platform}/{arch}")
+            return 0
+
+    except Exception as e:
+        logger.error(f"[Subprocess] Failed to install toolchain: {e}", exc_info=True)
+        return 1
+
+
+def ensure_toolchain(platform: str, arch: str) -> None:
+    """
+    Ensure the toolchain is installed for the given platform/arch.
+
+    This function uses subprocess-based installation with file locking to prevent
+    concurrent downloads. The subprocess approach ensures that fasteners.InterProcessLock
+    works correctly, as it only synchronizes across processes (not threads).
+
+    Double-checked locking pattern:
+    1. Quick check without lock - if already installed, return immediately
+    2. If not installed, spawn subprocess to acquire lock and install
+    3. Subprocess uses InterProcessLock for proper inter-process synchronization
+    4. After subprocess completes, verify installation succeeded
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Raises:
+        RuntimeError: If installation fails or binary verification fails
+    """
+    import subprocess
+    import sys
+    import time
+
     logger.info(f"Ensuring toolchain is installed for {platform}/{arch}")
 
     # Quick check without lock - if already installed, return immediately
@@ -388,57 +444,59 @@ def ensure_toolchain(platform: str, arch: str) -> None:
         logger.info(f"Toolchain already installed for {platform}/{arch}")
         return
 
-    # Need to download - acquire lock
-    logger.info(f"Toolchain not installed, acquiring lock for {platform}/{arch}")
-    lock_path = get_lock_path(platform, arch)
-    logger.debug(f"Lock path: {lock_path}")
-    lock = fasteners.InterProcessLock(str(lock_path))
+    # Need to download - spawn subprocess to handle locking and installation
+    logger.info(f"Toolchain not installed, spawning subprocess to install for {platform}/{arch}")
 
-    logger.info("Waiting to acquire installation lock...")
-    with lock:
-        logger.info("Lock acquired")
+    # Call this module's _subprocess_install_toolchain function in a subprocess
+    # This ensures InterProcessLock works correctly (it only works across processes, not threads)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"from clang_tool_chain.installer import _subprocess_install_toolchain; "
+            f"import sys; "
+            f"sys.exit(_subprocess_install_toolchain('{platform}', '{arch}'))",
+        ],
+        capture_output=False,  # Let subprocess write to stderr for user feedback
+        text=True,
+    )
 
-        # Check again inside lock in case another process just finished installing
-        if is_toolchain_installed(platform, arch):
-            logger.info("Another process installed the toolchain while we waited")
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to install toolchain for {platform}/{arch} (subprocess exited with code {result.returncode})"
+        )
 
-            # CRITICAL FIX for macOS APFS race condition:
-            # done.txt exists, but filesystem may not have synced yet (especially on macOS APFS)
-            # The other process may have written done.txt but binaries aren't visible yet
-            # Wait up to 2 seconds for the clang binary to become visible
-            install_dir = get_install_dir(platform, arch)
-            bin_dir = install_dir / "bin"
-            clang_binary = bin_dir / "clang.exe" if platform == "win" else bin_dir / "clang"
+    # Verify installation succeeded
+    # CRITICAL: Wait for filesystem sync (especially on macOS APFS)
+    # The subprocess may have written done.txt but binaries aren't visible yet
+    install_dir = get_install_dir(platform, arch)
+    bin_dir = install_dir / "bin"
+    clang_binary = bin_dir / "clang.exe" if platform == "win" else bin_dir / "clang"
 
-            if not clang_binary.exists():
-                logger.warning("done.txt exists but clang binary not visible yet, waiting for filesystem sync...")
-                import time
+    logger.info("Verifying toolchain installation after subprocess completion...")
+    if not clang_binary.exists():
+        logger.warning("Clang binary not visible yet after subprocess, waiting for filesystem sync...")
 
-                for attempt in range(200):  # 200 * 0.01s = 2 seconds max
-                    if clang_binary.exists():
-                        elapsed = attempt * 0.01
-                        if elapsed > 0.1:  # Log if it took more than 100ms
-                            logger.warning(f"Clang binary became visible after {elapsed:.2f}s (filesystem sync delay)")
-                        else:
-                            logger.info(f"Clang binary verified after {elapsed:.3f}s")
-                        break
-                    time.sleep(0.01)
+        for attempt in range(200):  # 200 * 0.01s = 2 seconds max
+            if clang_binary.exists():
+                elapsed = attempt * 0.01
+                if elapsed > 0.1:  # Log if it took more than 100ms
+                    logger.warning(f"Clang binary became visible after {elapsed:.2f}s (filesystem sync delay)")
                 else:
-                    # Binary still not visible after 2 seconds - this is unexpected but proceed anyway
-                    # The subsequent find_tool_binary() call will give a better error message
-                    logger.error(
-                        f"Clang binary still not visible after 2s wait. "
-                        f"Expected: {clang_binary}. This may indicate a filesystem sync issue or corrupted installation."
-                    )
-            else:
-                logger.info("Clang binary verified immediately (no sync delay)")
+                    logger.info(f"Clang binary verified after {elapsed:.3f}s")
+                break
+            time.sleep(0.01)
+        else:
+            # Binary still not visible after 2 seconds
+            raise RuntimeError(
+                f"Clang binary not found after subprocess installation: {clang_binary}\n"
+                f"Expected location: {clang_binary}\n"
+                f"This may indicate a filesystem sync issue or corrupted installation."
+            )
+    else:
+        logger.info("Clang binary verified immediately (no sync delay)")
 
-            return
-
-        # Download and install
-        logger.info("Starting toolchain download and installation")
-        download_and_install_toolchain(platform, arch)
-        logger.info(f"Toolchain installation complete for {platform}/{arch}")
+    logger.info(f"Toolchain installation verified for {platform}/{arch}")
 
 
 # ============================================================================
@@ -601,43 +659,78 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
         logger.info(f"IWYU installation complete for {platform}/{arch}")
 
 
+def _subprocess_install_iwyu(platform: str, arch: str) -> int:  # pyright: ignore[reportUnusedFunction]
+    """
+    Install IWYU in a subprocess with proper process-level locking.
+
+    Args:
+        platform: Platform name
+        arch: Architecture name
+
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
+    try:
+        logger.info(f"[Subprocess] Installing IWYU for {platform}/{arch}")
+        lock_path = get_iwyu_lock_path(platform, arch)
+        lock = fasteners.InterProcessLock(str(lock_path))
+
+        with lock:
+            logger.info("[Subprocess] IWYU lock acquired")
+            if is_iwyu_installed(platform, arch):
+                logger.info("[Subprocess] Another process installed IWYU while we waited")
+                return 0
+
+            download_and_install_iwyu(platform, arch)
+            logger.info(f"[Subprocess] IWYU installation complete for {platform}/{arch}")
+            return 0
+
+    except Exception as e:
+        logger.error(f"[Subprocess] Failed to install IWYU: {e}", exc_info=True)
+        return 1
+
+
 def ensure_iwyu(platform: str, arch: str) -> None:
     """
     Ensure IWYU is installed for the given platform/arch.
 
-    This function uses file locking to prevent concurrent downloads.
-    If IWYU is not installed, it will be downloaded and installed.
+    Uses subprocess-based installation with file locking to prevent concurrent downloads.
+    InterProcessLock only works across processes, not threads, so we use subprocess.
 
     Args:
         platform: Platform name (e.g., "win", "linux", "darwin")
         arch: Architecture name (e.g., "x86_64", "arm64")
     """
+    import subprocess
+    import sys
+
     logger.info(f"Ensuring IWYU is installed for {platform}/{arch}")
 
-    # Quick check without lock - if already installed, return immediately
+    # Quick check without lock
     if is_iwyu_installed(platform, arch):
         logger.info(f"IWYU already installed for {platform}/{arch}")
         return
 
-    # Need to download - acquire lock
-    logger.info(f"IWYU not installed, acquiring lock for {platform}/{arch}")
-    lock_path = get_iwyu_lock_path(platform, arch)
-    logger.debug(f"Lock path: {lock_path}")
-    lock = fasteners.InterProcessLock(str(lock_path))
+    # Spawn subprocess for installation
+    logger.info(f"IWYU not installed, spawning subprocess to install for {platform}/{arch}")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"from clang_tool_chain.installer import _subprocess_install_iwyu; "
+            f"import sys; "
+            f"sys.exit(_subprocess_install_iwyu('{platform}', '{arch}'))",
+        ],
+        capture_output=False,
+        text=True,
+    )
 
-    logger.info("Waiting to acquire IWYU installation lock...")
-    with lock:
-        logger.info("Lock acquired")
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to install IWYU for {platform}/{arch} (subprocess exited with code {result.returncode})"
+        )
 
-        # Check again inside lock in case another process just finished installing
-        if is_iwyu_installed(platform, arch):
-            logger.info("Another process installed IWYU while we waited")
-            return
-
-        # Download and install
-        logger.info("Starting IWYU download and installation")
-        download_and_install_iwyu(platform, arch)
-        logger.info(f"IWYU installation complete for {platform}/{arch}")
+    logger.info(f"IWYU installation verified for {platform}/{arch}")
 
 
 # ============================================================================
