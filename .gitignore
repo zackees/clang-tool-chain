@@ -179,3 +179,4 @@ test*.obj
 test*.exe
 a.out
 a.exe
+./*.dll
