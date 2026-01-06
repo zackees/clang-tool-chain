@@ -157,7 +157,7 @@ Download the toolchain before use (useful for CI/CD or offline work):
 clang-tool-chain install clang
 
 # This downloads ~71-91 MB and does NOT include:
-# - IWYU (downloads on first use of clang-tool-chain-iwyu)
+# - IWYU (downloads ~53-57 MB on first use of clang-tool-chain-iwyu)
 # - Emscripten (downloads on first use of clang-tool-chain-emcc)
 # - Node.js (downloads with Emscripten)
 ```
