@@ -198,6 +198,64 @@ def fix_includes_main() -> NoReturn:
 
 
 # ============================================================================
+# LLDB (LLVM Debugger) Entry Points
+# ============================================================================
+
+
+def lldb_main() -> int:
+    """
+    Entry point for clang-tool-chain-lldb command.
+
+    Special flag:
+        --print <executable>: Run executable and print crash stack trace
+
+    Example:
+        clang-tool-chain-lldb --print a.exe
+        clang-tool-chain-lldb a.exe  # Interactive mode
+    """
+    import sys
+
+    from ..execution.lldb import execute_lldb_tool
+
+    args = sys.argv[1:]
+
+    # Check for --print mode
+    print_mode = False
+    if args and args[0] == "--print":
+        print_mode = True
+        args = args[1:]
+
+        if not args:
+            print("Error: --print requires executable path", file=sys.stderr)
+            return 1
+
+    if print_mode:
+        # Automated crash analysis mode
+        # Run executable under LLDB, capture crash, print stack trace
+        exe_path = args[0]
+
+        # LLDB batch command to run and print backtrace on crash
+        lldb_args = [
+            "--batch",
+            "--no-lldbinit",  # Skip .lldbinit to avoid Python errors
+            "--no-use-colors",  # Disable colors for cleaner output
+            "-o",
+            "run",  # Run the program
+            "-o",
+            "bt all",  # Backtrace all threads on crash
+            "-o",
+            "quit",  # Exit after crash
+            "--",
+            exe_path,  # Executable to debug
+        ]
+
+        return execute_lldb_tool("lldb", lldb_args, print_mode=True)
+    else:
+        # Interactive LLDB mode
+        execute_lldb_tool("lldb", args)
+
+
+# ============================================================================
 # Build Utilities Entry Points
 # ============================================================================
 

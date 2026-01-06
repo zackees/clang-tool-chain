@@ -43,6 +43,25 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 *Emscripten support added November 2025*
 
+### LLDB Debugger Support
+
+| Platform | Architecture | LLDB Version | Python Support | Status |
+|----------|-------------|--------------|----------------|--------|
+| Windows  | x86_64      | 21.1.5       | ⚠️ Basic (python310.dll only) | ✅ Available |
+| Linux    | x86_64      | TBD          | TBD            | ⏳ Pending |
+| Linux    | arm64       | TBD          | TBD            | ⏳ Pending |
+| macOS    | x86_64      | TBD          | TBD            | ⏳ Pending |
+| macOS    | arm64       | TBD          | TBD            | ⏳ Pending |
+
+*LLDB support added January 2026 (Windows x64 MVP)*
+
+**Python Dependency Notes:**
+- **Windows x64**: Includes python310.dll (4.3 MB) for basic LLDB functionality
+- **Python site-packages NOT included**: Advanced features like full "bt all" backtraces require system Python 3.10.x
+- **Download size**: ~29 MB compressed (LLDB binaries + python310.dll)
+- **Future options**: Bundle full Python site-packages (~50 MB) or document system Python requirement
+- See [LLDB Documentation](docs/LLDB.md) for details on Python requirements and limitations
+
 **Key Features:**
 - Pre-built Clang/LLVM binaries (~50-400 MB per platform)
 - Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)
@@ -64,6 +83,7 @@ Detailed documentation is organized into focused sub-documents:
 - **[Clang/LLVM Toolchain](docs/CLANG_LLVM.md)** - Clang/LLVM compiler wrappers, macOS SDK detection, Windows GNU/MSVC ABI, sccache integration
 - **[DLL Deployment](docs/DLL_DEPLOYMENT.md)** - Windows MinGW DLL automatic deployment (detailed guide)
 - **[Emscripten](docs/EMSCRIPTEN.md)** - WebAssembly compilation with Emscripten
+- **[LLDB Debugger](docs/LLDB.md)** - LLVM debugger for interactive debugging and crash analysis
 - **[Node.js Integration](docs/NODEJS.md)** - Bundled Node.js runtime for WebAssembly
 - **[Parallel Downloads](docs/PARALLEL_DOWNLOADS.md)** - High-speed downloads with multi-threaded range requests
 - **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture, manifest system, multi-part archives
@@ -168,6 +188,7 @@ clang-tool-chain install clang
 
 # This downloads ~71-91 MB and does NOT include:
 # - IWYU (downloads on first use of clang-tool-chain-iwyu)
+# - LLDB (downloads on first use of clang-tool-chain-lldb)
 # - Emscripten (downloads on first use of clang-tool-chain-emcc)
 # - Node.js (downloads with Emscripten)
 ```
@@ -185,10 +206,11 @@ clang-tool-chain purge --yes    # Skip confirmation (for scripts)
 # - Emscripten SDK (~1.4 GB uncompressed)
 # - Node.js runtime (~90-100 MB uncompressed)
 # - IWYU binaries
+# - LLDB binaries
 # - Lock files
 
 # Toolchains will be re-downloaded on next use
-# Also automatically removes any PATH entries (clang-env, iwyu-env, etc.)
+# Also automatically removes any PATH entries (clang-env, iwyu-env, lldb-env, etc.)
 ```
 
 ### Installing Toolchain to System Environment
@@ -207,6 +229,7 @@ clang-tool-chain uninstall clang-env
 
 **Future expansion:**
 - `install iwyu` / `install iwyu-env` - IWYU analyzer (depends on clang)
+- `install lldb` / `install lldb-env` - LLDB debugger (depends on clang)
 - `install emscripten` / `install emscripten-env` - Emscripten SDK (includes its own LLVM, separate from main clang)
   - Note: Emscripten includes its own bundled LLVM, so `install emscripten-env` would add Emscripten's tools to PATH (emcc, em++, etc.), not the main clang toolchain.
 
@@ -239,10 +262,10 @@ See [Testing Guide](docs/TESTING.md) for comprehensive testing documentation.
 
 ## Test Matrix
 
-The project uses a comprehensive test matrix with 35 GitHub Actions workflows covering all platform+tool combinations:
+The project uses a comprehensive test matrix with 40 GitHub Actions workflows covering all platform+tool combinations:
 
 - **5 platforms:** Windows x64, Linux x86_64, Linux ARM64, macOS x86_64, macOS ARM64
-- **7 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, format-lint, binary-utils
+- **8 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, lldb, format-lint, binary-utils
 
 Each workflow runs platform-specific tests to ensure all tools work correctly on all platforms.
 
@@ -254,6 +277,7 @@ See the "Test Matrix" section in README.md for live status badges.
 - **tests/test_emscripten.py** - Emscripten WebAssembly compilation
 - **tests/test_emscripten_full_pipeline.py** - Full Emscripten pipeline tests
 - **tests/test_iwyu.py** - Include What You Use analyzer tests
+- **tests/test_lldb.py** - LLDB debugger tests (crash analysis and stack traces)
 - **tests/test_format_lint.py** - clang-format and clang-tidy tests
 - **tests/test_binary_utils.py** - LLVM binary utilities tests (ar, nm, objdump, strip, etc.)
 - **tests/test_build_run_cached_integration.py** - sccache integration tests
