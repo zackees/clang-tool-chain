@@ -499,7 +499,12 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                 # Case 1: Archive extracted to a single top-level directory (e.g., clang archives)
                 # Filter out dest_dir itself in case it was already created
                 candidates = [d for d in extracted_dirs if d != dest_dir]
-                if len(candidates) == 1 and len(extracted_files) == 0:
+                # Special case: if the single directory is named 'bin', 'lib', 'share', 'include', etc.,
+                # treat it as a flat structure component, not a wrapper directory (e.g., LLDB archives with only bin/)
+                COMPONENT_DIRS = {"bin", "lib", "share", "include", "libexec"}
+                is_component_dir = len(candidates) == 1 and candidates[0].name in COMPONENT_DIRS
+
+                if len(candidates) == 1 and len(extracted_files) == 0 and not is_component_dir:
                     actual_dir = candidates[0]
                     logger.info(f"Renaming extracted directory {actual_dir} to {dest_dir}")
                     # Use try-except to handle concurrent extraction race condition

@@ -25,6 +25,7 @@ from .manifest import (
     Manifest,
     fetch_emscripten_platform_manifest,
     fetch_iwyu_platform_manifest,
+    fetch_lldb_platform_manifest,
     fetch_nodejs_platform_manifest,
     fetch_platform_manifest,
 )
@@ -34,6 +35,8 @@ from .path_utils import (
     get_install_dir,
     get_iwyu_install_dir,
     get_iwyu_lock_path,
+    get_lldb_install_dir,
+    get_lldb_lock_path,
     get_lock_path,
     get_nodejs_install_dir,
     get_nodejs_lock_path,
@@ -731,6 +734,211 @@ def ensure_iwyu(platform: str, arch: str) -> None:
         )
 
     logger.info(f"IWYU installation verified for {platform}/{arch}")
+
+
+# ============================================================================
+# LLDB Installation
+# ============================================================================
+
+
+def is_lldb_installed(platform: str, arch: str) -> bool:
+    """
+    Check if LLDB is already installed and hash matches current manifest.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        True if installed and hash matches, False otherwise
+    """
+    install_dir = get_lldb_install_dir(platform, arch)
+    done_file = install_dir / "done.txt"
+
+    if not done_file.exists():
+        return False
+
+    try:
+        done_content = done_file.read_text()
+        installed_sha256 = None
+        for line in done_content.splitlines():
+            if line.startswith("SHA256:"):
+                installed_sha256 = line.split(":", 1)[1].strip()
+                break
+
+        if not installed_sha256:
+            logger.warning(f"No SHA256 found in LLDB {done_file}, will re-download")
+            return False
+
+        # Fetch current manifest
+        platform_manifest = fetch_lldb_platform_manifest(platform, arch)
+        latest_version = platform_manifest.latest
+        if not latest_version:
+            return False
+
+        version_info = platform_manifest.versions.get(latest_version)
+        if not version_info:
+            return False
+
+        current_sha256 = version_info.sha256
+
+        if installed_sha256.lower() != current_sha256.lower():
+            logger.info("LLDB SHA256 mismatch - will re-download")
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"Error checking LLDB installation: {e}, will re-download")
+        return False
+
+
+def download_and_install_lldb(platform: str, arch: str) -> None:
+    """
+    Download and install LLDB for the given platform/arch.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+    """
+    logger.info(f"Downloading and installing LLDB for {platform}/{arch}")
+
+    # Fetch the manifest to get download URL and checksum
+    manifest = fetch_lldb_platform_manifest(platform, arch)
+    version_info = manifest.versions[manifest.latest]
+
+    logger.info(f"LLDB version: {manifest.latest}")
+    logger.info(f"Download URL: {version_info.href}")
+
+    # Create temporary download directory
+    install_dir = get_lldb_install_dir(platform, arch)
+    logger.info(f"Installation directory: {install_dir}")
+
+    # Remove old installation if exists
+    if install_dir.exists():
+        logger.info("Removing old LLDB installation")
+        _robust_rmtree(install_dir)
+
+    # Create temp directory for download
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        archive_file = temp_path / "lldb.tar.zst"
+
+        # Download the archive (handles both single-file and multi-part)
+        download_archive(version_info, archive_file)
+
+        # Extract to installation directory
+        logger.info("Extracting LLDB archive")
+        extract_tarball(archive_file, install_dir)
+
+        # Fix permissions on Unix systems
+        if os.name != "nt":
+            logger.info("Setting executable permissions on LLDB binaries")
+            fix_file_permissions(install_dir)
+
+        # Verify the LLDB binary actually exists before marking as complete
+        lldb_binary_name = "lldb.exe" if platform == "win" else "lldb"
+        lldb_binary = install_dir / "bin" / lldb_binary_name
+        logger.info(f"Looking for LLDB binary at: {lldb_binary}")
+
+        if not lldb_binary.exists():
+            # Additional debugging before failing
+            bin_dir = install_dir / "bin"
+            logger.error(f"bin_dir ({bin_dir}) exists: {bin_dir.exists()}")
+            if bin_dir.exists():
+                bin_contents = list(bin_dir.iterdir())
+                logger.error(f"bin_dir contains {len(bin_contents)} items:")
+                for item in bin_contents:
+                    logger.error(f"  - {item.name}")
+
+            raise RuntimeError(
+                f"LLDB installation verification failed: binary not found at {lldb_binary}. "
+                f"Extraction may have failed or archive structure is incorrect."
+            )
+        logger.info(f"LLDB binary verified at: {lldb_binary}")
+
+        # Mark installation as complete
+        # Ensure install_dir exists before writing done.txt
+        install_dir.mkdir(parents=True, exist_ok=True)
+        done_file = install_dir / "done.txt"
+        with open(done_file, "w") as f:
+            f.write(f"LLDB {manifest.latest} installed successfully\n" f"SHA256: {version_info.sha256}\n")
+
+        logger.info(f"LLDB installation complete for {platform}/{arch}")
+
+
+def _subprocess_install_lldb(platform: str, arch: str) -> int:  # pyright: ignore[reportUnusedFunction]
+    """
+    Install LLDB in a subprocess with proper process-level locking.
+
+    Args:
+        platform: Platform name
+        arch: Architecture name
+
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
+    try:
+        logger.info(f"[Subprocess] Installing LLDB for {platform}/{arch}")
+        lock_path = get_lldb_lock_path(platform, arch)
+        lock = fasteners.InterProcessLock(str(lock_path))
+
+        with lock:
+            logger.info("[Subprocess] LLDB lock acquired")
+            if is_lldb_installed(platform, arch):
+                logger.info("[Subprocess] Another process installed LLDB while we waited")
+                return 0
+
+            download_and_install_lldb(platform, arch)
+            logger.info(f"[Subprocess] LLDB installation complete for {platform}/{arch}")
+            return 0
+
+    except Exception as e:
+        logger.error(f"[Subprocess] Failed to install LLDB: {e}", exc_info=True)
+        return 1
+
+
+def ensure_lldb(platform: str, arch: str) -> None:
+    """
+    Ensure LLDB is installed for the given platform/arch.
+
+    Uses subprocess-based installation with file locking to prevent concurrent downloads.
+    InterProcessLock only works across processes, not threads, so we use subprocess.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+    """
+    import subprocess
+    import sys
+
+    logger.info(f"Ensuring LLDB is installed for {platform}/{arch}")
+
+    # Quick check without lock
+    if is_lldb_installed(platform, arch):
+        logger.info(f"LLDB already installed for {platform}/{arch}")
+        return
+
+    # Spawn subprocess for installation
+    logger.info(f"LLDB not installed, spawning subprocess to install for {platform}/{arch}")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"from clang_tool_chain.installer import _subprocess_install_lldb; "
+            f"import sys; "
+            f"sys.exit(_subprocess_install_lldb('{platform}', '{arch}'))",
+        ],
+        capture_output=False,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to install LLDB for {platform}/{arch} (subprocess exited with code {result.returncode})"
+        )
+
+    logger.info(f"LLDB installation verified for {platform}/{arch}")
 
 
 # ============================================================================

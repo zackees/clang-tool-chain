@@ -153,6 +153,44 @@ def get_emscripten_lock_path(platform: str, arch: str) -> Path:
 
 
 # ============================================================================
+# LLDB Paths
+# ============================================================================
+
+
+def get_lldb_install_dir(platform: str, arch: str) -> Path:
+    """
+    Get the installation directory for LLDB.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the LLDB installation directory
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    install_dir = toolchain_dir / "lldb" / platform / arch
+    return install_dir
+
+
+def get_lldb_lock_path(platform: str, arch: str) -> Path:
+    """
+    Get the lock file path for LLDB installation.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the lock file
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    toolchain_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = toolchain_dir / f"lldb-{platform}-{arch}.lock"
+    return lock_path
+
+
+# ============================================================================
 # Node.js Paths
 # ============================================================================
 

@@ -21,6 +21,7 @@ logger = configure_logging(__name__)
 # Base URLs for manifests
 MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/clang"
 IWYU_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/iwyu"
+LLDB_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/lldb"
 EMSCRIPTEN_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/emscripten"
 NODEJS_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/nodejs"
 
@@ -289,6 +290,61 @@ def fetch_iwyu_platform_manifest(platform: str, arch: str) -> Manifest:
 
     logger.error(f"IWYU platform {platform}/{arch} not found in manifest")
     raise RuntimeError(f"IWYU platform {platform}/{arch} not found in manifest")
+
+
+# ============================================================================
+# LLDB Manifest Functions
+# ============================================================================
+
+
+def fetch_lldb_root_manifest() -> RootManifest:
+    """
+    Fetch the LLDB root manifest file.
+
+    Returns:
+        Root manifest as a RootManifest object
+    """
+    logger.info("Fetching LLDB root manifest")
+    url = f"{LLDB_MANIFEST_BASE_URL}/manifest.json"
+    data = _fetch_json_raw(url)
+    manifest = _parse_root_manifest(data)
+    logger.info(f"LLDB root manifest loaded with {len(manifest.platforms)} platforms")
+    return manifest
+
+
+def fetch_lldb_platform_manifest(platform: str, arch: str) -> Manifest:
+    """
+    Fetch the LLDB platform-specific manifest file.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Platform manifest as a Manifest object
+
+    Raises:
+        RuntimeError: If platform/arch combination is not found
+    """
+    logger.info(f"Fetching LLDB platform manifest for {platform}/{arch}")
+    root_manifest = fetch_lldb_root_manifest()
+
+    # Find the platform in the manifest
+    for plat_entry in root_manifest.platforms:
+        if plat_entry.platform == platform:
+            # Find the architecture
+            for arch_entry in plat_entry.architectures:
+                if arch_entry.arch == arch:
+                    manifest_path = arch_entry.manifest_path
+                    logger.info(f"Found LLDB manifest path: {manifest_path}")
+                    url = f"{LLDB_MANIFEST_BASE_URL}/{manifest_path}"
+                    data = _fetch_json_raw(url)
+                    manifest = _parse_manifest(data)
+                    logger.info(f"LLDB platform manifest loaded successfully for {platform}/{arch}")
+                    return manifest
+
+    logger.error(f"LLDB platform {platform}/{arch} not found in manifest")
+    raise RuntimeError(f"LLDB platform {platform}/{arch} not found in manifest")
 
 
 # ============================================================================

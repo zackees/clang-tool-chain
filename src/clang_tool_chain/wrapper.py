@@ -74,6 +74,7 @@ from .commands import (
     fix_includes_main,
     iwyu_main,
     iwyu_tool_main,
+    lldb_main,
     lld_main,
     llvm_ar_main,
     llvm_as_main,
@@ -124,6 +125,15 @@ from .execution.iwyu import (
     execute_iwyu_tool,
     find_iwyu_tool,
     get_iwyu_binary_dir,
+)
+
+# ============================================================================
+# LLDB Tool Execution
+# ============================================================================
+from .execution.lldb import (
+    execute_lldb_tool,
+    find_lldb_tool,
+    get_lldb_binary_dir,
 )
 
 # ============================================================================

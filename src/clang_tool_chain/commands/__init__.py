@@ -39,6 +39,9 @@ IWYU (Include What You Use):
     - iwyu_tool_main: iwyu_tool.py wrapper
     - fix_includes_main: fix_includes.py wrapper
 
+LLDB (LLVM Debugger):
+    - lldb_main: LLDB debugger
+
 Build Utilities:
     - build_main: Simple build utility (from wrapper.py)
     - build_run_main: Build and run utility (from wrapper.py)
@@ -60,6 +63,7 @@ from .entry_points import (
     fix_includes_main,
     iwyu_main,
     iwyu_tool_main,
+    lldb_main,
     lld_main,
     llvm_ar_main,
     llvm_as_main,
@@ -106,4 +110,6 @@ __all__ = [
     "iwyu_main",
     "iwyu_tool_main",
     "fix_includes_main",
+    # LLDB
+    "lldb_main",
 ]
