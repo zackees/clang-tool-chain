@@ -28,6 +28,14 @@ MINGW_DLL_PATTERNS = [
     r"libquadmath.*\.dll",
 ]
 
+# Sanitizer runtime DLL patterns (case-insensitive matching)
+SANITIZER_DLL_PATTERNS = [
+    r"libclang_rt\.asan_dynamic.*\.dll",
+    r"libclang_rt\.ubsan_dynamic.*\.dll",
+    r"libclang_rt\.tsan_dynamic.*\.dll",
+    r"libclang_rt\.msan_dynamic.*\.dll",
+]
+
 # Windows system DLLs to exclude (case-insensitive)
 WINDOWS_SYSTEM_DLLS = {
     "kernel32.dll",
@@ -54,22 +62,24 @@ HEURISTIC_MINGW_DLLS = [
 ]
 
 
-def _is_mingw_dll(dll_name: str) -> bool:
+def _is_deployable_dll(dll_name: str) -> bool:
     """
-    Check if a DLL name matches MinGW runtime DLL patterns.
+    Check if a DLL name matches MinGW runtime or sanitizer DLL patterns.
 
     Args:
-        dll_name: DLL filename (e.g., "libwinpthread-1.dll")
+        dll_name: DLL filename (e.g., "libwinpthread-1.dll", "libclang_rt.asan_dynamic-x86_64.dll")
 
     Returns:
-        True if the DLL is a MinGW runtime DLL, False otherwise.
+        True if the DLL is a MinGW runtime or sanitizer DLL, False otherwise.
 
     Examples:
-        >>> _is_mingw_dll("libwinpthread-1.dll")
+        >>> _is_deployable_dll("libwinpthread-1.dll")
         True
-        >>> _is_mingw_dll("kernel32.dll")
+        >>> _is_deployable_dll("kernel32.dll")
         False
-        >>> _is_mingw_dll("libgcc_s_seh-1.dll")
+        >>> _is_deployable_dll("libgcc_s_seh-1.dll")
+        True
+        >>> _is_deployable_dll("libclang_rt.asan_dynamic-x86_64.dll")
         True
     """
     dll_name_lower = dll_name.lower()
@@ -79,21 +89,68 @@ def _is_mingw_dll(dll_name: str) -> bool:
         return False
 
     # Check against MinGW patterns
-    return any(re.match(pattern, dll_name_lower) for pattern in MINGW_DLL_PATTERNS)
+    if any(re.match(pattern, dll_name_lower) for pattern in MINGW_DLL_PATTERNS):
+        return True
+
+    # Check against sanitizer patterns
+    return any(re.match(pattern, dll_name_lower) for pattern in SANITIZER_DLL_PATTERNS)
 
 
-def detect_required_dlls(exe_path: Path) -> list[str]:
+# Keep backward compatibility alias
+def _is_mingw_dll(dll_name: str) -> bool:  # pyright: ignore[reportUnusedFunction]
+    """Deprecated: Use _is_deployable_dll instead."""
+    return _is_deployable_dll(dll_name)
+
+
+def _extract_dll_dependencies(binary_path: Path, objdump_path: Path) -> list[str]:
     """
-    Detect required MinGW runtime DLLs for a Windows executable.
+    Extract DLL dependencies from a binary file (EXE or DLL) using llvm-objdump.
+
+    Args:
+        binary_path: Path to the binary file (.exe or .dll)
+        objdump_path: Path to llvm-objdump executable
+
+    Returns:
+        List of DLL names (both deployable and system DLLs)
+
+    Raises:
+        subprocess.TimeoutExpired: If objdump times out
+        subprocess.CalledProcessError: If objdump fails
+    """
+    result = subprocess.run(
+        [str(objdump_path), "-p", str(binary_path)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+
+    # Parse DLL dependencies from output
+    dll_pattern = re.compile(r"DLL Name:\s+(\S+)", re.IGNORECASE)
+    detected_dlls = []
+
+    for match in dll_pattern.finditer(result.stdout):
+        dll_name = match.group(1)
+        detected_dlls.append(dll_name)
+
+    return detected_dlls
+
+
+def detect_required_dlls(exe_path: Path, platform_name: str = "win", arch: str = "x86_64") -> list[str]:
+    """
+    Detect required MinGW runtime and sanitizer DLLs for a Windows executable.
 
     Uses llvm-objdump to parse PE headers and extract DLL dependencies.
+    Recursively scans deployable DLLs to find transitive dependencies.
     Falls back to heuristic list if llvm-objdump fails.
 
     Args:
         exe_path: Path to the executable file (.exe)
+        platform_name: Platform name ("win")
+        arch: Architecture ("x86_64" or "arm64")
 
     Returns:
-        List of MinGW DLL filenames (e.g., ["libwinpthread-1.dll", "libgcc_s_seh-1.dll"])
+        List of MinGW and sanitizer DLL filenames (e.g., ["libwinpthread-1.dll", "libclang_rt.asan_dynamic-x86_64.dll", "libc++.dll"])
 
     Raises:
         FileNotFoundError: If exe_path does not exist
@@ -130,23 +187,50 @@ def detect_required_dlls(exe_path: Path) -> list[str]:
             logger.warning(f"llvm-objdump failed (exit {result.returncode}), using heuristic DLL list")
             return HEURISTIC_MINGW_DLLS.copy()
 
-        # Parse DLL dependencies from output
-        # Pattern: "DLL Name: <dll_name>"
-        dll_pattern = re.compile(r"DLL Name:\s+(\S+)", re.IGNORECASE)
+        # Extract direct dependencies from the executable
+        all_direct_deps = _extract_dll_dependencies(exe_path, objdump_path)
+        total_dlls_found = len(all_direct_deps)
+
         detected_dlls = []
-        total_dlls_found = 0
-
-        for match in dll_pattern.finditer(result.stdout):
-            dll_name = match.group(1)
-            total_dlls_found += 1
-            if _is_mingw_dll(dll_name):
+        for dll_name in all_direct_deps:
+            if _is_deployable_dll(dll_name):
                 detected_dlls.append(dll_name)
-                logger.debug(f"Detected MinGW DLL dependency: {dll_name}")
+                logger.debug(f"Detected deployable DLL dependency: {dll_name}")
 
-        # If llvm-objdump succeeded and detected MinGW DLLs, use that result
+        # If llvm-objdump succeeded and detected deployable DLLs, recursively scan them
         if detected_dlls:
-            logger.debug(f"Found {len(detected_dlls)} MinGW DLL(s) via llvm-objdump")
-            return detected_dlls
+            logger.debug(f"Found {len(detected_dlls)} direct deployable DLL(s)")
+
+            # Recursively scan detected DLLs for transitive dependencies
+            all_required_dlls = set(detected_dlls)
+            dlls_to_scan = detected_dlls.copy()
+            scanned_dlls = set()
+
+            while dlls_to_scan:
+                current_dll = dlls_to_scan.pop(0)
+                if current_dll in scanned_dlls:
+                    continue
+                scanned_dlls.add(current_dll)
+
+                # Find the DLL in the toolchain
+                dll_path = find_dll_in_toolchain(current_dll, platform_name, arch)
+                if dll_path is None:
+                    logger.debug(f"Cannot scan dependencies for {current_dll}: not found in toolchain")
+                    continue
+
+                # Extract dependencies from this DLL
+                try:
+                    transitive_deps = _extract_dll_dependencies(dll_path, objdump_path)
+                    for dep_name in transitive_deps:
+                        if _is_deployable_dll(dep_name) and dep_name not in all_required_dlls:
+                            logger.debug(f"Found transitive dependency: {dep_name} (via {current_dll})")
+                            all_required_dlls.add(dep_name)
+                            dlls_to_scan.append(dep_name)
+                except Exception as e:
+                    logger.debug(f"Failed to scan dependencies for {current_dll}: {e}")
+
+            logger.debug(f"Total deployable DLLs (including transitive): {len(all_required_dlls)}")
+            return list(all_required_dlls)
 
         # If llvm-objdump found DLL imports but no MinGW DLLs, still use heuristic fallback
         # This covers the case where the executable was compiled but objdump may have
@@ -304,13 +388,64 @@ def get_mingw_sysroot_bin_dir(platform_name: str, arch: str) -> Path:
     return sysroot_bin
 
 
+def find_dll_in_toolchain(dll_name: str, platform_name: str, arch: str) -> Path | None:
+    """
+    Find a DLL in the toolchain (MinGW sysroot or sanitizer directories).
+
+    Searches in multiple locations:
+    1. MinGW sysroot/bin directory (for MinGW runtime DLLs)
+    2. Clang bin directory (for sanitizer DLLs that may be copied there)
+    3. MinGW sysroot/bin directory again (sanitizer DLLs are also stored here)
+
+    Args:
+        dll_name: DLL filename (e.g., "libwinpthread-1.dll", "libclang_rt.asan_dynamic-x86_64.dll")
+        platform_name: Platform name ("win")
+        arch: Architecture ("x86_64" or "arm64")
+
+    Returns:
+        Path to the DLL if found, None otherwise
+
+    Examples:
+        >>> find_dll_in_toolchain("libwinpthread-1.dll", "win", "x86_64")
+        PosixPath('~/.clang-tool-chain/clang/win/x86_64/x86_64-w64-mingw32/bin/libwinpthread-1.dll')
+    """
+    from ..platform.detection import get_platform_binary_dir
+
+    # Search locations in priority order
+    search_dirs = []
+
+    # 1. MinGW sysroot/bin directory
+    try:
+        sysroot_bin = get_mingw_sysroot_bin_dir(platform_name, arch)
+        search_dirs.append(sysroot_bin)
+    except (ValueError, RuntimeError) as e:
+        logger.debug(f"Cannot access MinGW sysroot: {e}")
+
+    # 2. Clang bin directory (for sanitizer DLLs that may be in bin/)
+    try:
+        clang_bin_dir = get_platform_binary_dir()
+        search_dirs.append(clang_bin_dir)
+    except Exception as e:
+        logger.debug(f"Cannot access clang bin directory: {e}")
+
+    # Search each directory
+    for search_dir in search_dirs:
+        dll_path = search_dir / dll_name
+        if dll_path.exists():
+            logger.debug(f"Found {dll_name} in {search_dir}")
+            return dll_path
+
+    logger.debug(f"DLL not found in any search directory: {dll_name}")
+    return None
+
+
 def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_abi: bool) -> None:
     """
-    Deploy required MinGW runtime DLLs to the executable directory after linking.
+    Deploy required MinGW runtime and sanitizer DLLs to the executable directory after linking.
 
     This function:
     1. Detects required DLLs using llvm-objdump (with fallback)
-    2. Locates source DLLs in MinGW sysroot/bin
+    2. Locates source DLLs in MinGW sysroot/bin or clang/bin (for sanitizers)
     3. Copies DLLs to executable directory (with timestamp checking)
     4. Handles all errors gracefully (warnings only, never fails the build)
 
@@ -328,7 +463,7 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
 
     Examples:
         >>> post_link_dll_deployment(Path("test.exe"), "win", True)
-        # Deploys libwinpthread-1.dll, libgcc_s_seh-1.dll, etc. to test.exe directory
+        # Deploys libwinpthread-1.dll, libgcc_s_seh-1.dll, sanitizer DLLs, etc. to test.exe directory
     """
     # Check opt-out environment variable
     if os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS") == "1":
@@ -365,17 +500,13 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
         # Get platform info for sysroot lookup
         _, arch = get_platform_info()
 
-        # Detect required DLLs
+        # Detect required DLLs (with recursive scanning)
         logger.debug(f"Detecting required DLLs for: {output_exe_path}")
-        required_dlls = detect_required_dlls(output_exe_path)
+        required_dlls = detect_required_dlls(output_exe_path, platform_name, arch)
 
         if not required_dlls:
-            logger.debug("No MinGW DLLs required")
+            logger.debug("No deployable DLLs required")
             return
-
-        # Locate MinGW sysroot bin directory
-        sysroot_bin = get_mingw_sysroot_bin_dir(platform_name, arch)
-        logger.debug(f"MinGW sysroot bin directory: {sysroot_bin}")
 
         # Destination directory (same as executable)
         dest_dir = output_exe_path.parent.resolve()
@@ -385,13 +516,14 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
         skipped_count = 0
 
         for dll_name in required_dlls:
-            src_dll = sysroot_bin / dll_name
-            dest_dll = dest_dir / dll_name
+            # Find DLL in toolchain (MinGW sysroot or sanitizer directories)
+            src_dll = find_dll_in_toolchain(dll_name, platform_name, arch)
 
-            # Check if source DLL exists
-            if not src_dll.exists():
-                logger.warning(f"Source DLL not found, skipping: {dll_name}")
+            if src_dll is None:
+                logger.warning(f"Source DLL not found in toolchain, skipping: {dll_name}")
                 continue
+
+            dest_dll = dest_dir / dll_name
 
             # Atomically copy DLL (handles race conditions)
             try:
@@ -409,9 +541,9 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
 
         # Summary logging
         if deployed_count > 0:
-            logger.info(f"Deployed {deployed_count} MinGW DLL(s) for {output_exe_path.name}")
+            logger.info(f"Deployed {deployed_count} runtime DLL(s) for {output_exe_path.name}")
         elif skipped_count > 0:
-            logger.debug(f"All {skipped_count} MinGW DLL(s) up-to-date for {output_exe_path.name}")
+            logger.debug(f"All {skipped_count} runtime DLL(s) up-to-date for {output_exe_path.name}")
 
     except Exception as e:
         # Non-fatal: log warning but don't fail the build
