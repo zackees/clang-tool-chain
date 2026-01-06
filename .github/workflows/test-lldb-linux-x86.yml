@@ -13,13 +13,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Skip test (platform not yet supported)
-      run: |
-        echo "LLDB support not yet implemented for this platform"
-        echo "Framework ready, implementation pending"
-        exit 0
-      shell: bash
-
     - name: Checkout code
       uses: actions/checkout@v4
 

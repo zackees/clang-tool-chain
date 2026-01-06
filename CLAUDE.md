@@ -48,20 +48,30 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 | Platform | Architecture | LLDB Version | Python Support | Status |
 |----------|-------------|--------------|----------------|--------|
 | Windows  | x86_64      | 21.1.5       | ✅ Full (Python 3.10 bundled) | ✅ Complete |
-| Linux    | x86_64      | TBD          | TBD            | ⏳ Pending |
-| Linux    | arm64       | TBD          | TBD            | ⏳ Pending |
-| macOS    | x86_64      | TBD          | TBD            | ⏳ Pending |
-| macOS    | arm64       | TBD          | TBD            | ⏳ Pending |
+| Linux    | x86_64      | 21.1.5       | ✅ Full (Python 3.10 ready) | ⏳ Wrapper Ready, Archives Pending |
+| Linux    | arm64       | 21.1.5       | ✅ Full (Python 3.10 ready) | ⏳ Wrapper Ready, Archives Pending |
+| macOS    | x86_64      | 21.1.6       | ⏳ Planned            | ⏳ Pending |
+| macOS    | arm64       | 21.1.6       | ⏳ Planned            | ⏳ Pending |
 
-*LLDB support added January 2026 (Windows x64 complete with full Python 3.10)*
+*LLDB support added January 2026 (Windows x64 complete, Linux wrapper integration complete)*
 
-**Python 3.10 Bundling (Windows x64):**
+**Python 3.10 Bundling:**
+
+*Windows x64 (Complete):*
 - **Full Python 3.10 included**: python310.dll + standard library + LLDB Python module
 - **Download size**: ~30 MB compressed (was ~29 MB, +1 MB increase)
 - **No system Python required**: All advanced features work out of the box
 - **Enables**: Full "bt all" backtraces, Python scripting, advanced variable inspection, LLDB Python API
 - **Size efficiency**: Binary deduplication (liblldb.dll + _lldb.pyd) keeps size minimal
-- See [LLDB Documentation](docs/LLDB.md) for complete Python integration details
+
+*Linux x86_64/ARM64 (Wrapper Ready):*
+- **Python 3.10 integration complete**: Wrapper configured with PYTHONPATH/PYTHONHOME
+- **Expected download size**: ~10-11 MB compressed per platform
+- **Python modules ready**: Extracted from Debian Jammy packages + minimized stdlib
+- **Status**: Wrapper complete, archives pending GitHub Actions workflow execution
+- **CI/CD**: Workflow ready at `.github/workflows/build-lldb-archives-linux.yml`
+
+See [LLDB Documentation](docs/LLDB.md) for complete Python integration details
 
 **Key Features:**
 - Pre-built Clang/LLVM binaries (~50-400 MB per platform)

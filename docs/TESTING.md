@@ -97,7 +97,230 @@ def pytest_configure(config):
 - `test_format_lint.py` - clang-format and clang-tidy tools (6 tests)
 - `test_binary_utils.py` - LLVM binary utilities (14 tests: ar, nm, objdump, strip, readelf, objcopy, ranlib)
 - `test_iwyu.py` - Include What You Use analyzer tests
+- `test_lldb.py` - LLDB debugger tests (4 tests: installation, crash analysis, full backtraces)
 - `test_build_run_cached_integration.py` - sccache integration tests
+
+## LLDB Debugger Testing
+
+The LLDB test suite verifies that the LLVM debugger can analyze crash dumps, produce stack traces, and work with bundled Python modules.
+
+### Running LLDB Tests
+
+```bash
+# Run all LLDB tests
+uv run pytest tests/test_lldb.py -v
+
+# Run specific test
+uv run pytest tests/test_lldb.py::TestLLDBExecution::test_lldb_full_backtraces_with_python -v
+```
+
+### Test Coverage (4 tests)
+
+**Installation Tests (`TestLLDBInstallation`):**
+1. **test_lldb_binary_dir_exists** - Verify LLDB binary directory can be located
+2. **test_find_lldb_tool** - Verify lldb binary can be found
+
+**Execution Tests (`TestLLDBExecution`):**
+3. **test_lldb_print_crash_stack** - Basic crash analysis with stack traces
+4. **test_lldb_full_backtraces_with_python** - Full backtraces with Python modules (requires bundled Python)
+
+### Test Features
+
+**Enhanced Diagnostics (Iteration 16):**
+- **Formatted diagnostic output** - Full command execution details with timing
+- **Stack frame extraction** - Parse and display extracted stack frames
+- **Missing function detection** - Lists which expected functions are missing from backtrace
+- **Performance timing** - Compile and LLDB execution times tracked and reported
+- **Comprehensive error messages** - Context-rich failures with full output dumps
+
+**Diagnostic Output Format:**
+```
+================================================================================
+DIAGNOSTIC: LLDB Crash Analysis
+================================================================================
+Command: clang-tool-chain-lldb --print crash_test.exe
+Elapsed Time: 1.23s
+Return Code: 0
+
+STDOUT (1234 chars):
+--------------------------------------------------------------------------------
+(lldb output here)
+--------------------------------------------------------------------------------
+
+STDERR (0 chars):
+--------------------------------------------------------------------------------
+(empty)
+--------------------------------------------------------------------------------
+================================================================================
+
+Extracted 5 stack frames:
+  frame #0: 0x00007ff1234 crash_test.exe`trigger_crash at crash_test.c:12
+  frame #1: 0x00007ff1235 crash_test.exe`intermediate_function at crash_test.c:18
+  frame #2: 0x00007ff1236 crash_test.exe`main at crash_test.c:24
+```
+
+**Performance Metrics:**
+```
+✓ test_lldb_print_crash_stack: compile=0.45s, lldb=1.23s, total=1.68s
+✓ test_lldb_full_backtraces_with_python: compile=0.52s, lldb=1.45s, total=1.97s
+  Functions found: 8/8, Frames extracted: 12
+```
+
+### Test Behavior
+
+**test_lldb_print_crash_stack:**
+- Compiles crash_test.c with null pointer dereference
+- Runs LLDB with `--print` flag to analyze crash
+- Verifies output contains:
+  - Function names: main, intermediate_function, trigger_crash
+  - Source file reference: crash_test.c
+  - Line number information (e.g., `:12`, `line 12`)
+  - Crash reason (SIGSEGV, access violation, etc.)
+- Reports timing: compile time, LLDB execution time, total time
+- Extracts and displays stack frames on failure
+
+**test_lldb_full_backtraces_with_python:**
+- Checks if Python is bundled with LLDB installation
+- **Skips if Python not bundled** (status != "ready")
+- Compiles deep_stack.c with 7-level deep call stack
+- Runs LLDB crash analysis
+- Verifies all 7 user functions visible in backtrace:
+  - main, level1, level2, level3, level4, level5, level6, level7_crash
+- Verifies line numbers and source file references
+- Verifies no Python-related errors if Python is bundled
+- Reports function coverage: "Functions found: 8/8, Frames extracted: 12"
+
+### Platform Support
+
+**Current Status:**
+- ✅ **Windows x64** - Complete with Python 3.10 bundled
+- ⏳ **Linux x86_64** - Wrapper ready, archives pending workflow execution
+- ⏳ **Linux ARM64** - Wrapper ready, archives pending workflow execution
+- ⏳ **macOS x86_64** - Planned
+- ⏳ **macOS ARM64** - Planned
+
+**Python Bundling:**
+- **Windows x64**: Python 3.10 bundled (full "bt all" support)
+- **Linux**: Python 3.10 ready for bundling (archives pending)
+- **macOS**: Planned for future releases
+
+### Test Skip Behavior
+
+**Python-Dependent Tests:**
+The `test_lldb_full_backtraces_with_python` test will skip if:
+- LLDB Python environment status is not "ready"
+- Python site-packages are not bundled
+- Python diagnostic check fails
+
+Skip message example:
+```
+SKIPPED: Python is not bundled with LLDB installation (status: not_found).
+Message: Python directory not found at ~/.clang-tool-chain/lldb-*/python.
+This test requires LLDB with Python 3.10 site-packages.
+The LLDB distribution may not include Python modules yet.
+```
+
+### Troubleshooting Test Failures
+
+**Missing Functions in Stack Trace:**
+```
+Missing functions in stack trace: ['level5', 'level6']
+Found functions: ['main', 'level1', 'level2', 'level3', 'level4', 'level7_crash']
+This may indicate incomplete backtrace support.
+
+Extracted 10 stack frames:
+  frame #0: ...
+  (diagnostic output follows)
+```
+- **Cause**: Incomplete backtrace, Python modules not loaded, or debug symbols missing
+- **Solution**: Check Python environment, verify debug symbols with `-g3`, review diagnostic output
+
+**No Line Numbers Found:**
+```
+Stack trace should contain line numbers (patterns: [':\d+', 'line \d+', '#\d+.*:\d+'])
+No line numbers found - debug symbols may not be loaded
+```
+- **Cause**: Compilation without debug symbols, stripped binary, or LLDB configuration issue
+- **Solution**: Ensure `-g3` flag used, check executable not stripped, verify LLDB can load symbols
+
+**Python Errors Detected:**
+```
+Python errors detected: ['ModuleNotFoundError', 'ImportError']
+Python is bundled (status: ready) but errors occurred.
+This indicates a configuration problem with the bundled Python.
+```
+- **Cause**: PYTHONPATH misconfigured, missing Python modules, or incompatible Python version
+- **Solution**: Check Python environment with `clang-tool-chain-lldb --check-python`, review LLDB.md troubleshooting
+
+### CI/CD Integration
+
+**GitHub Actions Workflows:**
+- `.github/workflows/test-lldb-linux-x86.yml` - Linux x86_64 LLDB tests
+- `.github/workflows/test-lldb-linux-arm.yml` - Linux ARM64 LLDB tests (native runner)
+- `.github/workflows/test-lldb-win.yml` - Windows x64 LLDB tests
+- `.github/workflows/test-lldb-macos-*.yml` - macOS LLDB tests (planned)
+
+**Workflow Behavior:**
+- Skip steps removed in Iteration 13 (workflows now execute full test suite)
+- ARM64 workflow uses native `ubuntu-24.04-arm` runner for accurate testing
+- Tests run on every push/PR to verify LLDB functionality
+- Archives downloaded and extracted before tests execute
+
+### Test Development Guidelines
+
+**Adding New LLDB Tests:**
+1. Add test methods to appropriate test class (Installation or Execution)
+2. Use `@pytest.mark.serial` to prevent parallel execution conflicts
+3. Create temporary directories for test programs (`self.temp_path`)
+4. Use helper methods for diagnostics:
+   - `_format_diagnostic_output()` - Format command execution details
+   - `_extract_stack_frames()` - Parse LLDB output for stack frames
+5. Track timing information in `self.timing_info` dict
+6. Print success metrics for performance monitoring
+7. Provide comprehensive error messages with context
+
+**Example Test Structure:**
+```python
+def test_new_lldb_feature(self) -> None:
+    """Test description with steps and success criteria."""
+    # Step 1: Setup
+    compile_cmd = [...]
+    start_time = time.time()
+    result = subprocess.run(compile_cmd, ...)
+    compile_time = time.time() - start_time
+
+    # Assertion with diagnostic output
+    self.assertEqual(
+        result.returncode, 0,
+        f"Compilation failed{self._format_diagnostic_output('Title', compile_cmd, result, compile_time)}"
+    )
+
+    # Step 2: LLDB execution with timing
+    lldb_cmd = [...]
+    start_time = time.time()
+    result = subprocess.run(lldb_cmd, ...)
+    lldb_time = time.time() - start_time
+
+    # Extract frames and create diagnostic
+    output = result.stdout + result.stderr
+    frames = self._extract_stack_frames(output)
+    diagnostic = self._format_diagnostic_output("LLDB Analysis", lldb_cmd, result, lldb_time)
+
+    # Assertions with context
+    if expected_item not in output:
+        self.fail(f"Expected item missing\nFrames: {len(frames)}{diagnostic}")
+
+    # Success metrics
+    print(f"✓ test_name: compile={compile_time:.2f}s, lldb={lldb_time:.2f}s")
+```
+
+### Related Documentation
+
+- **LLDB User Guide**: `docs/LLDB.md` - Comprehensive LLDB usage documentation
+- **Linux Troubleshooting**: `docs/LLDB.md` (Linux-Specific Troubleshooting section)
+- **Python Integration**: `docs/LLDB.md` (Python Integration section)
+- **Archive Integration**: `.agent_task/ARCHIVE_INTEGRATION_CHECKLIST.md`
+- **Workflow Triggering**: `.agent_task/WORKFLOW_TRIGGER_GUIDE.md`
 
 ## Windows-Specific Testing
 

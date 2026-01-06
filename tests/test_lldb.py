@@ -7,9 +7,11 @@ debug builds with crash information.
 Note: These tests will FAIL (not skip) if LLDB infrastructure is broken.
 """
 
+import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -45,10 +47,55 @@ class TestLLDBInstallation(unittest.TestCase):
 class TestLLDBExecution(unittest.TestCase):
     """Test LLDB execution with crash analysis."""
 
+    def _format_diagnostic_output(
+        self, title: str, cmd: list[str], result: subprocess.CompletedProcess[str], elapsed_time: float | None = None
+    ) -> str:
+        """Format diagnostic output for test failures."""
+        lines = [
+            f"\n{'=' * 80}",
+            f"DIAGNOSTIC: {title}",
+            f"{'=' * 80}",
+            f"Command: {' '.join(cmd)}",
+        ]
+        if elapsed_time is not None:
+            lines.append(f"Elapsed Time: {elapsed_time:.2f}s")
+        lines.extend(
+            [
+                f"Return Code: {result.returncode}",
+                f"\nSTDOUT ({len(result.stdout)} chars):",
+                "-" * 80,
+                result.stdout if result.stdout else "(empty)",
+                "-" * 80,
+                f"\nSTDERR ({len(result.stderr)} chars):",
+                "-" * 80,
+                result.stderr if result.stderr else "(empty)",
+                "-" * 80,
+                f"{'=' * 80}\n",
+            ]
+        )
+        return "\n".join(lines)
+
+    def _extract_stack_frames(self, output: str) -> list[str]:
+        """Extract stack frame information from LLDB output."""
+        # Match patterns like "frame #0:", "* thread #1", function names, etc.
+        frame_patterns = [
+            r"frame\s+#\d+:.*",  # frame #0: ...
+            r"\*\s+thread\s+#\d+.*",  # * thread #1 ...
+            r"#\d+\s+\w+\s+in\s+\w+.*",  # #0  0x... in main ...
+        ]
+        frames = []
+        for line in output.splitlines():
+            for pattern in frame_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    frames.append(line.strip())
+                    break
+        return frames
+
     def setUp(self) -> None:
         """Set up test environment with temporary directory and test files."""
         self.temp_dir = tempfile.mkdtemp()
         self.temp_path = Path(self.temp_dir)
+        self.timing_info: dict[str, float] = {}
 
         # Create a test C file that will crash with null pointer dereference
         self.test_c = self.temp_path / "crash_test.c"
@@ -111,33 +158,55 @@ int main() {
             str(self.exe_name),
         ]
 
+        start_time = time.time()
         result = subprocess.run(compile_cmd, capture_output=True, text=True, timeout=60)
+        compile_time = time.time() - start_time
+        self.timing_info["compile"] = compile_time
 
         self.assertEqual(
             result.returncode,
             0,
-            f"Compilation failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}",
+            f"Compilation failed{self._format_diagnostic_output('Compilation Failure', compile_cmd, result, compile_time)}",
         )
         self.assertTrue(self.exe_name.exists(), f"Executable should exist at {self.exe_name}")
 
         # Step 2: Run LLDB with --print flag
         lldb_cmd = ["clang-tool-chain-lldb", "--print", str(self.exe_name)]
 
+        start_time = time.time()
         result = subprocess.run(lldb_cmd, capture_output=True, text=True, timeout=60)
+        lldb_time = time.time() - start_time
+        self.timing_info["lldb_execution"] = lldb_time
 
         # LLDB should exit with non-zero (program crashed)
         # But LLDB itself should run successfully
 
         output = result.stdout + result.stderr
+        diagnostic = self._format_diagnostic_output("LLDB Crash Analysis", lldb_cmd, result, lldb_time)
+
+        # Extract stack frames for better diagnostics
+        frames = self._extract_stack_frames(output)
+        frames_info = (
+            f"\nExtracted {len(frames)} stack frames:\n" + "\n".join(f"  {frame}" for frame in frames)
+            if frames
+            else "\nNo stack frames detected!"
+        )
 
         # Step 3: Verify stack trace contents
         # Check for function names in stack trace
-        self.assertIn("main", output, "Stack trace should contain 'main' function")
-        self.assertIn("intermediate_function", output, "Stack trace should contain 'intermediate_function'")
-        self.assertIn("trigger_crash", output, "Stack trace should contain 'trigger_crash' function")
+        expected_functions = ["main", "intermediate_function", "trigger_crash"]
+        missing_functions = [func for func in expected_functions if func not in output]
+
+        if missing_functions:
+            self.fail(
+                f"Missing functions in stack trace: {missing_functions}\n"
+                f"Expected all of: {expected_functions}{frames_info}{diagnostic}"
+            )
 
         # Check for source file reference
-        self.assertIn("crash_test.c", output, "Stack trace should reference source file 'crash_test.c'")
+        self.assertIn(
+            "crash_test.c", output, f"Stack trace should reference source file 'crash_test.c'{frames_info}{diagnostic}"
+        )
 
         # Check for crash reason (platform-specific)
         crash_indicators = [
@@ -148,12 +217,14 @@ int main() {
         ]
 
         has_crash_indicator = any(indicator.lower() in output.lower() for indicator in crash_indicators)
-        self.assertTrue(has_crash_indicator, f"Stack trace should indicate crash reason. Output:\n{output}")
+        if not has_crash_indicator:
+            self.fail(
+                f"Stack trace should indicate crash reason (expected one of: {crash_indicators})\n"
+                f"No crash indicator found in output{frames_info}{diagnostic}"
+            )
 
         # Check for line numbers (indicates debug symbols loaded)
         # Looking for patterns like ":12" or "line 12"
-        import re
-
         line_number_patterns = [
             r":\d+",  # file.c:12
             r"line \d+",  # line 12
@@ -161,7 +232,16 @@ int main() {
         ]
 
         has_line_numbers = any(re.search(pattern, output) for pattern in line_number_patterns)
-        self.assertTrue(has_line_numbers, f"Stack trace should contain line numbers. Output:\n{output}")
+        if not has_line_numbers:
+            self.fail(
+                f"Stack trace should contain line numbers (patterns: {line_number_patterns})\n"
+                f"No line numbers found{frames_info}{diagnostic}"
+            )
+
+        # Print timing summary on success
+        print(
+            f"\n✓ test_lldb_print_crash_stack: compile={compile_time:.2f}s, lldb={lldb_time:.2f}s, total={compile_time+lldb_time:.2f}s"
+        )
 
     def test_lldb_full_backtraces_with_python(self) -> None:
         """
@@ -262,21 +342,36 @@ int main() {
             str(exe_name),
         ]
 
+        start_time = time.time()
         result = subprocess.run(compile_cmd, capture_output=True, text=True, timeout=60)
+        compile_time = time.time() - start_time
+        self.timing_info["deep_stack_compile"] = compile_time
 
         self.assertEqual(
             result.returncode,
             0,
-            f"Compilation failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}",
+            f"Compilation failed{self._format_diagnostic_output('Deep Stack Compilation Failure', compile_cmd, result, compile_time)}",
         )
         self.assertTrue(exe_name.exists(), f"Executable should exist at {exe_name}")
 
         # Step 2: Run LLDB with --print flag
         lldb_cmd = ["clang-tool-chain-lldb", "--print", str(exe_name)]
 
+        start_time = time.time()
         result = subprocess.run(lldb_cmd, capture_output=True, text=True, timeout=60)
+        lldb_time = time.time() - start_time
+        self.timing_info["deep_stack_lldb"] = lldb_time
 
         output = result.stdout + result.stderr
+        diagnostic = self._format_diagnostic_output("LLDB Deep Stack Analysis", lldb_cmd, result, lldb_time)
+
+        # Extract stack frames for better diagnostics
+        frames = self._extract_stack_frames(output)
+        frames_info = (
+            f"\nExtracted {len(frames)} stack frames:\n" + "\n".join(f"  {frame}" for frame in frames)
+            if frames
+            else "\nNo stack frames detected!"
+        )
 
         # Step 3: Verify all 7 user functions in stack trace
         expected_functions = [
@@ -290,12 +385,17 @@ int main() {
             "level7_crash",
         ]
 
-        for func in expected_functions:
-            self.assertIn(func, output, f"Stack trace should contain '{func}' function. Output:\n{output}")
+        missing_functions = [func for func in expected_functions if func not in output]
+        found_functions = [func for func in expected_functions if func in output]
+
+        if missing_functions:
+            self.fail(
+                f"Missing {len(missing_functions)} of {len(expected_functions)} expected functions: {missing_functions}\n"
+                f"Found functions: {found_functions}\n"
+                f"This may indicate incomplete backtrace support.{frames_info}{diagnostic}"
+            )
 
         # Step 4: Verify line numbers present (indicates debug symbols and full backtrace)
-        import re
-
         line_number_patterns = [
             r":\d+",  # file.c:12
             r"line \d+",  # line 12
@@ -303,10 +403,16 @@ int main() {
         ]
 
         has_line_numbers = any(re.search(pattern, output) for pattern in line_number_patterns)
-        self.assertTrue(has_line_numbers, f"Stack trace should contain line numbers. Output:\n{output}")
+        if not has_line_numbers:
+            self.fail(
+                f"Stack trace should contain line numbers (patterns: {line_number_patterns})\n"
+                f"No line numbers found - debug symbols may not be loaded{frames_info}{diagnostic}"
+            )
 
         # Step 5: Verify source file references
-        self.assertIn("deep_stack.c", output, "Stack trace should reference source file 'deep_stack.c'")
+        self.assertIn(
+            "deep_stack.c", output, f"Stack trace should reference source file 'deep_stack.c'{frames_info}{diagnostic}"
+        )
 
         # Step 6: Verify no Python-related errors (only checked if Python is bundled)
         # Since we already skipped the test if Python isn't bundled, any Python errors here
@@ -319,13 +425,12 @@ int main() {
             "LLDB_DISABLE_PYTHON",
         ]
 
-        for error_indicator in python_error_indicators:
-            self.assertNotIn(
-                error_indicator,
-                output,
-                f"Output should not contain Python error '{error_indicator}'. "
-                f"Python is bundled (status: {python_env['status']}) but errors occurred. "
-                f"This indicates a configuration problem. Output:\n{output}",
+        found_python_errors = [err for err in python_error_indicators if err in output]
+        if found_python_errors:
+            self.fail(
+                f"Python errors detected: {found_python_errors}\n"
+                f"Python is bundled (status: {python_env['status']}) but errors occurred.\n"
+                f"This indicates a configuration problem with the bundled Python.{frames_info}{diagnostic}"
             )
 
         # Step 7: Verify crash reason present
@@ -337,7 +442,18 @@ int main() {
         ]
 
         has_crash_indicator = any(indicator.lower() in output.lower() for indicator in crash_indicators)
-        self.assertTrue(has_crash_indicator, f"Stack trace should indicate crash reason. Output:\n{output}")
+        if not has_crash_indicator:
+            self.fail(
+                f"Stack trace should indicate crash reason (expected one of: {crash_indicators})\n"
+                f"No crash indicator found{frames_info}{diagnostic}"
+            )
+
+        # Print timing summary and function coverage on success
+        total_time = compile_time + lldb_time
+        print(
+            f"\n✓ test_lldb_full_backtraces_with_python: compile={compile_time:.2f}s, lldb={lldb_time:.2f}s, total={total_time:.2f}s"
+        )
+        print(f"  Functions found: {len(found_functions)}/{len(expected_functions)}, Frames extracted: {len(frames)}")
 
 
 if __name__ == "__main__":

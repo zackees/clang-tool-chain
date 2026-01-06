@@ -18,12 +18,15 @@ This package provides LLDB (LLVM Debugger) integration for debugging C/C++ progr
 | Platform | Architecture | LLDB Version | Archive Size | Python Support | Status |
 |----------|-------------|--------------|--------------|----------------|--------|
 | Windows  | x86_64      | 21.1.5       | ~30 MB       | ✅ Full (3.10) | ✅ Complete |
-| Linux    | x86_64      | 21.1.5       | ~8 MB        | ⏳ Pending     | ⏳ Pending |
-| Linux    | arm64       | 21.1.5       | ~8 MB        | ⏳ Pending     | ⏳ Pending |
+| Linux    | x86_64      | 21.1.5       | ~10-11 MB (est.) | ✅ Full (3.10) | ⏳ Wrapper Ready, Archives Pending |
+| Linux    | arm64       | 21.1.5       | ~10-11 MB (est.) | ✅ Full (3.10) | ⏳ Wrapper Ready, Archives Pending |
 | macOS    | x86_64      | 21.1.6       | ~7 MB        | ⏳ Pending     | ⏳ Pending |
 | macOS    | arm64       | 21.1.6       | ~7 MB        | ⏳ Pending     | ⏳ Pending |
 
-**Current Status:** Windows x64 implementation complete. Linux and macOS support framework ready, binary distribution pending.
+**Current Status:**
+- **Windows x64:** ✅ Complete - Full Python 3.10 bundled, all features working
+- **Linux x86_64/ARM64:** ⏳ Wrapper integration complete, CI/CD workflow deployed, archives pending manual trigger
+- **macOS:** Framework ready, binary distribution pending
 
 **Note on macOS:** macOS includes a system LLDB via Xcode Command Line Tools. The bundled LLDB provides consistency across platforms and does not require Xcode installation.
 
@@ -346,17 +349,36 @@ clang-tool-chain-lldb program_msvc.exe
 
 ### Linux (x86_64 and ARM64)
 
-- **Status:** ⏳ Implementation pending
+- **Status:** ⏳ Wrapper Ready, Archives Pending CI/CD
 - **Binary format:** ELF (Executable and Linkable Format)
 - **Debug format:** DWARF
 - **Crash signal:** SIGSEGV (segmentation fault)
 - **Library dependencies:** May require libunwind for stack unwinding
 - **Expected behavior:** Standard Unix-style stack traces
+- **Python Support:** ✅ Full Python 3.10 will be bundled (like Windows)
+
+**Wrapper Integration Status:**
+- ✅ LLDB wrapper supports Linux (src/clang_tool_chain/execution/lldb.py:392-439)
+- ✅ PYTHONPATH environment variable configured
+- ✅ PYTHONHOME environment variable configured
+- ✅ Python module discovery implemented
+- ✅ LD_LIBRARY_PATH support for liblldb.so
+- ✅ Test infrastructure ready (tests/test_lldb.py)
+- ✅ Manifest files prepared with Python metadata
+- ⏳ LLDB archives pending GitHub Actions workflow execution
+
+**Environment Variables (Linux):**
+```bash
+# Set automatically by wrapper when LLDB runs
+PYTHONPATH=$HOME/.clang-tool-chain/lldb-linux-x86_64/python/Lib/site-packages
+PYTHONHOME=$HOME/.clang-tool-chain/lldb-linux-x86_64/python
+LD_LIBRARY_PATH=$HOME/.clang-tool-chain/lldb-linux-x86_64/lib
+```
 
 **Known considerations:**
-- May need `LD_LIBRARY_PATH` for shared libraries
-- Check libunwind availability (see libunwind section below)
-- System LLDB may be available via package manager (apt, dnf)
+- Python 3.10 site-packages bundled in LLDB archive (~10-11 MB compressed)
+- libpython3.10.so may use system library initially (not bundled)
+- System LLDB available via package manager (apt, dnf) but lacks Python integration
 
 ### macOS (x86_64 and ARM64)
 
@@ -425,12 +447,40 @@ LLDB on Windows x64 now includes **complete Python 3.10 support** bundled in the
 - Current size (with full Python): ~30 MB compressed
 - Size increase: Only ~1 MB due to efficient binary deduplication (zstd level 22)
 
-### Other Platforms (Linux/macOS)
+### Linux (x86_64 and ARM64) - Python 3.10 Bundling Ready ⏳
 
-Python bundling for Linux and macOS is planned but not yet implemented. On these platforms:
+Python bundling for Linux is **fully integrated in the wrapper** but archives are pending CI/CD workflow execution:
+
+**What Will Be Bundled:**
+- ✅ Python 3.10 standard library (minimized from 43 MB → 11 MB)
+- ✅ LLDB Python module (_lldb.cpython-310-*.so + lldb package)
+- ✅ Relative symlinks for binary deduplication
+- ⏳ libpython3.10.so (may use system Python initially)
+
+**Expected Archive Size:**
+- ~10-11 MB compressed per platform (includes Python)
+- Similar to Windows (~30 MB) but with less binary duplication
+
+**Current Status:**
+- ✅ Wrapper integration complete (automatic PYTHONPATH/PYTHONHOME setup)
+- ✅ Python modules extracted from Debian Jammy packages
+- ✅ GitHub Actions workflow ready (.github/workflows/build-lldb-archives-linux.yml)
+- ⏳ Archives pending manual workflow trigger
+
+**Testing:**
+Once archives are available, verify with:
+```bash
+# Check Python environment status
+clang-tool-chain-lldb-check-python
+# Should show: "Status: READY" and "Python environment is fully configured"
+```
+
+### macOS (x86_64 and ARM64)
+
+Python bundling for macOS is planned but not yet implemented. On these platforms:
 - Basic LLDB debugging works without Python
 - Advanced features may require system Python 3.10.x installation
-- Future releases will bundle Python similar to Windows x64
+- Future releases will bundle Python similar to Windows x64 and Linux
 
 ### Testing Python Integration
 
@@ -576,6 +626,305 @@ error: attach failed: Operation not permitted
 - Run LLDB as administrator (Windows) or with sudo (Linux/macOS)
 - Or debug your own processes only
 - macOS: May need to disable SIP for debugging system processes
+
+## Linux-Specific Troubleshooting
+
+### Issue: Python environment not ready on Linux
+
+**Symptoms:**
+```bash
+clang-tool-chain-lldb-check-python
+# Output: "Status: NOT_READY" or "Python environment not configured"
+```
+
+**Solution:**
+```bash
+# Step 1: Verify LLDB installation
+clang-tool-chain install lldb
+
+# Step 2: Check Python directory exists
+ls ~/.clang-tool-chain/lldb-linux-x86_64/python/Lib/site-packages/lldb/
+# Should show: __init__.py, _lldb.*.so, formatters/, plugins/, utils/
+
+# Step 3: Verify LLDB Python module symlink
+ls -l ~/.clang-tool-chain/lldb-linux-x86_64/python/Lib/site-packages/lldb/_lldb.*.so
+# Should show symlink to ../../../lib/liblldb.so
+
+# Step 4: Check libpython3.10.so availability
+python3.10 --version
+# If missing: sudo apt install python3.10 (Ubuntu/Debian)
+
+# Step 5: Re-run diagnostic
+clang-tool-chain-lldb-check-python
+# Should now show: "Status: READY"
+```
+
+**Expected Diagnostic Output (Ready):**
+```
+LLDB Python Environment Diagnostic
+==================================
+Python ZIP: NOT FOUND (Linux uses Lib/ directory instead)
+Python Lib Directory: FOUND (/home/user/.clang-tool-chain/lldb-linux-x86_64/python/Lib)
+LLDB Module: FOUND (/home/user/.clang-tool-chain/lldb-linux-x86_64/python/Lib/site-packages/lldb/__init__.py)
+Python Binary: FOUND (3.10.x)
+Environment: CONFIGURED (PYTHONPATH and PYTHONHOME set)
+Status: READY
+
+Python environment is fully configured. Full 'bt all' backtraces should work.
+```
+
+### Issue: "libpython3.10.so.1.0: cannot open shared object file" on Linux
+
+**Symptoms:**
+```
+lldb: error while loading shared libraries: libpython3.10.so.1.0: cannot open shared object file: No such file or directory
+```
+
+**Solution:**
+```bash
+# Install system Python 3.10 (provides libpython3.10.so)
+# Ubuntu 22.04 (Jammy) or later
+sudo apt update
+sudo apt install python3.10 python3.10-dev
+
+# Ubuntu 20.04 (Focal) - requires PPA
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install python3.10 python3.10-dev
+
+# Verify libpython3.10.so is available
+ldconfig -p | grep libpython3.10
+# Should show: libpython3.10.so.1.0 (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libpython3.10.so.1.0
+
+# Retry LLDB
+clang-tool-chain-lldb --version
+```
+
+**Alternative: Use LD_LIBRARY_PATH (temporary workaround):**
+```bash
+# If system Python not available, locate libpython3.10.so manually
+find /usr -name "libpython3.10.so*" 2>/dev/null
+
+# Add to LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/path/to/python/lib:$LD_LIBRARY_PATH
+clang-tool-chain-lldb --version
+```
+
+### Issue: Incomplete backtraces on Linux ("?? ()" frames)
+
+**Symptoms:**
+```
+(lldb) bt all
+* thread #1, name = 'program'
+    frame #0: 0x00007ffff7a2d000
+    frame #1: 0x00007ffff7a2d123 ?? ()
+    frame #2: 0x00007ffff7a2d456 ?? ()
+# Missing function names and line numbers
+```
+
+**Root Cause:** Python environment not configured, limiting LLDB's backtrace capabilities.
+
+**Solution:**
+```bash
+# Verify Python environment is ready
+clang-tool-chain-lldb-check-python
+# Must show: "Status: READY"
+
+# If NOT_READY, follow steps in "Python environment not ready" section above
+
+# Re-compile with debug symbols
+clang-tool-chain-cpp program.cpp -g3 -O0 -o program
+
+# Test backtrace again
+clang-tool-chain-lldb --print program
+# Should now show full function names and line numbers
+```
+
+### Issue: LLDB crashes with "Illegal instruction" on ARM64
+
+**Symptoms:**
+```bash
+clang-tool-chain-lldb --version
+# Output: Illegal instruction (core dumped)
+```
+
+**Root Cause:** ARM64 binaries built for different CPU (e.g., ARMv8.2) running on older ARM CPU (e.g., ARMv8.0).
+
+**Solution:**
+```bash
+# Check CPU features
+lscpu | grep -E "(Architecture|Model name|Flags)"
+
+# Check LLDB binary architecture
+file ~/.clang-tool-chain/lldb-linux-arm64/bin/lldb
+
+# If architecture mismatch, file a GitHub issue with CPU details
+# GitHub: https://github.com/zackees/clang-tool-chain/issues
+
+# Workaround: Use system LLDB temporarily
+sudo apt install lldb-21
+lldb-21 --version
+```
+
+### Issue: "ptrace: Operation not permitted" on Linux
+
+**Symptoms:**
+```
+error: attach failed: ptrace: Operation not permitted
+```
+
+**Root Cause:** Linux security restrictions (Yama ptrace scope or container restrictions).
+
+**Solution:**
+
+**Option 1: Temporarily disable Yama ptrace restrictions (requires sudo):**
+```bash
+# Check current ptrace_scope value
+cat /proc/sys/kernel/yama/ptrace_scope
+# 0 = Classic ptrace (all processes can ptrace)
+# 1 = Restricted ptrace (only parent processes, default on Ubuntu)
+# 2 = Admin-only attach (only admin can ptrace)
+# 3 = No attach (no ptrace allowed)
+
+# Temporarily allow ptrace for debugging session
+sudo sysctl kernel.yama.ptrace_scope=0
+
+# Debug your program
+clang-tool-chain-lldb program
+
+# Restore security after debugging
+sudo sysctl kernel.yama.ptrace_scope=1
+```
+
+**Option 2: Run debugger as root (less secure):**
+```bash
+sudo $(which clang-tool-chain-lldb) program
+```
+
+**Option 3: Add CAP_SYS_PTRACE capability (persistent, secure):**
+```bash
+# Add capability to LLDB binary
+sudo setcap cap_sys_ptrace=eip ~/.clang-tool-chain/lldb-linux-x86_64/bin/lldb
+
+# Now debug without sudo
+clang-tool-chain-lldb program
+```
+
+**Docker/Container Users:**
+```bash
+# Add --cap-add=SYS_PTRACE to docker run command
+docker run --cap-add=SYS_PTRACE -it your-image
+```
+
+### Issue: ARM64 and x86_64 confusion (wrong architecture installed)
+
+**Symptoms:**
+```bash
+clang-tool-chain-lldb --version
+# Output: cannot execute binary file: Exec format error
+```
+
+**Root Cause:** Installed x86_64 LLDB on ARM64 system, or vice versa.
+
+**Solution:**
+```bash
+# Check system architecture
+uname -m
+# x86_64 = Intel/AMD 64-bit
+# aarch64 = ARM 64-bit
+
+# Remove wrong architecture
+clang-tool-chain purge --yes
+
+# Re-install (will auto-detect correct architecture)
+clang-tool-chain install lldb
+
+# Verify correct architecture installed
+file ~/.clang-tool-chain/lldb-linux-*/bin/lldb
+# Should match system architecture (x86-64 or aarch64)
+```
+
+### Issue: Test workflows skipped on Linux (CI/CD)
+
+**Symptoms:**
+GitHub Actions shows "Linux LLDB tests" workflow as skipped or "Archives not available yet".
+
+**Root Cause:** LLDB archives not yet built or manual workflow trigger pending.
+
+**Solution:**
+```bash
+# Check if archives available in downloads-bins repository
+cd downloads-bins/
+git pull origin main
+ls -lh assets/lldb/linux/x86_64/lldb-21.1.5-linux-x86_64.tar.zst
+ls -lh assets/lldb/linux/arm64/lldb-21.1.5-linux-arm64.tar.zst
+
+# If files not present: Archives pending manual workflow trigger
+# See: .agent_task/WORKFLOW_TRIGGER_GUIDE.md for instructions
+
+# Once archives available:
+cd ../clang-tool-chain/
+git submodule update --remote downloads-bins
+git add downloads-bins
+git commit -m "Update downloads-bins submodule (LLDB Linux archives)"
+git push origin main
+
+# CI/CD will automatically run LLDB tests on next push
+```
+
+### Expected Test Behavior on Linux
+
+When LLDB archives are available and tests run on Linux:
+
+**Expected: All tests pass ✅**
+```bash
+pytest tests/test_lldb.py -v
+# test_lldb_binary_dir_discovery PASSED
+# test_lldb_version PASSED
+# test_lldb_print_crash_stack PASSED
+# test_lldb_full_backtraces_with_python PASSED
+# ============================== 4 passed ==============================
+```
+
+**Test Details:**
+
+1. **test_lldb_binary_dir_discovery** - Verifies LLDB installation directory exists
+   - Checks `~/.clang-tool-chain/lldb-linux-{arch}/bin/lldb` exists
+   - Validates directory structure (bin/, lib/, python/)
+
+2. **test_lldb_version** - Verifies LLDB version query works
+   - Runs `clang-tool-chain-lldb --version`
+   - Validates version output contains "lldb version"
+
+3. **test_lldb_print_crash_stack** - Tests automated crash analysis
+   - Compiles test program with intentional crash (null pointer dereference)
+   - Runs `clang-tool-chain-lldb --print crash_test`
+   - Verifies stack trace contains function names, file names, line numbers
+
+4. **test_lldb_full_backtraces_with_python** - Tests Python-powered deep backtraces
+   - Compiles program with 7-level deep call stack
+   - Verifies "bt all" captures all 7 user frames
+   - Confirms Python environment enables full backtrace functionality
+   - Validates frame details (function names, file names, line numbers)
+
+**If tests fail:**
+```bash
+# Check Python environment
+clang-tool-chain-lldb-check-python
+# Should show: "Status: READY"
+
+# Verify libpython3.10.so available
+python3.10 --version
+
+# Check LLDB can start
+clang-tool-chain-lldb --version
+
+# Run tests with verbose output
+pytest tests/test_lldb.py -v -s
+
+# File GitHub issue if tests fail consistently
+# GitHub: https://github.com/zackees/clang-tool-chain/issues
+```
 
 ## Command Reference
 

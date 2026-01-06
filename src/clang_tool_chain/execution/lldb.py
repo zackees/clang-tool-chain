@@ -167,6 +167,7 @@ def check_lldb_python_environment() -> dict[str, bool | str | None]:
         - "site_packages": Path to site-packages directory (or None)
         - "lldb_module": True if LLDB Python module exists
         - "python_zip": True if python310.zip exists
+        - "python_lib_dir": True if Lib/ directory exists (Linux)
         - "pythonpath_value": What PYTHONPATH would be set to
         - "pythonhome_value": What PYTHONHOME would be set to
         - "status": "ready", "missing", or "incomplete"
@@ -182,6 +183,7 @@ def check_lldb_python_environment() -> dict[str, bool | str | None]:
         "site_packages": None,
         "lldb_module": False,
         "python_zip": False,
+        "python_lib_dir": False,
         "pythonpath_value": None,
         "pythonhome_value": None,
         "status": "missing",
@@ -204,19 +206,29 @@ def check_lldb_python_environment() -> dict[str, bool | str | None]:
             if lldb_module.exists():
                 result["lldb_module"] = True
 
-        # Check for Python standard library
+        # Check for Python standard library (two possible formats)
+        # Windows: python310.zip (compressed)
         python_zip = python_dir / "python310.zip"
         if python_zip.exists():
             result["python_zip"] = True
 
+        # Linux/macOS: Lib/ directory (extracted)
+        lib_dir = python_dir / "Lib"
+        if lib_dir.exists() and lib_dir.is_dir():
+            result["python_lib_dir"] = True
+
         # Determine overall status
-        if result["lldb_module"] and result["python_zip"]:
+        # Python stdlib can be either python310.zip (Windows) or Lib/ directory (Linux/macOS)
+        has_stdlib = result["python_zip"] or result["python_lib_dir"]
+
+        if result["lldb_module"] and has_stdlib:
             result["status"] = "ready"
-            result["message"] = "Python environment is fully configured"
+            stdlib_type = "python310.zip" if result["python_zip"] else "Lib/ directory"
+            result["message"] = f"Python environment is fully configured (stdlib: {stdlib_type})"
         elif result["lldb_module"]:
             result["status"] = "incomplete"
             result["message"] = "LLDB module found but Python standard library missing"
-        elif result["python_zip"]:
+        elif has_stdlib:
             result["status"] = "incomplete"
             result["message"] = "Python standard library found but LLDB module missing"
         else:
@@ -261,7 +273,13 @@ def print_lldb_python_diagnostics() -> int:
         print(f"  Python Directory: {diagnostics['python_dir'] or 'NOT FOUND'}")
         print(f"  Site-Packages: {diagnostics['site_packages'] or 'NOT FOUND'}")
         print(f"  LLDB Module: {'✓ FOUND' if diagnostics['lldb_module'] else '✗ MISSING'}")
-        print(f"  Python Stdlib (python310.zip): {'✓ FOUND' if diagnostics['python_zip'] else '✗ MISSING'}")
+        # Show both Windows (python310.zip) and Linux (Lib/) stdlib formats
+        if diagnostics["python_zip"]:
+            print("  Python Stdlib (python310.zip): ✓ FOUND")
+        elif diagnostics["python_lib_dir"]:
+            print("  Python Stdlib (Lib/ directory): ✓ FOUND")
+        else:
+            print("  Python Stdlib: ✗ MISSING")
         print()
 
         print("Environment Variables (when LLDB runs):")

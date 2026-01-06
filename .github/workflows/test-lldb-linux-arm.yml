@@ -10,16 +10,9 @@ on:
 jobs:
   test-lldb-linux-arm:
     name: LLDB (Linux ARM64)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
 
     steps:
-    - name: Skip test (platform not yet supported)
-      run: |
-        echo "LLDB support not yet implemented for this platform"
-        echo "Framework ready, implementation pending"
-        exit 0
-      shell: bash
-
     - name: Checkout code
       uses: actions/checkout@v4
 
