@@ -501,8 +501,8 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                 candidates = [d for d in extracted_dirs if d != dest_dir]
                 # Special case: if the single directory is named 'bin', 'lib', 'share', 'include', etc.,
                 # treat it as a flat structure component, not a wrapper directory (e.g., LLDB archives with only bin/)
-                COMPONENT_DIRS = {"bin", "lib", "share", "include", "libexec"}
-                is_component_dir = len(candidates) == 1 and candidates[0].name in COMPONENT_DIRS
+                component_dirs = {"bin", "lib", "share", "include", "libexec"}
+                is_component_dir = len(candidates) == 1 and candidates[0].name in component_dirs
 
                 if len(candidates) == 1 and len(extracted_files) == 0 and not is_component_dir:
                     actual_dir = candidates[0]

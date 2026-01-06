@@ -63,8 +63,9 @@ from .entry_points import (
     fix_includes_main,
     iwyu_main,
     iwyu_tool_main,
-    lldb_main,
     lld_main,
+    lldb_check_python_main,
+    lldb_main,
     llvm_ar_main,
     llvm_as_main,
     llvm_dis_main,
@@ -112,4 +113,5 @@ __all__ = [
     "fix_includes_main",
     # LLDB
     "lldb_main",
+    "lldb_check_python_main",
 ]

@@ -100,6 +100,7 @@ clang-tool-chain-iwyu-tool = "clang_tool_chain.wrapper:iwyu_tool_main"
 clang-tool-chain-fix-includes = "clang_tool_chain.wrapper:fix_includes_main"
 # LLDB (LLVM Debugger)
 clang-tool-chain-lldb = "clang_tool_chain.wrapper:lldb_main"
+clang-tool-chain-lldb-check-python = "clang_tool_chain.wrapper:lldb_check_python_main"
 # Emscripten (WebAssembly compilation)
 clang-tool-chain-emcc = "clang_tool_chain.wrapper:emcc_main"
 clang-tool-chain-empp = "clang_tool_chain.wrapper:empp_main"

@@ -127,10 +127,7 @@ def find_lldb_tool(tool_name: str) -> Path:
     platform_name, _ = get_platform_info()
 
     # Add .exe extension on Windows for the binary
-    if platform_name == "win":
-        tool_path = bin_dir / f"{tool_name}.exe"
-    else:
-        tool_path = bin_dir / tool_name
+    tool_path = bin_dir / f"{tool_name}.exe" if platform_name == "win" else bin_dir / tool_name
 
     logger.debug(f"Looking for LLDB tool at: {tool_path}")
 
@@ -159,9 +156,170 @@ def find_lldb_tool(tool_name: str) -> Path:
     return tool_path
 
 
-def execute_lldb_tool(
-    tool_name: str, args: list[str] | None = None, print_mode: bool = False
-) -> NoReturn | int:
+def check_lldb_python_environment() -> dict[str, bool | str | None]:
+    """
+    Check the LLDB Python environment configuration and return diagnostic information.
+
+    Returns:
+        Dictionary containing diagnostic information:
+        - "python_available": True if Python modules are bundled
+        - "python_dir": Path to Python directory (or None)
+        - "site_packages": Path to site-packages directory (or None)
+        - "lldb_module": True if LLDB Python module exists
+        - "python_zip": True if python310.zip exists
+        - "pythonpath_value": What PYTHONPATH would be set to
+        - "pythonhome_value": What PYTHONHOME would be set to
+        - "status": "ready", "missing", or "incomplete"
+        - "message": Human-readable status message
+    """
+    platform_name, arch = get_platform_info()
+    install_dir = downloader.get_lldb_install_dir(platform_name, arch)
+    python_dir = install_dir / "python"
+
+    result = {
+        "python_available": False,
+        "python_dir": None,
+        "site_packages": None,
+        "lldb_module": False,
+        "python_zip": False,
+        "pythonpath_value": None,
+        "pythonhome_value": None,
+        "status": "missing",
+        "message": "Python modules not found",
+    }
+
+    if python_dir.exists():
+        result["python_available"] = True
+        result["python_dir"] = str(python_dir)
+        result["pythonhome_value"] = str(python_dir)
+
+        # Check site-packages
+        site_packages = python_dir / "Lib" / "site-packages"
+        if site_packages.exists():
+            result["site_packages"] = str(site_packages)
+            result["pythonpath_value"] = str(site_packages)
+
+            # Check for LLDB Python module
+            lldb_module = site_packages / "lldb"
+            if lldb_module.exists():
+                result["lldb_module"] = True
+
+        # Check for Python standard library
+        python_zip = python_dir / "python310.zip"
+        if python_zip.exists():
+            result["python_zip"] = True
+
+        # Determine overall status
+        if result["lldb_module"] and result["python_zip"]:
+            result["status"] = "ready"
+            result["message"] = "Python environment is fully configured"
+        elif result["lldb_module"]:
+            result["status"] = "incomplete"
+            result["message"] = "LLDB module found but Python standard library missing"
+        elif result["python_zip"]:
+            result["status"] = "incomplete"
+            result["message"] = "Python standard library found but LLDB module missing"
+        else:
+            result["status"] = "incomplete"
+            result["message"] = "Python directory exists but modules are incomplete"
+    else:
+        result["message"] = f"Python directory not found at {python_dir}"
+
+    return result
+
+
+def print_lldb_python_diagnostics() -> int:
+    """
+    Print diagnostic information about LLDB Python environment.
+
+    Returns:
+        Exit code (0 if Python is ready, 1 if missing/incomplete)
+    """
+    print("LLDB Python Environment Diagnostics")
+    print("=" * 60)
+
+    try:
+        # Get platform info
+        platform_name, arch = get_platform_info()
+        print(f"Platform: {platform_name}/{arch}")
+
+        # Get installation directory
+        install_dir = downloader.get_lldb_install_dir(platform_name, arch)
+        print(f"LLDB Install Dir: {install_dir}")
+        print()
+
+        # Check Python environment
+        diagnostics = check_lldb_python_environment()
+
+        status = diagnostics["status"]
+        assert isinstance(status, str), "Status should be a string"
+        print(f"Status: {status.upper()}")
+        print(f"Message: {diagnostics['message']}")
+        print()
+
+        print("Python Components:")
+        print(f"  Python Directory: {diagnostics['python_dir'] or 'NOT FOUND'}")
+        print(f"  Site-Packages: {diagnostics['site_packages'] or 'NOT FOUND'}")
+        print(f"  LLDB Module: {'✓ FOUND' if diagnostics['lldb_module'] else '✗ MISSING'}")
+        print(f"  Python Stdlib (python310.zip): {'✓ FOUND' if diagnostics['python_zip'] else '✗ MISSING'}")
+        print()
+
+        print("Environment Variables (when LLDB runs):")
+        if diagnostics["pythonpath_value"]:
+            print(f"  PYTHONPATH={diagnostics['pythonpath_value']}")
+        else:
+            print("  PYTHONPATH: (not set - Python disabled)")
+
+        if diagnostics["pythonhome_value"]:
+            print(f"  PYTHONHOME={diagnostics['pythonhome_value']}")
+        else:
+            print("  PYTHONHOME: (not set - Python disabled)")
+
+        if diagnostics["python_available"]:
+            print("  LLDB_DISABLE_PYTHON: (removed - Python enabled)")
+        else:
+            print("  LLDB_DISABLE_PYTHON: 1 (Python disabled)")
+        print()
+
+        # Print recommendations
+        if diagnostics["status"] == "ready":
+            print("✓ Python environment is ready for full 'bt all' backtraces!")
+            print()
+            print("You can now use:")
+            print("  - Full stack traces with 'bt all' command")
+            print("  - Python scripting in LLDB")
+            print("  - Advanced variable inspection")
+            return 0
+        elif diagnostics["status"] == "incomplete":
+            print("⚠ Python environment is incomplete.")
+            print()
+            print("Troubleshooting:")
+            print("  1. Try reinstalling LLDB: clang-tool-chain purge --yes && clang-tool-chain install lldb")
+            print("  2. Check archive integrity during download")
+            print("  3. Report issue at: https://github.com/zackees/clang-tool-chain/issues")
+            return 1
+        else:  # missing
+            print("✗ Python modules are not bundled with this LLDB installation.")
+            print()
+            print("This means:")
+            print("  - 'bt all' backtraces may be incomplete")
+            print("  - Python scripting is disabled")
+            print("  - Advanced features not available")
+            print()
+            print("Note: This may be expected for older LLDB installations.")
+            print("      The current release includes Python 3.10 modules.")
+            print()
+            print("To get Python support:")
+            print("  1. Update to latest version: pip install --upgrade clang-tool-chain")
+            print("  2. Reinstall LLDB: clang-tool-chain purge --yes && clang-tool-chain install lldb")
+            return 1
+
+    except Exception as e:
+        print(f"Error checking LLDB Python environment: {e}")
+        return 1
+
+
+def execute_lldb_tool(tool_name: str, args: list[str] | None = None, print_mode: bool = False) -> NoReturn | int:
     """
     Execute an LLDB tool with the given arguments.
 
@@ -194,8 +352,33 @@ def execute_lldb_tool(
             bin_dir = get_lldb_binary_dir()
             env = os.environ.copy()
             env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
-            # Disable Python to avoid initialization errors when Python site-packages aren't available
-            env["LLDB_DISABLE_PYTHON"] = "1"
+
+            # Configure Python environment for LLDB
+            # Python 3.10 site-packages are bundled with LLDB for full "bt all" support
+            install_dir = downloader.get_lldb_install_dir(platform_name, get_platform_info()[1])
+            python_dir = install_dir / "python"
+
+            if python_dir.exists():
+                # Set PYTHONPATH to site-packages directory
+                site_packages = python_dir / "Lib" / "site-packages"
+                if site_packages.exists():
+                    env["PYTHONPATH"] = str(site_packages)
+                    logger.debug(f"Set PYTHONPATH={site_packages}")
+
+                # Set PYTHONHOME to Python installation directory
+                # This helps LLDB find the Python standard library
+                env["PYTHONHOME"] = str(python_dir)
+                logger.debug(f"Set PYTHONHOME={python_dir}")
+
+                # Remove LLDB_DISABLE_PYTHON if it exists (enable Python scripting)
+                if "LLDB_DISABLE_PYTHON" in env:
+                    del env["LLDB_DISABLE_PYTHON"]
+                    logger.debug("Removed LLDB_DISABLE_PYTHON (Python enabled)")
+            else:
+                # Python modules not bundled (fallback to system Python or disable)
+                logger.warning(f"Python directory not found at {python_dir}, Python features may be limited")
+                # Keep Python disabled if modules aren't available
+                env["LLDB_DISABLE_PYTHON"] = "1"
 
             result = subprocess.run(cmd, env=env)
 
@@ -225,7 +408,25 @@ def execute_lldb_tool(
                     env["LD_LIBRARY_PATH"] = str(lib_dir)
             else:
                 logger.debug(f"No lib directory found at {lib_dir}, using system libraries")
-                env = None
+                env = os.environ.copy()
+
+            # Configure Python environment for LLDB (future: Linux/macOS support)
+            python_dir = install_dir / "python"
+            if python_dir.exists():
+                # Set PYTHONPATH to site-packages directory
+                site_packages = python_dir / "Lib" / "site-packages"
+                if site_packages.exists():
+                    env["PYTHONPATH"] = str(site_packages)
+                    logger.debug(f"Set PYTHONPATH={site_packages}")
+
+                # Set PYTHONHOME to Python installation directory
+                env["PYTHONHOME"] = str(python_dir)
+                logger.debug(f"Set PYTHONHOME={python_dir}")
+
+                # Remove LLDB_DISABLE_PYTHON if it exists
+                if "LLDB_DISABLE_PYTHON" in env:
+                    del env["LLDB_DISABLE_PYTHON"]
+                    logger.debug("Removed LLDB_DISABLE_PYTHON (Python enabled)")
 
             result = subprocess.run(cmd, env=env)
 

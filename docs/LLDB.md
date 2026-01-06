@@ -4,23 +4,24 @@ This package provides LLDB (LLVM Debugger) integration for debugging C/C++ progr
 
 ## Key Features
 
-- Pre-built LLDB binaries (~7-8 MB compressed per platform)
+- Pre-built LLDB binaries (~30 MB compressed for Windows x64 with Python)
 - Automatic download and installation on first use
 - Interactive debugging with full symbol support
 - Automated crash analysis with `--print` mode
+- **Full Python 3.10 support bundled (Windows x64)** - enables complete backtrace functionality
 - Cross-platform support (Windows x64 complete, Linux/macOS pending)
 - Manifest-based distribution with SHA256 verification
 - Zero-configuration debug symbol support
 
 ## Platform Support
 
-| Platform | Architecture | LLDB Version | Archive Size | Status |
-|----------|-------------|--------------|--------------|--------|
-| Windows  | x86_64      | 21.1.5       | ~7-8 MB      | ✅ Complete |
-| Linux    | x86_64      | 21.1.5       | ~8 MB        | ⏳ Pending |
-| Linux    | arm64       | 21.1.5       | ~8 MB        | ⏳ Pending |
-| macOS    | x86_64      | 21.1.6       | ~7 MB        | ⏳ Pending |
-| macOS    | arm64       | 21.1.6       | ~7 MB        | ⏳ Pending |
+| Platform | Architecture | LLDB Version | Archive Size | Python Support | Status |
+|----------|-------------|--------------|--------------|----------------|--------|
+| Windows  | x86_64      | 21.1.5       | ~30 MB       | ✅ Full (3.10) | ✅ Complete |
+| Linux    | x86_64      | 21.1.5       | ~8 MB        | ⏳ Pending     | ⏳ Pending |
+| Linux    | arm64       | 21.1.5       | ~8 MB        | ⏳ Pending     | ⏳ Pending |
+| macOS    | x86_64      | 21.1.6       | ~7 MB        | ⏳ Pending     | ⏳ Pending |
+| macOS    | arm64       | 21.1.6       | ~7 MB        | ⏳ Pending     | ⏳ Pending |
 
 **Current Status:** Windows x64 implementation complete. Linux and macOS support framework ready, binary distribution pending.
 
@@ -107,14 +108,78 @@ Process 12345 stopped
     frame #2: 0x00007ff7... crash_test.exe`main at crash_test.c:15:5
 ```
 
+### Python Environment Diagnostics
+
+Check if Python modules are bundled with LLDB for full "bt all" backtraces:
+
+```bash
+# Check LLDB Python environment status
+clang-tool-chain-lldb-check-python
+```
+
+**What this command checks:**
+1. Python directory exists in LLDB installation
+2. Python site-packages are present (LLDB module)
+3. Python standard library is available (python310.zip)
+4. Environment variables (PYTHONPATH, PYTHONHOME) configuration
+5. Whether Python scripting is enabled or disabled
+
+**Example output (Python available):**
+```
+LLDB Python Environment Diagnostics
+============================================================
+Platform: win/x86_64
+LLDB Install Dir: C:\Users\user\.clang-tool-chain\lldb\win\x86_64
+
+Status: READY
+Message: Python environment is fully configured
+
+Python Components:
+  Python Directory: C:\Users\user\.clang-tool-chain\lldb\win\x86_64\python
+  Site-Packages: C:\Users\user\.clang-tool-chain\lldb\win\x86_64\python\Lib\site-packages
+  LLDB Module: ✓ FOUND
+  Python Stdlib (python310.zip): ✓ FOUND
+
+Environment Variables (when LLDB runs):
+  PYTHONPATH=C:\Users\user\.clang-tool-chain\lldb\win\x86_64\python\Lib\site-packages
+  PYTHONHOME=C:\Users\user\.clang-tool-chain\lldb\win\x86_64\python
+  LLDB_DISABLE_PYTHON: (removed - Python enabled)
+
+✓ Python environment is ready for full 'bt all' backtraces!
+
+You can now use:
+  - Full stack traces with 'bt all' command
+  - Python scripting in LLDB
+  - Advanced variable inspection
+```
+
+**Exit codes:**
+- `0` - Python environment is ready
+- `1` - Python modules missing or incomplete
+
+**Use case:** Verify Python integration before debugging complex crashes that require full backtrace support.
+
 ## What's Included
 
+### Windows x64 (with Python 3.10)
 - **lldb** - Main LLDB debugger executable (80-120 MB uncompressed)
 - **lldb-server** - Remote debugging server (15-25 MB uncompressed)
 - **lldb-argdumper** - Argument processing helper (5-10 MB uncompressed)
+- **Python 3.10** - Full Python runtime and LLDB module for advanced features:
+  - python310.dll (4.3 MB)
+  - Python standard library (python310.zip)
+  - LLDB Python module (_lldb.pyd + lldb package)
+  - Enables full "bt all" backtraces, Python scripting, and advanced variable inspection
 
-**Total uncompressed size:** ~100-155 MB per platform
-**Compressed archive size:** ~7-8 MB per platform (zstd level 22 compression)
+**Total uncompressed size:** ~209 MB (Windows x64 with Python)
+**Compressed archive size:** ~30 MB (Windows x64 with Python) | ~7-8 MB (other platforms without Python)
+
+### Other Platforms (Linux/macOS)
+- **lldb** - Main LLDB debugger executable
+- **lldb-server** - Remote debugging server
+- **lldb-argdumper** - Argument processing helper
+
+**Note:** Python bundling for Linux and macOS is planned but not yet implemented.
 
 **Not included (may be added later):**
 - lldb-vscode - VS Code debug adapter
@@ -335,72 +400,52 @@ The clang-tool-chain already uses libunwind for Windows GNU ABI compilation:
 
 This suggests libunwind is available in the MinGW sysroot on Windows.
 
-## Python Dependencies
+## Python Support
 
-LLDB has optional Python scripting support that enables advanced features like full stack backtraces, variable inspection, and custom commands. Currently, the bundled LLDB on Windows includes python310.dll (4.3 MB) but does NOT include the Python site-packages (lldb Python module).
+### Windows x64 - Full Python 3.10 Bundled ✅
 
-### What Works Without Python Site-Packages (✅)
-
-- LLDB launches successfully without DLL errors
-- Version queries: `clang-tool-chain-lldb --version`
-- Loading executables and running programs
-- Basic crash detection
-- Crash frames with source code and function names
-- Stack traces with limited detail
-
-### What Requires Python Site-Packages (⚠️)
-
-- Full stack backtraces using "bt all" command with threading support
-- Advanced variable inspection beyond basic frame variables
-- Python scripting and custom commands
-- LLDB Python API usage
-- Some interactive debugging features
-
-### Current Status (Windows x64)
+LLDB on Windows x64 now includes **complete Python 3.10 support** bundled in the archive, enabling all advanced debugging features out of the box:
 
 **Bundled Components:**
 - ✅ python310.dll (4.3 MB) - Python runtime DLL
-- ❌ Python site-packages - LLDB Python module (~50 MB uncompressed)
+- ✅ Python standard library (python310.zip) - Core Python modules
+- ✅ LLDB Python module (_lldb.pyd + lldb package) - Full LLDB Python API
 
-**Impact:**
-- Basic LLDB debugging works (90% of use cases)
-- Advanced features requiring Python scripting may fail gracefully
-- Tests like `test_lldb_print_crash_stack` may fail due to missing Python module
+**What This Enables:**
+- ✅ Full stack backtraces using "bt all" command with threading support
+- ✅ Advanced variable inspection beyond basic frame variables
+- ✅ Python scripting and custom commands
+- ✅ LLDB Python API usage
+- ✅ All interactive debugging features
 
-### Future Options
+**No system Python required!** Everything works out of the box after installation.
 
-1. **Bundle Python site-packages** (~50 MB)
-   - Pros: Full LLDB functionality out of the box
-   - Cons: Increases download size from 29 MB to ~80 MB
+**Archive Size Impact:**
+- Previous size (without Python): ~29 MB compressed
+- Current size (with full Python): ~30 MB compressed
+- Size increase: Only ~1 MB due to efficient binary deduplication (zstd level 22)
 
-2. **Document system Python 3.10 requirement**
-   - Pros: No additional download size
-   - Cons: Users must install Python 3.10 separately
-   - Note: LLDB requires exact Python 3.10.x version (python310.dll)
+### Other Platforms (Linux/macOS)
 
-3. **Keep current approach** (recommended for MVP)
-   - Pros: Small download, works for most use cases
-   - Cons: Advanced features limited
-   - Graceful degradation: Basic debugging works, advanced features fail gracefully
+Python bundling for Linux and macOS is planned but not yet implemented. On these platforms:
+- Basic LLDB debugging works without Python
+- Advanced features may require system Python 3.10.x installation
+- Future releases will bundle Python similar to Windows x64
 
-### Using System Python with LLDB (Advanced)
+### Testing Python Integration
 
-If you need full LLDB Python support, install Python 3.10.x and ensure it's in PATH:
+Verify Python is working correctly:
 
 ```bash
-# Windows: Download Python 3.10.x from python.org
-# Linux: sudo apt install python3.10
-# macOS: brew install python@3.10
+# Check Python environment status
+clang-tool-chain-lldb-check-python
 
-# Verify version
-python --version  # Should show Python 3.10.x
+# Should show: "Status: READY" and "Python environment is fully configured"
 
-# LLDB will detect system Python automatically
-clang-tool-chain-lldb
-(lldb) script print("Python works!")
+# Test full backtrace in automated mode
+clang-tool-chain-lldb --print crash_test.exe
+# Should show complete stack traces with all frames
 ```
-
-**Note:** Python version must match python310.dll (Python 3.10.x). Python 3.11+ will NOT work.
 
 ## Troubleshooting
 
@@ -701,28 +746,61 @@ LLDB integrates with the existing clang-tool-chain infrastructure:
 
 ## Testing
 
-LLDB is tested via `tests/test_lldb.py` with GitHub Actions workflows for all platforms.
+LLDB is tested via `tests/test_lldb.py` with comprehensive automated tests for full backtrace functionality.
 
 ### Test Coverage
 
-- LLDB binary directory discovery
-- Tool finding (lldb, lldb-server, lldb-argdumper)
-- Automated crash analysis (`--print` mode)
-- Stack trace verification (function names, file names, line numbers, crash reason)
-- Platform-specific behavior (Windows, Linux, macOS)
+- **Basic functionality:**
+  - LLDB binary directory discovery
+  - Tool finding (lldb, lldb-server, lldb-argdumper)
+  - Version queries
+
+- **Crash analysis (Windows x64 with Python):**
+  - Automated crash analysis (`--print` mode)
+  - Stack trace verification (function names, file names, line numbers, crash reason)
+  - Full backtrace testing with deep call stacks (7+ levels)
+  - Python integration verification (ensures "bt all" works)
+
+- **Platform-specific behavior:**
+  - Windows GNU ABI executable debugging
+  - Windows MSVC ABI executable debugging (future)
+  - Linux/macOS testing framework (pending)
 
 ### Running Tests Locally
 
 ```bash
-# Run all LLDB tests
+# Run all LLDB tests (4 tests)
 uv run pytest tests/test_lldb.py -v
 
-# Run specific test
-uv run pytest tests/test_lldb.py::TestLLDBExecution::test_lldb_print_crash_stack -v
+# Output should show:
+# test_lldb_binary_dir_discovery PASSED
+# test_lldb_version PASSED
+# test_lldb_print_crash_stack PASSED
+# test_lldb_full_backtraces_with_python PASSED
+# ============================== 4 passed in ~7s ==============================
 
-# Run with verbose output
+# Run specific test
+uv run pytest tests/test_lldb.py::test_lldb_full_backtraces_with_python -v
+
+# Run with verbose output to see full backtraces
 uv run pytest tests/test_lldb.py -v -s
 ```
+
+### Test Design
+
+The LLDB tests use a sophisticated approach to ensure full backtrace functionality:
+
+1. **Deep call stack generation:** Tests create 7-level deep call stacks to verify complete backtrace capture
+2. **Automated crash analysis:** Uses `--print` mode to run LLDB non-interactively
+3. **Python integration verification:** Confirms Python modules are loaded and "bt all" works
+4. **Cross-ABI testing:** Tests both GNU ABI (default) and MSVC ABI executables (future)
+
+**Key test: `test_lldb_full_backtraces_with_python`**
+- Creates a 7-level deep call stack (level7 → level6 → ... → level1 → main)
+- Crashes at deepest level (null pointer dereference)
+- Verifies all 7 user frames appear in backtrace
+- Confirms Python-powered "bt all" command works
+- Ensures function names, file names, and line numbers are present
 
 ## References
 

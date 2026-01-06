@@ -202,7 +202,7 @@ def fix_includes_main() -> NoReturn:
 # ============================================================================
 
 
-def lldb_main() -> int:
+def lldb_main() -> NoReturn | int:
     """
     Entry point for clang-tool-chain-lldb command.
 
@@ -235,24 +235,39 @@ def lldb_main() -> int:
         exe_path = args[0]
 
         # LLDB batch command to run and print backtrace on crash
+        # Use -k flag for commands that should run after the process stops (crashes)
+        # -o commands run immediately, -k commands run after stop events
         lldb_args = [
             "--batch",
-            "--no-lldbinit",  # Skip .lldbinit to avoid Python errors
-            "--no-use-colors",  # Disable colors for cleaner output
+            "-o",
+            f"target create {exe_path}",  # Create target explicitly
             "-o",
             "run",  # Run the program
-            "-o",
-            "bt all",  # Backtrace all threads on crash
-            "-o",
-            "quit",  # Exit after crash
-            "--",
-            exe_path,  # Executable to debug
+            "-k",
+            "bt",  # Backtrace after crash (-k = run after stop event)
+            "-k",
+            "thread list",  # List all threads after crash
         ]
 
         return execute_lldb_tool("lldb", lldb_args, print_mode=True)
-    else:
-        # Interactive LLDB mode
-        execute_lldb_tool("lldb", args)
+
+    # Interactive LLDB mode (never returns - calls sys.exit)
+    execute_lldb_tool("lldb", args)
+    raise AssertionError("execute_lldb_tool should never return in interactive mode")
+
+
+def lldb_check_python_main() -> int:
+    """
+    Entry point for clang-tool-chain-lldb-check-python command.
+
+    Prints diagnostic information about LLDB Python environment configuration.
+
+    Returns:
+        Exit code (0 if Python is ready, 1 if missing/incomplete)
+    """
+    from ..execution.lldb import print_lldb_python_diagnostics
+
+    return print_lldb_python_diagnostics()
 
 
 # ============================================================================

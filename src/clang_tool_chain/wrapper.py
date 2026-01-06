@@ -74,8 +74,9 @@ from .commands import (
     fix_includes_main,
     iwyu_main,
     iwyu_tool_main,
-    lldb_main,
     lld_main,
+    lldb_check_python_main,
+    lldb_main,
     llvm_ar_main,
     llvm_as_main,
     llvm_dis_main,
@@ -211,6 +212,10 @@ __all__ = [
     "execute_iwyu_tool",
     "find_iwyu_tool",
     "get_iwyu_binary_dir",
+    # LLDB
+    "execute_lldb_tool",
+    "find_lldb_tool",
+    "get_lldb_binary_dir",
     # Build Utilities
     "build_main",
     "build_run_main",
@@ -238,6 +243,8 @@ __all__ = [
     "iwyu_main",
     "iwyu_tool_main",
     "fix_includes_main",
+    "lldb_main",
+    "lldb_check_python_main",
     "sccache_emcc_main",
     "sccache_empp_main",
 ]

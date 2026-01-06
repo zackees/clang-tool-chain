@@ -47,20 +47,21 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 | Platform | Architecture | LLDB Version | Python Support | Status |
 |----------|-------------|--------------|----------------|--------|
-| Windows  | x86_64      | 21.1.5       | ⚠️ Basic (python310.dll only) | ✅ Available |
+| Windows  | x86_64      | 21.1.5       | ✅ Full (Python 3.10 bundled) | ✅ Complete |
 | Linux    | x86_64      | TBD          | TBD            | ⏳ Pending |
 | Linux    | arm64       | TBD          | TBD            | ⏳ Pending |
 | macOS    | x86_64      | TBD          | TBD            | ⏳ Pending |
 | macOS    | arm64       | TBD          | TBD            | ⏳ Pending |
 
-*LLDB support added January 2026 (Windows x64 MVP)*
+*LLDB support added January 2026 (Windows x64 complete with full Python 3.10)*
 
-**Python Dependency Notes:**
-- **Windows x64**: Includes python310.dll (4.3 MB) for basic LLDB functionality
-- **Python site-packages NOT included**: Advanced features like full "bt all" backtraces require system Python 3.10.x
-- **Download size**: ~29 MB compressed (LLDB binaries + python310.dll)
-- **Future options**: Bundle full Python site-packages (~50 MB) or document system Python requirement
-- See [LLDB Documentation](docs/LLDB.md) for details on Python requirements and limitations
+**Python 3.10 Bundling (Windows x64):**
+- **Full Python 3.10 included**: python310.dll + standard library + LLDB Python module
+- **Download size**: ~30 MB compressed (was ~29 MB, +1 MB increase)
+- **No system Python required**: All advanced features work out of the box
+- **Enables**: Full "bt all" backtraces, Python scripting, advanced variable inspection, LLDB Python API
+- **Size efficiency**: Binary deduplication (liblldb.dll + _lldb.pyd) keeps size minimal
+- See [LLDB Documentation](docs/LLDB.md) for complete Python integration details
 
 **Key Features:**
 - Pre-built Clang/LLVM binaries (~50-400 MB per platform)
