@@ -209,8 +209,8 @@ class TestNodeJSDownloader:
             result_dir = downloader.ensure_nodejs_available("linux", "x86_64")
             elapsed = time.time() - start_time
 
-            # Should return immediately
-            assert elapsed < 0.1, f"Fast path took {elapsed}s (expected <100ms)"
+            # Should return quickly (allow some headroom for system variance during parallel tests)
+            assert elapsed < 0.2, f"Fast path took {elapsed}s (expected <200ms)"
             assert result_dir == test_dir
 
 

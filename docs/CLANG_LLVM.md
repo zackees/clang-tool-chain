@@ -47,6 +47,79 @@ clang-tool-chain-sccache --version        # Show sccache version
 - Requires sccache to be available in your PATH
 - If sccache is not found, the commands will fail with clear installation instructions
 
+## Sanitizers (AddressSanitizer, UndefinedBehaviorSanitizer)
+
+The Clang/LLVM toolchain includes full support for runtime sanitizers on Windows, with automatic DLL deployment for seamless execution.
+
+**Supported Sanitizers:**
+- **AddressSanitizer (ASAN)**: Detects memory errors (buffer overflows, use-after-free, memory leaks)
+- **UndefinedBehaviorSanitizer (UBSAN)**: Detects undefined behavior (integer overflow, null pointer dereference, etc.)
+
+**Usage:**
+```bash
+# AddressSanitizer - detect memory errors
+clang-tool-chain-cpp -fsanitize=address main.cpp -o main.exe
+./main.exe  # Automatically uses deployed ASAN DLL
+
+# UndefinedBehaviorSanitizer - detect undefined behavior
+clang-tool-chain-cpp -fsanitize=undefined main.cpp -o main.exe
+./main.exe  # UBSAN runtime is statically linked
+
+# Combine sanitizers
+clang-tool-chain-cpp -fsanitize=address,undefined main.cpp -o main.exe
+```
+
+**Automatic DLL Deployment:**
+
+When compiling with AddressSanitizer (`-fsanitize=address`), the toolchain automatically deploys required sanitizer runtime DLLs alongside your executable:
+
+- `libclang_rt.asan_dynamic-x86_64.dll` - ASAN runtime library
+- `libc++.dll` - LLVM C++ standard library (transitive dependency)
+- `libunwind.dll` - LLVM unwinding library (transitive dependency)
+
+**How It Works:**
+1. **Recursive dependency scanning**: The DLL deployer scans not only the executable but also the sanitizer DLLs themselves to find transitive dependencies
+2. **Automatic deployment**: All required DLLs are copied to the executable directory
+3. **No PATH setup required**: Executables run immediately in `cmd.exe` without environment modifications
+
+**Example Output:**
+```bash
+$ clang-tool-chain-cpp -fsanitize=address test.cpp -o test.exe
+2026-01-06 05:21:30,837 - clang_tool_chain.deployment.dll_deployer - INFO - Deployed 3 runtime DLL(s) for test.exe
+
+$ ./test.exe
+=================================================================
+==12345==ERROR: AddressSanitizer: stack-buffer-overflow on address...
+WRITE of size 4 at 0x... thread T0
+    #0 0x7ff6ae3a14fc  (test.exe+0x1400014fc)
+SUMMARY: AddressSanitizer: stack-buffer-overflow
+==12345==ABORTING
+```
+
+**Platform Support:**
+- **Windows (x64)**: Full support with automatic DLL deployment ✅
+- **Linux (x86_64/ARM64)**: Full support (sanitizers statically linked) ✅
+- **macOS (x86_64/ARM64)**: Full support (sanitizers statically linked) ✅
+
+**Performance Notes:**
+- ASAN adds ~2x memory overhead and ~2x slowdown
+- UBSAN adds minimal overhead (~5-20%)
+- Use in debug/testing builds only, not production
+
+**Disabling DLL Deployment:**
+
+To disable automatic sanitizer DLL deployment (advanced use):
+```bash
+export CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+clang-tool-chain-cpp -fsanitize=address main.cpp -o main.exe
+# No DLLs deployed - you must manually manage dependencies
+```
+
+**See Also:**
+- [DLL Deployment Documentation](DLL_DEPLOYMENT.md) - Complete guide to automatic DLL deployment
+- [Clang Sanitizer Documentation](https://clang.llvm.org/docs/AddressSanitizer.html) - Official ASAN documentation
+- [UBSAN Documentation](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html) - Official UBSAN documentation
+
 ## LLVM lld Linker (Linux Only, System Linker on macOS)
 
 Starting with v1.0.8+, clang-tool-chain uses LLVM's `lld` linker on Linux for consistent cross-platform behavior. **macOS currently uses the system linker (ld64) due to mixed LLVM versions across architectures.**

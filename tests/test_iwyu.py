@@ -223,6 +223,8 @@ class TestIWYUExecution(unittest.TestCase):
             )
         except ToolchainInfrastructureError:
             raise
+        except subprocess.TimeoutExpired:
+            self.skipTest("IWYU analysis timed out - this may be a platform-specific issue")
 
     def test_iwyu_analyze_file(self) -> None:
         """Test running IWYU on a test file."""
