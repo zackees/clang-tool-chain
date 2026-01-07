@@ -417,15 +417,14 @@ class TestIWYUWrapperEntryPoints(unittest.TestCase):
             bin_dir = wrapper.get_iwyu_binary_dir()
             self.assertTrue(bin_dir.exists(), "IWYU binary directory should exist")
 
-            # Check for expected files
-            platform_name, _ = wrapper.get_platform_info()
-            iwyu_binary = "include-what-you-use.exe" if platform_name == "win" else "include-what-you-use"
-
-            expected_binary = bin_dir / iwyu_binary
+            # Check for expected files using find_iwyu_tool which has retry logic
+            # for Windows file system caching issues during parallel test execution
+            iwyu_path = wrapper.find_iwyu_tool("include-what-you-use")
             self.assertTrue(
-                expected_binary.exists(),
-                f"IWYU binary should exist at {expected_binary}",
+                iwyu_path.exists(),
+                f"IWYU binary should exist at {iwyu_path}",
             )
+            self.assertTrue(iwyu_path.is_file(), f"IWYU binary should be a file: {iwyu_path}")
         except ToolchainInfrastructureError:
             raise
 
