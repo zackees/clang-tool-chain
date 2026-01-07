@@ -16,7 +16,7 @@ logging.basicConfig(
     format='%(levelname)s - %(message)s'
 )
 
-from clang_tool_chain.parallel_download import download_file_parallel, DownloadConfig
+from clang_tool_chain.parallel_download import DownloadConfig, download_file_parallel
 
 # Use a larger file from Python.org that supports range requests
 TEST_URL = "https://www.python.org/ftp/python/3.11.0/python-3.11.0-amd64.exe"  # ~25 MB installer
@@ -27,7 +27,7 @@ def test_comparison():
     print("PARALLEL vs SINGLE-THREADED COMPARISON")
     print("="*80)
     print(f"Test file: {TEST_URL}")
-    print(f"This file should support range requests\n")
+    print("This file should support range requests\n")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
@@ -72,6 +72,7 @@ def test_comparison():
         # Disable parallel via environment
         os.environ["CLANG_TOOL_CHAIN_DISABLE_PARALLEL"] = "1"
         import importlib
+
         import clang_tool_chain.archive
         importlib.reload(clang_tool_chain.archive)
         from clang_tool_chain.archive import download_file

@@ -148,6 +148,18 @@ int main() {
         Note: Python site-packages are bundled with LLDB on Windows x64, enabling
         full backtrace functionality including "bt all" command.
         """
+        # Check if python310.dll is present on Windows (required for LLDB to run)
+        if sys.platform == "win32":
+
+            bin_dir = wrapper.get_lldb_binary_dir()
+            python_dll = bin_dir / "python310.dll"
+            if not python_dll.exists():
+                self.skipTest(
+                    f"python310.dll is missing from LLDB installation at {python_dll}. "
+                    "This is a critical dependency for liblldb.dll. The LLDB archive may be incomplete. "
+                    "LLDB cannot run without this file."
+                )
+
         # Step 1: Compile with debug symbols
         compile_cmd = [
             "clang-tool-chain-c",

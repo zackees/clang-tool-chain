@@ -19,6 +19,7 @@ import pytest
 
 from clang_tool_chain.deployment.dll_deployer import (
     HEURISTIC_MINGW_DLLS,
+    _is_deployable_dll,
     _is_mingw_dll,
     detect_required_dlls,
     get_mingw_sysroot_bin_dir,
@@ -81,6 +82,49 @@ class TestMingwDllPatternMatching:
 
         for dll in non_mingw_dlls:
             assert not _is_mingw_dll(dll), f"Expected {dll} to be rejected (not MinGW)"
+
+
+class TestSanitizerDllPatternMatching:
+    """Test sanitizer DLL pattern matching with _is_deployable_dll()."""
+
+    def test_sanitizer_dll_patterns_match(self):
+        """Test that sanitizer DLL patterns match correctly."""
+        sanitizer_dlls = [
+            "libclang_rt.asan_dynamic-x86_64.dll",
+            "libclang_rt.asan_dynamic-i386.dll",
+            "libclang_rt.ubsan_dynamic-x86_64.dll",
+            "libclang_rt.tsan_dynamic-x86_64.dll",
+            "libclang_rt.msan_dynamic-x86_64.dll",
+            "LIBCLANG_RT.ASAN_DYNAMIC-X86_64.DLL",  # Case insensitive
+        ]
+
+        for dll in sanitizer_dlls:
+            assert _is_deployable_dll(dll), f"Expected {dll} to match sanitizer patterns"
+
+    def test_sanitizer_and_mingw_combined(self):
+        """Test that both MinGW and sanitizer DLLs are recognized."""
+        combined_dlls = [
+            "libwinpthread-1.dll",  # MinGW
+            "libclang_rt.asan_dynamic-x86_64.dll",  # Sanitizer
+            "libstdc++-6.dll",  # MinGW
+            "libc++.dll",  # LLVM C++
+            "libunwind.dll",  # LLVM unwinding
+        ]
+
+        for dll in combined_dlls:
+            assert _is_deployable_dll(dll), f"Expected {dll} to be deployable"
+
+    def test_non_sanitizer_dlls_rejected(self):
+        """Test that non-sanitizer/non-MinGW DLLs are rejected."""
+        non_deployable_dlls = [
+            "libclang_rt.profile-x86_64.dll",  # Profile runtime (not dynamic sanitizer)
+            "custom_sanitizer.dll",
+            "kernel32.dll",
+            "my_asan.dll",
+        ]
+
+        for dll in non_deployable_dlls:
+            assert not _is_deployable_dll(dll), f"Expected {dll} to be rejected"
 
 
 class TestDetectRequiredDlls:

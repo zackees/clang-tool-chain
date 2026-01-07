@@ -237,10 +237,11 @@ def lldb_main() -> NoReturn | int:
         # LLDB batch command to run and print backtrace on crash
         # Use -k flag for commands that should run after the process stops (crashes)
         # -o commands run immediately, -k commands run after stop events
+        # IMPORTANT: Quote the executable path to handle spaces correctly
         lldb_args = [
             "--batch",
             "-o",
-            f"target create {exe_path}",  # Create target explicitly
+            f'target create "{exe_path}"',  # Create target explicitly (quoted for paths with spaces)
             "-o",
             "run",  # Run the program
             "-k",

@@ -6,7 +6,6 @@ This downloads a real file from the internet to test the parallel download
 functionality. This is NOT part of the test suite - just a quick verification.
 """
 
-import hashlib
 import logging
 import os
 import tempfile
@@ -19,7 +18,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-from clang_tool_chain.parallel_download import download_file_parallel, DownloadConfig
+from clang_tool_chain.parallel_download import DownloadConfig, download_file_parallel
 
 # Test URLs - these are publicly available files of various sizes
 TEST_FILES = [
@@ -127,6 +126,7 @@ def test_parallel_download():
 
         # Reload the module to pick up the environment variable
         import importlib
+
         import clang_tool_chain.archive
         importlib.reload(clang_tool_chain.archive)
 

@@ -168,6 +168,7 @@ def check_lldb_python_environment() -> dict[str, bool | str | None]:
         - "lldb_module": True if LLDB Python module exists
         - "python_zip": True if python310.zip exists
         - "python_lib_dir": True if Lib/ directory exists (Linux)
+        - "python_dll": True if python310.dll exists (Windows)
         - "pythonpath_value": What PYTHONPATH would be set to
         - "pythonhome_value": What PYTHONHOME would be set to
         - "status": "ready", "missing", or "incomplete"
@@ -176,6 +177,7 @@ def check_lldb_python_environment() -> dict[str, bool | str | None]:
     platform_name, arch = get_platform_info()
     install_dir = downloader.get_lldb_install_dir(platform_name, arch)
     python_dir = install_dir / "python"
+    bin_dir = install_dir / "bin"
 
     result = {
         "python_available": False,
@@ -184,6 +186,7 @@ def check_lldb_python_environment() -> dict[str, bool | str | None]:
         "lldb_module": False,
         "python_zip": False,
         "python_lib_dir": False,
+        "python_dll": False,
         "pythonpath_value": None,
         "pythonhome_value": None,
         "status": "missing",
@@ -217,14 +220,28 @@ def check_lldb_python_environment() -> dict[str, bool | str | None]:
         if lib_dir.exists() and lib_dir.is_dir():
             result["python_lib_dir"] = True
 
+        # Check for python310.dll on Windows (required by liblldb.dll)
+        if platform_name == "win":
+            python_dll = bin_dir / "python310.dll"
+            if python_dll.exists():
+                result["python_dll"] = True
+
         # Determine overall status
         # Python stdlib can be either python310.zip (Windows) or Lib/ directory (Linux/macOS)
         has_stdlib = result["python_zip"] or result["python_lib_dir"]
 
-        if result["lldb_module"] and has_stdlib:
+        # On Windows, python310.dll is required for LLDB to run
+        has_python_runtime = True
+        if platform_name == "win":
+            has_python_runtime = result["python_dll"]
+
+        if result["lldb_module"] and has_stdlib and has_python_runtime:
             result["status"] = "ready"
             stdlib_type = "python310.zip" if result["python_zip"] else "Lib/ directory"
             result["message"] = f"Python environment is fully configured (stdlib: {stdlib_type})"
+        elif not has_python_runtime:
+            result["status"] = "incomplete"
+            result["message"] = "Python runtime (python310.dll) is missing from bin/ directory"
         elif result["lldb_module"]:
             result["status"] = "incomplete"
             result["message"] = "LLDB module found but Python standard library missing"
@@ -280,6 +297,9 @@ def print_lldb_python_diagnostics() -> int:
             print("  Python Stdlib (Lib/ directory): ✓ FOUND")
         else:
             print("  Python Stdlib: ✗ MISSING")
+        # Show python310.dll status on Windows
+        if platform_name == "win":
+            print(f"  Python Runtime (python310.dll): {'✓ FOUND' if diagnostics['python_dll'] else '✗ MISSING'}")
         print()
 
         print("Environment Variables (when LLDB runs):")
@@ -357,6 +377,32 @@ def execute_lldb_tool(tool_name: str, args: list[str] | None = None, print_mode:
 
     tool_path = find_lldb_tool(tool_name)
     platform_name, _ = get_platform_info()
+
+    # Check for python310.dll on Windows (required by liblldb.dll)
+    if platform_name == "win":
+        bin_dir = get_lldb_binary_dir()
+        python_dll = bin_dir / "python310.dll"
+        if not python_dll.exists():
+            error_msg = (
+                f"ERROR: python310.dll is missing from LLDB installation\n"
+                f"Expected location: {python_dll}\n"
+                f"\n"
+                f"This is a critical dependency for liblldb.dll. The LLDB archive may be incomplete.\n"
+                f"\n"
+                f"Troubleshooting:\n"
+                f"  1. Reinstall LLDB: clang-tool-chain purge --yes && clang-tool-chain install lldb\n"
+                f"  2. If the problem persists, report it at:\n"
+                f"     https://github.com/zackees/clang-tool-chain/issues\n"
+            )
+            logger.error(error_msg)
+            if print_mode:
+                # In print mode, write error to stderr and return error code
+                sys.stderr.write(error_msg)
+                return 1
+            else:
+                # In interactive mode, print error and exit
+                sys.stderr.write(error_msg)
+                sys.exit(1)
 
     cmd = [str(tool_path)] + args
 

@@ -14,11 +14,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-from clang_tool_chain.parallel_download import (
-    check_server_capabilities,
-    download_file_parallel,
-    DownloadConfig
-)
+from clang_tool_chain.parallel_download import DownloadConfig, check_server_capabilities, download_file_parallel
+
 
 def test_server_capabilities():
     """Test server capability detection for various URLs."""
@@ -81,7 +78,7 @@ def test_download_with_logging():
 
             if dest_path.exists():
                 size = dest_path.stat().st_size
-                print(f"\n✅ Download complete!")
+                print("\n✅ Download complete!")
                 print(f"   Size: {size / (1024*1024):.2f} MB")
                 print(f"   Time: {elapsed:.2f}s")
                 print(f"   Speed: {size / elapsed / (1024*1024):.2f} MB/s")
