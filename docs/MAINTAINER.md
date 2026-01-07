@@ -46,6 +46,48 @@ pip install zstandard
 
 **Result:** 51.53 MB archive (from 902 MB original) for Windows x86_64
 
+## Platform Upgrade History
+
+### macOS x86_64 LLVM 21.x Upgrade
+
+**Status:** ✅ Complete (January 7, 2026)
+
+**Previous State:**
+- **macOS x86_64:** LLVM 19.1.7 (did NOT support `-fuse-ld` flag)
+- **macOS arm64:** LLVM 21.1.6
+- **Windows/Linux:** LLVM 21.1.5 (all architectures)
+
+**Current State:**
+- **All platforms:** LLVM 21.x (macOS x86_64: 21.1.6, macOS ARM64: 21.1.6, Windows/Linux: 21.1.5)
+- **Status:** Upgrade complete, all platforms now on LLVM 21.x
+
+**Completed Actions:**
+1. ✅ Built LLVM 21.1.6 for macOS x86_64 via GitHub Actions workflow
+2. ✅ Uploaded `llvm-21.1.6-darwin-x86_64.tar.zst` (77 MB) to downloads-bins
+3. ✅ Updated `manifest.json` with version 21.1.6 (set as latest)
+4. ✅ Updated documentation (CLAUDE.md, MAINTAINER.md, version tables)
+
+**Build Method:**
+- **Automated GitHub Actions workflow:** `.github/workflows/build-llvm-macos-x86.yml`
+- **Build time:** 8 minutes 8 seconds
+- **Workflow run:** https://github.com/zackees/clang-tool-chain/actions/runs/20777997930
+- **Archive SHA256:** `426e2b0f3a89bb7bc94cb3ff11c84ccf2fc032c29d0ef6d65286ae3e54cd3410`
+
+**Benefits Achieved:**
+- ✅ Consistent LLVM 21.x across all platforms
+- ✅ Enables `-fuse-ld=lld` support on macOS (both architectures)
+- ✅ Better GNU flag support on macOS
+- ✅ Removed version inconsistency documentation warnings
+
+**Updated Files:**
+- `downloads-bins/assets/clang/darwin/x86_64/llvm-21.1.6-darwin-x86_64.tar.zst` (new)
+- `downloads-bins/assets/clang/darwin/x86_64/manifest.json` (updated)
+- `CLAUDE.md` (version tables updated)
+- `docs/MAINTAINER.md` (this file - marked complete)
+
+**Completed:** January 7, 2026 (Iteration 1)
+**Tracking:** Identified in Iteration 9 (2026-01-07), completed in Iteration 1 of agent loop
+
 ## Individual Maintainer Scripts
 
 Located in `downloads-bins/tools/`:
@@ -83,6 +125,146 @@ python extract_mingw_sysroot.py --arch x86_64 --work-dir work
 8. Places in `../assets/mingw/win/{arch}/`
 
 **Result:** ~12 MB archive (from 176 MB uncompressed) for Windows x86_64
+
+## LLDB Archive Generation
+
+### Windows LLDB Archive Build Workflow
+
+An automated GitHub Actions workflow is available for building Windows LLDB archives with Python 3.10 support:
+
+**Workflow:** `.github/workflows/build-lldb-archives-windows.yml`
+
+**Purpose:**
+- Automates Windows LLDB archive creation with python310.dll bundled
+- Based on proven Linux workflow template
+- Handles Windows-specific requirements (7-Zip, PowerShell, .exe extraction)
+- Supports both x86_64 and ARM64 architectures
+
+**How to Execute:**
+1. Navigate to GitHub → Actions → "Build LLDB Archives (Windows)"
+2. Click "Run workflow"
+3. Configure parameters (optional):
+   - LLVM version (default: 21.1.5)
+   - Architectures (default: x86_64)
+4. Wait ~60-90 minutes for build to complete
+5. Download artifacts from workflow run:
+   - `lldb-windows-x86_64.tar.zst` (~35 MB compressed)
+   - `lldb-windows-x86_64.tar.zst.sha256` (checksum file)
+
+**What the Workflow Does:**
+1. Downloads LLVM release from GitHub
+2. Extracts LLDB binaries (lldb.exe, lldb-server.exe, liblldb.dll)
+3. Downloads Python embeddable package (python-3.10.11-embed-amd64.zip)
+4. Extracts python310.dll and python310.zip
+5. Packages Python modules (LLDB Python API + site-packages)
+6. Creates archive structure:
+   ```
+   lldb-windows-x86_64/
+   ├── bin/
+   │   ├── lldb.exe
+   │   ├── lldb-server.exe
+   │   ├── lldb-argdumper.exe
+   │   ├── liblldb.dll
+   │   └── python310.dll          # ← Critical for Python support
+   ├── python/
+   │   ├── python310.dll           # ← Backup copy
+   │   ├── python310.zip           # ← Standard library
+   │   └── Lib/
+   │       └── site-packages/
+   │           └── lldb/           # ← LLDB Python module
+   └── lib/
+       └── liblldb.dll
+   ```
+7. Compresses with zstd level 22
+8. Generates SHA256 checksum
+9. Uploads artifacts (30-day retention)
+
+**Expected Archive Size:**
+- Compressed: ~35 MB (+5 MB from current ~30 MB)
+- Uncompressed: ~209 MB
+
+**After Workflow Completion:**
+1. Download artifacts from GitHub Actions
+2. Test locally:
+   ```bash
+   # Extract to test directory
+   tar --use-compress-program=unzstd -xf lldb-windows-x86_64.tar.zst
+
+   # Verify python310.dll exists
+   ls lldb-windows-x86_64/bin/python310.dll
+   ls lldb-windows-x86_64/python/python310.dll
+
+   # Test LLDB launch
+   ./lldb-windows-x86_64/bin/lldb.exe --version
+   # Should work without DLL errors
+   ```
+3. Upload to downloads-bins repository:
+   ```bash
+   cd downloads-bins/assets/lldb/windows/x86_64/
+   cp ~/Downloads/lldb-windows-x86_64.tar.zst .
+   ```
+4. Update manifest with new SHA256:
+   ```bash
+   # Get SHA256 from downloaded .sha256 file
+   cat ~/Downloads/lldb-windows-x86_64.tar.zst.sha256
+
+   # Update downloads-bins/assets/lldb/windows/x86_64/manifest.json
+   # Replace sha256 field with new checksum
+   ```
+5. Commit and push:
+   ```bash
+   git add lldb-windows-x86_64.tar.zst manifest.json
+   git commit -m "Update Windows LLDB archive with python310.dll (v21.1.5)"
+   git push origin main
+
+   # Update submodule reference in main repo
+   cd ~/dev/clang-tool-chain
+   git add downloads-bins
+   git commit -m "chore: Update downloads-bins with LLDB python310.dll fix"
+   git push origin main
+   ```
+
+**Verification After Deployment:**
+```bash
+# Remove old installation
+clang-tool-chain purge --yes
+
+# Install fresh
+clang-tool-chain install lldb
+
+# Check Python environment
+clang-tool-chain-lldb-check-python
+# Should show: "Status: READY"
+
+# Test LLDB
+clang-tool-chain-lldb --version
+# Should work without DLL errors
+
+# Run tests
+uv run pytest tests/test_lldb.py -v
+# All 4 tests should pass
+```
+
+**Documentation:**
+- Complete workflow documentation: [Iteration 5](.agent_task/ITERATION_5.md)
+- Troubleshooting: [LLDB.md](LLDB.md#troubleshooting)
+- Linux workflow (similar): `.github/workflows/build-lldb-archives-linux.yml`
+
+### Linux LLDB Archive Build Workflow
+
+A similar automated workflow exists for Linux LLDB archives:
+
+**Workflow:** `.github/workflows/build-lldb-archives-linux.yml`
+
+**Status:** Ready for execution, archives pending
+
+**Differences from Windows:**
+- Uses `tar` instead of 7-Zip
+- Extracts Python from Debian Jammy packages
+- Creates symlinks instead of copying binaries
+- Smaller archive size (~10-11 MB vs ~35 MB)
+
+See workflow file for complete documentation.
 
 ## Updating Binary Payloads
 

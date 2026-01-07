@@ -22,12 +22,11 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 | Linux    | x86_64      | 21.1.5            | lld         | -                    |
 | Linux    | arm64       | 21.1.5            | lld         | -                    |
 
-*Version information as of January 4, 2026*
+*Version information as of January 7, 2026*
 
 **Linker Notes:**
-- **macOS**: Both x86_64 and ARM64 use LLVM 21.1.6 (supports `-fuse-ld` flag), but system linker (ld64) still used by default
+- **macOS**: Both ARM64 and x86_64 use LLVM 21.1.6 (supports `-fuse-ld` flag). Both use system linker (ld64) by default.
 - **Linux/Windows**: Uses LLVM lld for faster linking and cross-platform consistency
-- **Future**: macOS may switch to lld for consistency with Linux/Windows
 
 **Note:** The LLVM versions listed above are for the main clang-tool-chain toolchain. Emscripten uses its own bundled LLVM (LLVM 22 for Emscripten 4.0.19), which is installed separately and does not share binaries with the main toolchain.
 
@@ -47,22 +46,24 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 | Platform | Architecture | LLDB Version | Python Support | Status |
 |----------|-------------|--------------|----------------|--------|
-| Windows  | x86_64      | 21.1.5       | ✅ Full (Python 3.10 bundled) | ✅ Complete |
+| Windows  | x86_64      | 21.1.5       | ✅ Ready (workflow available) | ⏳ Build Pending |
 | Linux    | x86_64      | 21.1.5       | ✅ Full (Python 3.10 ready) | ⏳ Wrapper Ready, Archives Pending |
 | Linux    | arm64       | 21.1.5       | ✅ Full (Python 3.10 ready) | ⏳ Wrapper Ready, Archives Pending |
 | macOS    | x86_64      | 21.1.6       | ⏳ Planned            | ⏳ Pending |
 | macOS    | arm64       | 21.1.6       | ⏳ Planned            | ⏳ Pending |
 
-*LLDB support added January 2026 (Windows x64 complete, Linux wrapper integration complete)*
+*LLDB support added January 2026 (wrapper integration complete for Windows/Linux, automated build workflows deployed)*
 
 **Python 3.10 Bundling:**
 
-*Windows x64 (Complete):*
-- **Full Python 3.10 included**: python310.dll + standard library + LLDB Python module
-- **Download size**: ~30 MB compressed (was ~29 MB, +1 MB increase)
-- **No system Python required**: All advanced features work out of the box
-- **Enables**: Full "bt all" backtraces, Python scripting, advanced variable inspection, LLDB Python API
-- **Size efficiency**: Binary deduplication (liblldb.dll + _lldb.pyd) keeps size minimal
+*Windows x64 (Build Workflow Ready):*
+- **Automated workflow available**: `.github/workflows/build-lldb-archives-windows.yml`
+- **Code changes complete**: Scripts extract python310.dll + standard library + LLDB Python module
+- **Expected archive size**: ~35 MB compressed (+5 MB from current ~30 MB)
+- **Status**: Archive rebuild pending maintainer action (workflow ready to execute)
+- **Expected features after rebuild**: Full "bt all" backtraces, Python scripting, advanced variable inspection, LLDB Python API
+- **Current workaround**: Users experiencing python310.dll errors should wait for next archive rebuild
+- **Technical details**: See [Iteration 5 Documentation](.agent_task/ITERATION_5.md)
 
 *Linux x86_64/ARM64 (Wrapper Ready):*
 - **Python 3.10 integration complete**: Wrapper configured with PYTHONPATH/PYTHONHOME
