@@ -514,6 +514,80 @@ int main() {
                 "Even if old mingw dir exists, integrated headers should be present",
             )
 
+    def test_pthread_usage(self) -> None:
+        """
+        Test that pthread headers and libraries work correctly with GNU ABI.
+
+        This verifies that MinGW's winpthreads library is accessible and that
+        threading support works after the include path ordering fix. MinGW headers
+        (including pthread.h) should be available via -isystem, while Clang's
+        standard headers take precedence via -I.
+        """
+        test_file = self.temp_path / "test_pthread.cpp"
+        test_code = """#include <pthread.h>
+#include <iostream>
+
+void* thread_func(void* arg) {
+    std::cout << "Thread running" << std::endl;
+    return nullptr;
+}
+
+int main() {
+    pthread_t thread;
+    int result = pthread_create(&thread, nullptr, thread_func, nullptr);
+    if (result != 0) {
+        std::cerr << "Failed to create thread" << std::endl;
+        return 1;
+    }
+    pthread_join(thread, nullptr);
+    std::cout << "Thread completed" << std::endl;
+    return 0;
+}
+"""
+        test_file.write_text(test_code)
+        exe_file = self.temp_path / "test_pthread.exe"
+
+        try:
+            # Compile and link with pthread support
+            result = subprocess.run(
+                ["clang-tool-chain-cpp", str(test_file), "-o", str(exe_file)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=str(self.temp_path),
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"pthread compilation should succeed.\nstdout: {result.stdout}\nstderr: {result.stderr}",
+            )
+            self.assertTrue(exe_file.exists(), "Executable should be created")
+
+            # Run the program to verify pthread works
+            run_result = subprocess.run(
+                [str(exe_file)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5
+            )
+
+            self.assertEqual(
+                run_result.returncode, 0, f"pthread program should run successfully.\nstderr: {run_result.stderr}"
+            )
+            self.assertIn(
+                "Thread running",
+                run_result.stdout,
+                f"Output should contain 'Thread running'. Got: {run_result.stdout}",
+            )
+            self.assertIn(
+                "Thread completed",
+                run_result.stdout,
+                f"Output should contain 'Thread completed'. Got: {run_result.stdout}",
+            )
+        finally:
+            for f in [test_file, exe_file]:
+                if f.exists():
+                    f.unlink()
+
 
 @unittest.skipUnless(sys.platform == "win32", "MSVC ABI tests are Windows-only")
 class TestMSVCABI(unittest.TestCase):

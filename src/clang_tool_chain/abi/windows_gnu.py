@@ -160,9 +160,19 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
     # Add -D_LIBCPP_HAS_THREAD_API_PTHREAD to ensure libc++ uses pthread threading
     # This is required for MinGW-w64 where winpthreads provides pthread compatibility
     #
-    # NOTE: We add explicit -I paths for MinGW headers because they're in the parent directory
-    # (clang_root/include/) rather than inside the sysroot. The sysroot itself contains
-    # the target-specific libraries and binaries.
+    # INCLUDE PATH ORDERING RATIONALE:
+    # We carefully order include paths to ensure Clang's headers take precedence over MinGW headers.
+    # This prevents GCC-specific headers from interfering with Clang compilation.
+    #
+    # Search order (high to low priority):
+    # 1. libc++ C++ standard library headers (include/c++/v1) - HIGH priority via -I
+    # 2. Clang resource headers (lib/clang/*/include) - HIGH priority via -I
+    # 3. MinGW platform headers (include/) - SYSTEM priority via -isystem
+    # 4. Sysroot libraries and binaries - via --sysroot
+    #
+    # We use -isystem for MinGW headers (instead of -I) to give them lower search priority.
+    # This ensures Clang's intrinsic headers (stddef.h, stdarg.h, etc.) are found first,
+    # while still making MinGW platform headers (windows.h, pthread.h) available.
     cxx_include_path = clang_root / "include" / "c++" / "v1"
     mingw_include_path = clang_root / "include"
 
@@ -180,26 +190,31 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
             if not resource_include_path.exists():
                 resource_include_path = None
 
+    # Build include path arguments in correct priority order
     gnu_args.extend(
         [
             f"--sysroot={sysroot_path}",
             "-stdlib=libc++",
             "-D_LIBCPP_HAS_THREAD_API_PTHREAD",
-            f"-I{cxx_include_path}",
-            f"-I{mingw_include_path}",
+            f"-I{cxx_include_path}",  # 1. libc++ headers (HIGH priority)
         ]
     )
 
     # Add resource directory if found (needed for both headers and libraries)
     # This sets the base directory for clang's resource files (includes and libs)
     if resource_include_path:
-        gnu_args.append(f"-I{resource_include_path}")
+        gnu_args.append(f"-I{resource_include_path}")  # 2. Clang resource headers (HIGH priority)
         logger.debug(f"Added clang resource include path: {resource_include_path}")
         # Also set the resource-dir to point to the correct version directory
         # This is critical for linking with libclang_rt.builtins.a and other runtime libs
         resource_dir = resource_include_path.parent  # lib/clang/<version>/
         gnu_args.append(f"-resource-dir={resource_dir}")
         logger.debug(f"Set resource directory: {resource_dir}")
+
+    # Add MinGW headers with -isystem (SYSTEM priority, lower than -I)
+    # This prevents MinGW/GCC headers from overriding Clang's standard headers
+    gnu_args.append(f"-isystem{mingw_include_path}")  # 3. MinGW headers (SYSTEM priority)
+    logger.debug(f"Added MinGW include path with -isystem: {mingw_include_path}")
 
     # Only add link-time flags if not compiling only
     if not is_compile_only:
