@@ -17,14 +17,14 @@ This package provides LLDB (LLVM Debugger) integration for debugging C/C++ progr
 
 | Platform | Architecture | LLDB Version | Archive Size | Python Support | Status |
 |----------|-------------|--------------|--------------|----------------|--------|
-| Windows  | x86_64      | 21.1.5       | ~30 MB       | ✅ Full (3.10) | ✅ Complete |
+| Windows  | x86_64      | 21.1.5       | ~35 MB (est.) | ✅ Ready (workflow) | ⏳ Build Pending |
 | Linux    | x86_64      | 21.1.5       | ~10-11 MB (est.) | ✅ Full (3.10) | ⏳ Wrapper Ready, Archives Pending |
 | Linux    | arm64       | 21.1.5       | ~10-11 MB (est.) | ✅ Full (3.10) | ⏳ Wrapper Ready, Archives Pending |
-| macOS    | x86_64      | 21.1.6       | ~7 MB        | ⏳ Pending     | ⏳ Pending |
+| macOS    | x86_64      | 19.1.7       | ~7 MB        | ⏳ Pending     | ⏳ Pending (LLVM 21.x upgrade needed) |
 | macOS    | arm64       | 21.1.6       | ~7 MB        | ⏳ Pending     | ⏳ Pending |
 
 **Current Status:**
-- **Windows x64:** ✅ Complete - Full Python 3.10 bundled, all features working
+- **Windows x64:** ⏳ Build Workflow Ready - Code changes complete, automated workflow available, archive rebuild pending maintainer action
 - **Linux x86_64/ARM64:** ⏳ Wrapper integration complete, CI/CD workflow deployed, archives pending manual trigger
 - **macOS:** Framework ready, binary distribution pending
 
@@ -424,28 +424,35 @@ This suggests libunwind is available in the MinGW sysroot on Windows.
 
 ## Python Support
 
-### Windows x64 - Full Python 3.10 Bundled ✅
+### Windows x64 - Python 3.10 Bundling Ready ⏳
 
-LLDB on Windows x64 now includes **complete Python 3.10 support** bundled in the archive, enabling all advanced debugging features out of the box:
+LLDB on Windows x64 has **Python 3.10 support ready** with code changes complete and automated workflow available. Archive rebuild is pending maintainer action.
 
-**Bundled Components:**
+**What Will Be Bundled (After Rebuild):**
 - ✅ python310.dll (4.3 MB) - Python runtime DLL
 - ✅ Python standard library (python310.zip) - Core Python modules
 - ✅ LLDB Python module (_lldb.pyd + lldb package) - Full LLDB Python API
 
-**What This Enables:**
+**What This Will Enable:**
 - ✅ Full stack backtraces using "bt all" command with threading support
 - ✅ Advanced variable inspection beyond basic frame variables
 - ✅ Python scripting and custom commands
 - ✅ LLDB Python API usage
 - ✅ All interactive debugging features
 
-**No system Python required!** Everything works out of the box after installation.
+**Current Status:**
+- ✅ Code changes complete (Iteration 3) - Scripts extract python310.dll correctly
+- ✅ Automated workflow available (Iteration 5) - `.github/workflows/build-lldb-archives-windows.yml`
+- ⏳ Archive rebuild pending - Requires maintainer to execute workflow
+- ⏳ Archive deployment pending - New archive must be uploaded and manifest updated
 
-**Archive Size Impact:**
-- Previous size (without Python): ~29 MB compressed
-- Current size (with full Python): ~30 MB compressed
-- Size increase: Only ~1 MB due to efficient binary deduplication (zstd level 22)
+**Expected Archive Size (After Rebuild):**
+- Previous size (current): ~30 MB compressed
+- Expected size (with python310.dll): ~35 MB compressed
+- Size increase: +5 MB due to python310.dll inclusion
+
+**Workaround:**
+Users experiencing python310.dll errors should wait for the next archive rebuild. The workflow is ready and documented in [Iteration 5](.agent_task/ITERATION_5.md).
 
 ### Linux (x86_64 and ARM64) - Python 3.10 Bundling Ready ⏳
 
@@ -592,6 +599,52 @@ find ~/.clang-tool-chain/clang/ -name "*unwind*"
 sudo apt install libunwind-dev        # Ubuntu/Debian
 sudo dnf install libunwind-devel      # Fedora/RHEL
 sudo pacman -S libunwind              # Arch Linux
+```
+
+### Issue: python310.dll not found (Windows)
+
+**Symptoms:**
+```
+The code execution cannot proceed because python310.dll was not found.
+Reinstalling the program may fix this problem.
+```
+
+**Root Cause:**
+The current distributed LLDB archive for Windows was built before python310.dll bundling was implemented. The code changes are complete (Iteration 3) and the automated build workflow is ready (Iteration 5), but the archive has not been rebuilt yet.
+
+**Status:**
+- ✅ Scripts extract python310.dll correctly (committed in Iteration 3)
+- ✅ Automated workflow available: `.github/workflows/build-lldb-archives-windows.yml`
+- ✅ Error handling works (clear diagnostic messages)
+- ✅ Diagnostic tool available: `clang-tool-chain-lldb-check-python`
+- ⏳ Archive rebuild pending maintainer action
+
+**Workaround:**
+Wait for the next archive rebuild. The maintainer must execute the GitHub Actions workflow to build and deploy the updated archive.
+
+**For Maintainers:**
+Execute the Windows LLDB build workflow:
+1. GitHub → Actions → "Build LLDB Archives (Windows)"
+2. Click "Run workflow"
+3. Wait ~60-90 minutes for build
+4. Download artifacts (archive + SHA256)
+5. Deploy to repository and update manifest
+
+See [Iteration 5 Documentation](.agent_task/ITERATION_5.md) for complete instructions.
+
+**Verification after rebuild:**
+```bash
+# Check Python environment status
+clang-tool-chain-lldb-check-python
+# Should show: "Status: READY"
+
+# Verify python310.dll exists
+ls ~/.clang-tool-chain/lldb-windows-x86_64/bin/python310.dll
+ls ~/.clang-tool-chain/lldb-windows-x86_64/python/python310.dll
+
+# Test LLDB launch
+clang-tool-chain-lldb --version
+# Should work without DLL errors
 ```
 
 ### Issue: LLDB crashes on startup (Windows)
@@ -860,7 +913,7 @@ ls -lh assets/lldb/linux/x86_64/lldb-21.1.5-linux-x86_64.tar.zst
 ls -lh assets/lldb/linux/arm64/lldb-21.1.5-linux-arm64.tar.zst
 
 # If files not present: Archives pending manual workflow trigger
-# See: .agent_task/WORKFLOW_TRIGGER_GUIDE.md for instructions
+# See: docs/MAINTAINER.md section "Linux LLDB Archive Build Workflow" for instructions
 
 # Once archives available:
 cd ../clang-tool-chain/

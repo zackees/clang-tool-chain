@@ -41,7 +41,7 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
     # - macOS x86_64: LLVM 19.1.7 (doesn't support -fuse-ld flag) ❌
     # Cannot enable lld until both architectures support it to maintain consistent behavior
     # This causes compilation failures on x86_64 with: "clang: error: invalid linker name in argument '-fuse-ld=...'"
-    # TODO: Re-enable when x86_64 upgrades to LLVM 21.1.6+ (blocked: no pre-built binary available)
+    # TODO: Re-enable when x86_64 upgrades to LLVM 21.x+ (blocked: no pre-built binary available)
     if platform_name == "darwin":
         logger.info("Skipping lld on macOS (x86_64 LLVM 19.1.7 doesn't support -fuse-ld flag)")
         return False

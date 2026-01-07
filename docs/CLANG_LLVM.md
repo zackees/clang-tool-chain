@@ -146,7 +146,7 @@ The injection is skipped when:
 - User sets `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` (opt-out)
 - User already specified `-fuse-ld=` in arguments
 - Compile-only operation (`-c` flag present, no linking)
-- Platform is macOS (temporarily disabled until x86_64 upgrades to LLVM 21.1.6+)
+- Platform is macOS (temporarily disabled until x86_64 upgrades to LLVM 21.x+)
 
 **Environment Variables:**
 ```bash

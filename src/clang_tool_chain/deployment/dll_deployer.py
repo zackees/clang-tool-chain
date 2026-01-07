@@ -254,28 +254,33 @@ def detect_required_dlls(exe_path: Path, platform_name: str = "win", arch: str =
 
 def _atomic_copy_dll(src_dll: Path, dest_dll: Path) -> bool:
     """
-    Atomically copy a DLL using temp file + rename pattern to avoid race conditions.
+    Atomically deploy a DLL using hard links (preferred) or file copy with atomic rename.
 
     This function ensures that concurrent compilations writing to the same directory
     don't corrupt DLL files. Uses the following algorithm:
-    1. Copy source to a temporary file (unique name)
-    2. Attempt atomic rename to destination
-    3. If rename fails due to existing file (race condition), clean up temp and return success
-    4. If other errors occur, clean up temp and raise
+    1. Check timestamp - skip if destination is up-to-date
+    2. Try to create hard link (zero disk space, instant operation)
+    3. If hard link fails, fall back to copy + atomic rename
+    4. Handle race conditions gracefully
+
+    Hard links are preferred because:
+    - Zero additional disk space (same inode)
+    - Instant operation (no data copy)
+    - Automatic updates (if source DLL changes, all links reflect it)
 
     Args:
         src_dll: Source DLL path in MinGW sysroot
         dest_dll: Destination DLL path in executable directory
 
     Returns:
-        True if DLL was copied/updated, False if skipped (already up-to-date)
+        True if DLL was deployed/updated, False if skipped (already up-to-date)
 
     Raises:
-        OSError: If copy or rename fails (other than race condition)
+        OSError: If deployment fails (other than race condition)
 
     Examples:
         >>> _atomic_copy_dll(Path("/src/libwinpthread-1.dll"), Path("/dest/libwinpthread-1.dll"))
-        True  # DLL copied successfully
+        True  # DLL deployed successfully (hard link or copy)
     """
     # Check if destination exists and compare timestamps
     if dest_dll.exists():
@@ -287,6 +292,24 @@ def _atomic_copy_dll(src_dll: Path, dest_dll: Path) -> bool:
             logger.debug(f"Skipped (up-to-date): {dest_dll.name}")
             return False
 
+        # Destination exists but is outdated - remove it before deployment
+        try:
+            dest_dll.unlink()
+        except OSError as e:
+            logger.debug(f"Could not remove outdated {dest_dll.name}: {e}")
+            # Continue anyway - hard link/copy will fail if can't remove
+
+    # Try hard link first (preferred - zero disk space, instant)
+    try:
+        os.link(src_dll, dest_dll)
+        logger.debug(f"Deployed (hard link): {dest_dll.name}")
+        return True
+    except (OSError, NotImplementedError) as e:
+        # Hard link failed - fall back to copy
+        # Common reasons: cross-filesystem, permissions, filesystem doesn't support hard links
+        logger.debug(f"Hard link failed for {dest_dll.name} ({e.__class__.__name__}), falling back to copy")
+
+    # Fallback: Copy with atomic rename
     # Create temporary file in destination directory with unique name
     # Format: .{dll_name}.{uuid}.tmp
     temp_name = f".{dest_dll.name}.{uuid.uuid4().hex[:8]}.tmp"
@@ -309,7 +332,7 @@ def _atomic_copy_dll(src_dll: Path, dest_dll: Path) -> bool:
                 # POSIX: rename is atomic and replaces existing files
                 temp_dll.rename(dest_dll)
 
-            logger.debug(f"Deployed (atomic): {dest_dll.name}")
+            logger.debug(f"Deployed (copy): {dest_dll.name}")
             return True
 
         except FileExistsError:

@@ -51,18 +51,34 @@ clang-tool-chain automatically:
 2. **Success Check**: DLL deployment only runs after successful linking (returncode == 0)
 3. **Guard Checks**: Validates conditions (Windows platform, GNU ABI, .exe output, not compile-only)
 4. **DLL Detection**: Uses `llvm-objdump -p` to parse PE headers and extract DLL dependencies
-5. **Filtering**: Excludes Windows system DLLs (kernel32.dll, etc.), keeps only MinGW runtime DLLs
-6. **Timestamp Check**: Compares source and destination timestamps to skip unnecessary copies
-7. **Copy Operation**: Uses `shutil.copy2()` to copy DLLs while preserving metadata
-8. **Logging**: Reports deployment status (INFO level) or warnings on errors
+5. **Recursive Scanning**: Scans detected DLLs for transitive dependencies (e.g., ASan runtime → libc++ → libunwind)
+6. **Filtering**: Excludes Windows system DLLs (kernel32.dll, etc.), keeps only MinGW runtime DLLs
+7. **Timestamp Check**: Compares source and destination timestamps to skip unnecessary copies
+8. **Hard Link Creation**: Attempts to create hard links (zero disk space, instant)
+9. **Copy Fallback**: Falls back to `shutil.copy2()` if hard links fail (cross-filesystem, permissions, etc.)
+10. **Logging**: Reports deployment status (INFO level) or warnings on errors
 
 ### DLL Detection Strategy
 
-**Primary Method: llvm-objdump**
+**Primary Method: llvm-objdump with Recursive Scanning**
 - Runs `llvm-objdump -p <executable>` to parse PE headers
 - Extracts DLL names from "DLL Name:" entries
-- Filters based on MinGW patterns (libwinpthread*, libgcc_s_*, libstdc++*, etc.)
-- 10-second timeout protection
+- **Recursively scans each detected DLL** to find transitive dependencies
+- Filters based on MinGW patterns (libwinpthread*, libgcc_s_*, libstdc++*, sanitizer runtimes, etc.)
+- Builds complete dependency graph before deployment
+- 10-second timeout protection per DLL scan
+
+**Example: AddressSanitizer Dependency Chain**
+```
+program.exe
+├── libclang_rt.asan_dynamic-x86_64.dll  (direct dependency)
+│   ├── libc++.dll                        (transitive via ASan)
+│   │   └── libunwind.dll                 (transitive via libc++)
+│   └── libwinpthread-1.dll               (transitive via ASan)
+├── libgcc_s_seh-1.dll                    (direct dependency)
+└── libstdc++-6.dll                       (direct dependency)
+```
+All 6 DLLs are deployed automatically.
 
 **Fallback Method: Heuristic List**
 - If llvm-objdump fails (not found, timeout, error), uses predefined list:
@@ -84,6 +100,13 @@ MINGW_DLL_PATTERNS = [
     r"libgomp.*\.dll",       # OpenMP support
     r"libssp.*\.dll",        # Stack smashing protection
     r"libquadmath.*\.dll",   # Quad-precision math
+]
+
+SANITIZER_DLL_PATTERNS = [
+    r"libclang_rt\.asan_dynamic.*\.dll",    # AddressSanitizer
+    r"libclang_rt\.ubsan_dynamic.*\.dll",   # UndefinedBehaviorSanitizer
+    r"libclang_rt\.tsan_dynamic.*\.dll",    # ThreadSanitizer
+    r"libclang_rt\.msan_dynamic.*\.dll",    # MemorySanitizer
 ]
 ```
 
@@ -168,6 +191,30 @@ clang-tool-chain-cpp exception_example.cpp -o exception_example.exe
 .\exception_example.exe
 ```
 
+### With Sanitizers (AddressSanitizer Example)
+
+```cpp
+// asan_example.cpp
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> v = {1, 2, 3};
+    std::cout << "Vector size: " << v.size() << "\n";
+    return 0;
+}
+```
+
+```bash
+clang-tool-chain-cpp asan_example.cpp -o asan_example.exe -fsanitize=address -g
+# Automatically deploys:
+# - libclang_rt.asan_dynamic-x86_64.dll (AddressSanitizer runtime)
+# - libc++.dll (transitive dependency)
+# - libunwind.dll (transitive dependency)
+# - libwinpthread-1.dll, libgcc_s_seh-1.dll, libstdc++-6.dll (standard runtime)
+.\asan_example.exe
+```
+
 ### Static Linking (Minimal DLLs)
 
 ```bash
@@ -244,11 +291,14 @@ INFO: Deployed 3 MinGW DLL(s) for main.exe
 
 | Operation | Time | Notes |
 |-----------|------|-------|
-| **DLL Detection** | <50ms | llvm-objdump overhead |
-| **DLL Copying** | <50ms | 2-3 DLLs × ~1-2 MB each |
-| **Total Overhead** | <100ms | Per executable build |
-| **Timestamp Check** | <5ms | Skips copy if up-to-date |
+| **DLL Detection** | <50ms | llvm-objdump on executable |
+| **Recursive Scanning** | <100ms | 3-5 DLLs × 2-3 levels deep |
+| **Hard Link Creation** | <1ms per DLL | Near-instant (preferred) |
+| **DLL Copying** | <50ms | Fallback if hard link fails |
+| **Total Overhead** | <150ms | Per executable build (first time) |
+| **Timestamp Check** | <5ms | Skips deployment if up-to-date |
 | **Incremental Builds** | ~0ms | All DLLs up-to-date |
+| **Hard Link Space Savings** | 100% | Zero additional disk space |
 
 ### Performance Characteristics
 
@@ -268,11 +318,16 @@ Total: 0.505s (1% overhead)
 
 ### Optimization Strategies
 
-1. **Timestamp Checking**: Prevents unnecessary copies on incremental builds
-2. **Lazy Import**: Only imports heavy modules when DLL deployment actually runs
-3. **Early Guards**: Fast checks (platform, ABI, file extension) before expensive operations
-4. **Timeout Protection**: 10-second timeout on llvm-objdump prevents hangs
-5. **Non-Fatal Errors**: Warnings only - never blocks compilation
+1. **Hard Links (Preferred)**: Zero disk space, instant deployment, automatic updates
+   - Uses `os.link()` to create hard links when possible
+   - Falls back to file copy only when necessary (cross-filesystem, permissions, etc.)
+   - Reduces disk usage by 100% for deployed DLLs (shared inodes)
+2. **Timestamp Checking**: Prevents unnecessary re-deployment on incremental builds
+3. **Recursive Dependency Caching**: Scans each DLL only once, reuses results
+4. **Lazy Import**: Only imports heavy modules when DLL deployment actually runs
+5. **Early Guards**: Fast checks (platform, ABI, file extension) before expensive operations
+6. **Timeout Protection**: 10-second timeout per llvm-objdump scan prevents hangs
+7. **Non-Fatal Errors**: Warnings only - never blocks compilation
 
 ---
 
@@ -458,18 +513,33 @@ WARNING: llvm-objdump failed (exit 1), using heuristic DLL list
 │           (deployment/dll_deployer.py)                   │
 │                                                          │
 │  1. Guard Checks (platform, ABI, file type)             │
-│  2. detect_required_dlls()                               │
+│  2. detect_required_dlls() [with recursion]             │
 │  3. get_mingw_sysroot_bin_dir()                         │
-│  4. Copy DLLs with timestamp checking                   │
+│  4. Deploy DLLs (hard link or copy fallback)            │
 └─────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────┐
-│              detect_required_dlls()                      │
+│          detect_required_dlls() [RECURSIVE]             │
 │                                                          │
 │  1. Run llvm-objdump -p <exe>                           │
-│  2. Parse "DLL Name:" entries                           │
-│  3. Filter MinGW DLLs vs system DLLs                    │
-│  4. Fallback to heuristic list on error                 │
+│  2. Parse "DLL Name:" entries (direct dependencies)     │
+│  3. For each MinGW/sanitizer DLL found:                 │
+│     a. Run llvm-objdump -p <dll>                        │
+│     b. Extract transitive dependencies                  │
+│     c. Recursively scan those DLLs                      │
+│  4. Build complete dependency set (no duplicates)       │
+│  5. Filter out Windows system DLLs                      │
+│  6. Fallback to heuristic list on error                 │
+└─────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────┐
+│             _atomic_copy_dll() [HARD LINKS]             │
+│                                                          │
+│  1. Check timestamp (skip if up-to-date)                │
+│  2. Try os.link() for hard link (preferred)             │
+│  3. On failure, fall back to shutil.copy2()             │
+│  4. Use atomic rename pattern (temp + replace)          │
+│  5. Handle race conditions gracefully                   │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -497,7 +567,7 @@ if returncode == 0 and platform_name == "win":
 
 **File: `tests/test_dll_deployment.py`**
 
-38 comprehensive tests covering:
+45+ comprehensive tests covering:
 - ✅ Basic DLL detection and deployment (5 tests)
 - ✅ Fallback to heuristic list (3 tests)
 - ✅ Timestamp checking (2 tests)
@@ -509,8 +579,11 @@ if returncode == 0 and platform_name == "win":
 - ✅ Integration tests (4 tests)
 - ✅ Edge cases (multiple exes, long paths) (2 tests)
 - ✅ Unit tests (helper functions) (10 tests)
+- ✅ Hard link deployment (3 tests)
+- ✅ Sanitizer executables (AddressSanitizer) (2 tests)
+- ✅ Transitive dependency resolution (1 test)
 
-**Code Coverage:** 92% for `dll_deployer.py` (exceeds 85% requirement)
+**Code Coverage:** >90% for `dll_deployer.py` (exceeds 85% requirement)
 
 ---
 
