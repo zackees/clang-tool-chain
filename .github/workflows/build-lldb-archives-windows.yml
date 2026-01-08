@@ -176,7 +176,16 @@ jobs:
           cd downloads-bins/tools
 
           # Find the extracted LLVM directory
+          echo "Searching for extracted LLDB files..."
+          find ../work/lldb_windows_x64_extracted -type f -name "lldb.exe" -o -name "liblldb.dll" || echo "No LLDB files found"
+
           LLVM_ROOT=$(find ../work/lldb_windows_x64_extracted -type d -name "bin" | head -1 | xargs dirname)
+          if [ -z "$LLVM_ROOT" ]; then
+            echo "ERROR: Could not find bin directory in extracted LLDB files"
+            echo "Directory structure:"
+            ls -lhR ../work/lldb_windows_x64_extracted/
+            exit 1
+          fi
           echo "Using LLVM root: $LLVM_ROOT"
 
           # Build LLDB archive with Python 3.10 modules (including python310.dll)
