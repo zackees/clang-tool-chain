@@ -65,47 +65,31 @@ jobs:
           fi
         shell: bash
 
-      - name: Extract LLDB from existing clang archive
+      - name: Download and extract LLDB from official LLVM release
         run: |
           cd downloads-bins/work
           mkdir -p lldb_windows_x64_extracted
           cd lldb_windows_x64_extracted
 
-          echo "Extracting clang archive to get LLDB binaries..."
-          # The clang archive already contains LLDB binaries
-          python -c "
-          import sys
-          sys.path.insert(0, '../../..')
-          import tarfile
-          import zstandard as zstd
-          from pathlib import Path
-          import io
+          echo "Downloading LLVM ${{ github.event.inputs.llvm_version }} Windows installer..."
+          # Download official LLVM Windows installer
+          curl -L -o LLVM-${{ github.event.inputs.llvm_version }}-win64.exe \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ github.event.inputs.llvm_version }}/LLVM-${{ github.event.inputs.llvm_version }}-win64.exe"
 
-          archive_path = Path('../../../downloads-bins/assets/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst')
-          print(f'Extracting {archive_path}...')
+          echo "Download complete. File size:"
+          ls -lh LLVM-${{ github.event.inputs.llvm_version }}-win64.exe
 
-          # Read and decompress the zstd file
-          dctx = zstd.ZstdDecompressor()
-          with open(archive_path, 'rb') as compressed:
-              print(f'Decompressing {archive_path.stat().st_size / (1024*1024):.2f} MB...')
-              decompressed_data = dctx.decompress(compressed.read())
-              print(f'Decompressed to {len(decompressed_data) / (1024*1024):.2f} MB')
+          echo "Extracting LLVM installer with 7z..."
+          7z x "LLVM-${{ github.event.inputs.llvm_version }}-win64.exe" -o"extracted" -y
 
-          # Extract LLDB-related files from the tar
-          with tarfile.open(fileobj=io.BytesIO(decompressed_data), mode='r|') as tar:
-              for member in tar:
-                  if any(name in member.name for name in ['lldb.exe', 'lldb-server.exe', 'lldb-argdumper.exe', 'liblldb.dll']):
-                      print(f'  Extracting: {member.name} ({member.size / (1024*1024):.2f} MB)')
-                      tar.extract(member, path='.')
+          echo "Extracted directory structure:"
+          ls -lhR extracted/
 
-          print('Extraction complete')
-          "
+          echo "Searching for LLDB binaries..."
+          find extracted -name "lldb*.exe" -o -name "liblldb.dll" || echo "LLDB files not found yet"
 
-          echo "Extracted LLDB binaries:"
-          find . -name "lldb*.exe" -o -name "liblldb.dll"
-
-          echo "Full directory listing after extraction:"
-          ls -lhR .
+          echo "Searching for bin directory..."
+          find extracted -type d -name "bin" || echo "bin directory not found"
         shell: bash
 
       - name: Prepare Python modules for LLDB
@@ -178,18 +162,24 @@ jobs:
         run: |
           cd downloads-bins/tools
 
-          # Find the extracted LLVM directory
+          # Find the extracted LLVM directory (inside extracted/ subdirectory)
           echo "Searching for extracted LLDB files..."
-          find ../work/lldb_windows_x64_extracted -type f -name "lldb.exe" -o -name "liblldb.dll" || echo "No LLDB files found"
+          find ../work/lldb_windows_x64_extracted/extracted -type f -name "lldb.exe" 2>/dev/null || echo "lldb.exe not found yet"
+          find ../work/lldb_windows_x64_extracted/extracted -type f -name "liblldb.dll" 2>/dev/null || echo "liblldb.dll not found yet"
 
-          LLVM_ROOT=$(find ../work/lldb_windows_x64_extracted -type d -name "bin" | head -1 | xargs dirname)
-          if [ -z "$LLVM_ROOT" ]; then
-            echo "ERROR: Could not find bin directory in extracted LLDB files"
-            echo "Directory structure:"
+          # Find bin directory containing LLDB
+          LLVM_BIN=$(find ../work/lldb_windows_x64_extracted/extracted -type d -name "bin" -exec test -f {}/lldb.exe \; -print | head -1)
+          if [ -z "$LLVM_BIN" ]; then
+            echo "ERROR: Could not find bin directory with lldb.exe"
+            echo "Full directory structure:"
             ls -lhR ../work/lldb_windows_x64_extracted/
             exit 1
           fi
-          echo "Using LLVM root: $LLVM_ROOT"
+
+          LLVM_ROOT=$(dirname "$LLVM_BIN")
+          echo "Found LLVM root: $LLVM_ROOT"
+          echo "Contents of bin directory:"
+          ls -lh "$LLVM_BIN" | grep -i lldb || echo "No LLDB files found in bin/"
 
           # Build LLDB archive with Python 3.10 modules (including python310.dll)
           python create_lldb_archives.py \
