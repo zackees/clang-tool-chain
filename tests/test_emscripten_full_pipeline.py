@@ -20,22 +20,7 @@ from pathlib import Path
 import pytest
 
 
-def is_emscripten_available() -> bool:
-    """Check if Emscripten binaries are available for this platform."""
-    try:
-        result = subprocess.run(
-            ["clang-tool-chain-emcc", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
 @pytest.mark.serial
-@pytest.mark.skipif(not is_emscripten_available(), reason="Emscripten binaries not available for this platform")
 class TestEmscriptenCompilationPipeline:
     """Comprehensive Emscripten compilation pipeline tests."""
 
