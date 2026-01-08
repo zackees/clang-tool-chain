@@ -276,19 +276,8 @@ int main() {
         - Source file references accurate
         - If Python bundled: No Python-related errors in output
         """
-        # Check if Python is bundled with LLDB
-        from clang_tool_chain.execution.lldb import check_lldb_python_environment
-
-        python_env = check_lldb_python_environment()
-        python_bundled = python_env["status"] == "ready"
-
-        if not python_bundled:
-            self.skipTest(
-                f"Python is not bundled with LLDB installation (status: {python_env['status']}). "
-                f"Message: {python_env['message']}. "
-                "This test requires LLDB with Python 3.10 site-packages. "
-                "The LLDB distribution may not include Python modules yet."
-            )
+        # Python is now bundled with LLDB (as of commit 255fbe2)
+        # If this test fails, run: clang-tool-chain purge --yes && clang-tool-chain install clang
         # Create a test C file with deep call stack (7 levels)
         deep_stack_c = self.temp_path / "deep_stack.c"
         deep_stack_c.write_text(
