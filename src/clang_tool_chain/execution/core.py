@@ -339,7 +339,16 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
 
     Args:
         use_msvc: If True on Windows, use MSVC ABI instead of GNU ABI
+
+    Environment Variables:
+        SCCACHE_IDLE_TIMEOUT: Set to 5 seconds to minimize file locking window
     """
+    # Set sccache idle timeout to 5 seconds to minimize file locking window
+    # This prevents sccache daemon from holding .venv/Scripts/sccache.exe locked
+    # for extended periods, which blocks pip/uv package updates
+    if "SCCACHE_IDLE_TIMEOUT" not in os.environ:
+        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
+
     args = sys.argv[1:]
 
     try:
@@ -431,7 +440,16 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
 
     Args:
         use_msvc: If True on Windows, use MSVC ABI instead of GNU ABI
+
+    Environment Variables:
+        SCCACHE_IDLE_TIMEOUT: Set to 5 seconds to minimize file locking window
     """
+    # Set sccache idle timeout to 5 seconds to minimize file locking window
+    # This prevents sccache daemon from holding .venv/Scripts/sccache.exe locked
+    # for extended periods, which blocks pip/uv package updates
+    if "SCCACHE_IDLE_TIMEOUT" not in os.environ:
+        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
+
     args = sys.argv[1:]
 
     try:

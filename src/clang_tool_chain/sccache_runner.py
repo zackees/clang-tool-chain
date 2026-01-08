@@ -46,6 +46,9 @@ def run_sccache_via_isoenv(args: list[str]) -> int:
 
     Returns:
         Exit code from sccache execution
+
+    Environment Variables:
+        SCCACHE_IDLE_TIMEOUT: Set to 5 seconds to minimize file locking window
     """
     try:
         from iso_env import IsoEnv, IsoEnvArgs, Requirements
@@ -65,6 +68,14 @@ def run_sccache_via_isoenv(args: list[str]) -> int:
         return 1
 
     cache_dir = get_iso_env_cache_dir()
+
+    # Set sccache idle timeout to 5 seconds to minimize file locking window
+    # This prevents sccache daemon from holding .venv/Scripts/sccache.exe locked
+    # for extended periods, which blocks pip/uv package updates
+    import os
+
+    if "SCCACHE_IDLE_TIMEOUT" not in os.environ:
+        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
 
     # Create iso-env configuration for sccache
     try:
@@ -111,7 +122,18 @@ def run_sccache(args: list[str]) -> int:
 
     Returns:
         Exit code from sccache execution
+
+    Environment Variables:
+        SCCACHE_IDLE_TIMEOUT: Set to 5 seconds to minimize file locking window
     """
+    import os
+
+    # Set sccache idle timeout to 5 seconds to minimize file locking window
+    # This prevents sccache daemon from holding .venv/Scripts/sccache.exe locked
+    # for extended periods, which blocks pip/uv package updates
+    if "SCCACHE_IDLE_TIMEOUT" not in os.environ:
+        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
+
     sccache_path = get_sccache_path()
 
     if sccache_path:
@@ -141,7 +163,18 @@ def run_sccache_with_compiler(compiler_path: str, args: list[str]) -> int:
 
     Returns:
         Exit code from sccache execution
+
+    Environment Variables:
+        SCCACHE_IDLE_TIMEOUT: Set to 5 seconds to minimize file locking window
     """
+    import os
+
+    # Set sccache idle timeout to 5 seconds to minimize file locking window
+    # This prevents sccache daemon from holding .venv/Scripts/sccache.exe locked
+    # for extended periods, which blocks pip/uv package updates
+    if "SCCACHE_IDLE_TIMEOUT" not in os.environ:
+        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
+
     sccache_path = get_sccache_path()
 
     if sccache_path:
