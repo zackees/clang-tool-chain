@@ -183,7 +183,33 @@ def run_sccache_with_compiler(compiler_path: str, args: list[str]) -> int:
 
         try:
             result = subprocess.run(cmd)
-            return result.returncode
+            exit_code = result.returncode
+
+            # Post-link DLL deployment (Windows GNU ABI only)
+            if exit_code == 0:
+
+                from .abi import _should_use_gnu_abi
+                from .deployment.dll_deployer import post_link_dll_deployment
+                from .execution.core import _extract_output_path
+                from .logging_config import configure_logging
+                from .platform.detection import get_platform_info
+
+                logger = configure_logging(__name__)
+
+                platform_name, _ = get_platform_info()
+
+                # Determine tool name from compiler path (clang or clang++)
+                tool_name = "clang++" if "clang++" in compiler_path.lower() else "clang"
+
+                output_exe = _extract_output_path(args, tool_name)
+                if output_exe is not None:
+                    use_gnu = _should_use_gnu_abi(platform_name, args)
+                    try:
+                        post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                    except Exception as e:
+                        logger.warning(f"DLL deployment failed: {e}")
+
+            return exit_code
         except Exception as e:
             print(f"ERROR: Failed to execute sccache: {e}", file=sys.stderr)
             return 1
@@ -191,4 +217,29 @@ def run_sccache_with_compiler(compiler_path: str, args: list[str]) -> int:
         # sccache not found in PATH, use iso-env fallback
         print("sccache not found in PATH, using isolated environment...", file=sys.stderr)
         print(file=sys.stderr)
-        return run_sccache_via_isoenv([compiler_path] + args)
+        exit_code = run_sccache_via_isoenv([compiler_path] + args)
+
+        # Post-link DLL deployment (Windows GNU ABI only)
+        if exit_code == 0:
+            from .abi import _should_use_gnu_abi
+            from .deployment.dll_deployer import post_link_dll_deployment
+            from .execution.core import _extract_output_path
+            from .logging_config import configure_logging
+            from .platform.detection import get_platform_info
+
+            logger = configure_logging(__name__)
+
+            platform_name, _ = get_platform_info()
+
+            # Determine tool name from compiler path (clang or clang++)
+            tool_name = "clang++" if "clang++" in compiler_path.lower() else "clang"
+
+            output_exe = _extract_output_path(args, tool_name)
+            if output_exe is not None:
+                use_gnu = _should_use_gnu_abi(platform_name, args)
+                try:
+                    post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                except Exception as e:
+                    logger.warning(f"DLL deployment failed: {e}")
+
+        return exit_code
