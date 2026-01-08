@@ -242,6 +242,38 @@ class TestCLIMain(unittest.TestCase):
         output = mock_stdout.getvalue()
         self.assertIn("version", output.lower())
 
+    @patch("sys.argv", ["clang-tool-chain", "--version"])
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_main_version_flag(self, mock_stdout: StringIO) -> None:
+        """Test main with --version flag."""
+        try:
+            cli.main()
+        except SystemExit as e:
+            # argparse exits with 0 for --version
+            self.assertEqual(e.code, 0)
+
+        output = mock_stdout.getvalue()
+        self.assertIn("clang-tool-chain", output)
+        # Should contain version number pattern
+        import re
+        self.assertTrue(re.search(r'\d+\.\d+\.\d+', output), "Should contain version number")
+
+    @patch("sys.argv", ["clang-tool-chain", "-V"])
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_main_version_flag_short(self, mock_stdout: StringIO) -> None:
+        """Test main with -V flag (short version)."""
+        try:
+            cli.main()
+        except SystemExit as e:
+            # argparse exits with 0 for -V
+            self.assertEqual(e.code, 0)
+
+        output = mock_stdout.getvalue()
+        self.assertIn("clang-tool-chain", output)
+        # Should contain version number pattern
+        import re
+        self.assertTrue(re.search(r'\d+\.\d+\.\d+', output), "Should contain version number")
+
 
 class TestSccacheWrappers(unittest.TestCase):
     """Test sccache wrapper commands."""

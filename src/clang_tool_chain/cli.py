@@ -773,6 +773,14 @@ def main() -> int:
         epilog="For more information, visit: https://github.com/your-repo/clang-tool-chain",
     )
 
+    # Add --version flag at the top level
+    parser.add_argument(
+        "-V", "--version",
+        action="version",
+        version=f"clang-tool-chain {__version__}",
+        help="Show program's version number and exit"
+    )
+
     subparsers = parser.add_subparsers(
         dest="command",
         help="Available commands",
