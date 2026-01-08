@@ -430,7 +430,7 @@ int main() {
         if found_python_errors:
             self.fail(
                 f"Python errors detected: {found_python_errors}\n"
-                f"Python is bundled (status: {python_env['status']}) but errors occurred.\n"
+                f"Python is bundled with LLDB but errors occurred.\n"
                 f"This indicates a configuration problem with the bundled Python.{frames_info}{diagnostic}"
             )
 

@@ -256,7 +256,8 @@ class TestCLIMain(unittest.TestCase):
         self.assertIn("clang-tool-chain", output)
         # Should contain version number pattern
         import re
-        self.assertTrue(re.search(r'\d+\.\d+\.\d+', output), "Should contain version number")
+
+        self.assertTrue(re.search(r"\d+\.\d+\.\d+", output), "Should contain version number")
 
     @patch("sys.argv", ["clang-tool-chain", "-V"])
     @patch("sys.stdout", new_callable=StringIO)
@@ -272,7 +273,8 @@ class TestCLIMain(unittest.TestCase):
         self.assertIn("clang-tool-chain", output)
         # Should contain version number pattern
         import re
-        self.assertTrue(re.search(r'\d+\.\d+\.\d+', output), "Should contain version number")
+
+        self.assertTrue(re.search(r"\d+\.\d+\.\d+", output), "Should contain version number")
 
 
 class TestSccacheWrappers(unittest.TestCase):

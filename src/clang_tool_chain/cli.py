@@ -775,10 +775,11 @@ def main() -> int:
 
     # Add --version flag at the top level
     parser.add_argument(
-        "-V", "--version",
+        "-V",
+        "--version",
         action="version",
         version=f"clang-tool-chain {__version__}",
-        help="Show program's version number and exit"
+        help="Show program's version number and exit",
     )
 
     subparsers = parser.add_subparsers(
