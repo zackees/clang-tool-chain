@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyzstd requests
+          pip install zstandard requests
         shell: bash
 
       - name: Create working directory
@@ -76,7 +76,7 @@ jobs:
           import sys
           sys.path.insert(0, '../../..')
           import tarfile
-          import pyzstd
+          import zstandard as zstd
           from pathlib import Path
           import io
 
@@ -84,10 +84,10 @@ jobs:
           print(f'Extracting {archive_path}...')
 
           # Read and decompress the zstd file
+          dctx = zstd.ZstdDecompressor()
           with open(archive_path, 'rb') as compressed:
-              compressed_data = compressed.read()
-              print(f'Decompressing {len(compressed_data) / (1024*1024):.2f} MB...')
-              decompressed_data = pyzstd.decompress(compressed_data)
+              print(f'Decompressing {archive_path.stat().st_size / (1024*1024):.2f} MB...')
+              decompressed_data = dctx.decompress(compressed.read())
               print(f'Decompressed to {len(decompressed_data) / (1024*1024):.2f} MB')
 
           # Extract LLDB-related files from the tar
@@ -131,7 +131,7 @@ jobs:
           python -c "
           import sys
           import tarfile
-          import pyzstd
+          import zstandard as zstd
           from pathlib import Path
           import urllib.request
           import io
@@ -145,10 +145,10 @@ jobs:
 
           # Extract Python module files
           print('Extracting LLDB Python module...')
+          dctx = zstd.ZstdDecompressor()
           with open(archive_path, 'rb') as compressed:
-              compressed_data = compressed.read()
-              print(f'Decompressing {len(compressed_data) / (1024*1024):.2f} MB...')
-              decompressed_data = pyzstd.decompress(compressed_data)
+              print(f'Decompressing {archive_path.stat().st_size / (1024*1024):.2f} MB...')
+              decompressed_data = dctx.decompress(compressed.read())
               print(f'Decompressed to {len(decompressed_data) / (1024*1024):.2f} MB')
 
           with tarfile.open(fileobj=io.BytesIO(decompressed_data), mode='r|') as tar:
@@ -203,14 +203,14 @@ jobs:
           echo "Verifying python310.dll is in bin/ directory of archive:"
           python -c "
           import tarfile
-          import pyzstd
+          import zstandard as zstd
           from pathlib import Path
           import io
 
           archive = Path('downloads-bins/assets/lldb/win/x86_64/lldb-${{ github.event.inputs.llvm_version }}-win-x86_64.tar.zst')
+          dctx = zstd.ZstdDecompressor()
           with open(archive, 'rb') as compressed:
-              compressed_data = compressed.read()
-              decompressed_data = pyzstd.decompress(compressed_data)
+              decompressed_data = dctx.decompress(compressed.read())
 
           with tarfile.open(fileobj=io.BytesIO(decompressed_data), mode='r|') as tar:
               has_python_dll = False
