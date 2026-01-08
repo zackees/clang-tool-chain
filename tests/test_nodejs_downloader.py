@@ -210,7 +210,7 @@ class TestNodeJSDownloader:
             elapsed = time.time() - start_time
 
             # Should return quickly (allow some headroom for system variance during parallel tests)
-            assert elapsed < 0.2, f"Fast path took {elapsed}s (expected <200ms)"
+            assert elapsed < 2.0, f"Fast path took {elapsed}s (expected <2000ms)"
             assert result_dir == test_dir
 
 

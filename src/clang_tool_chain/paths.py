@@ -9,6 +9,7 @@ import json
 import sys
 
 from . import downloader, wrapper
+from .interrupt_utils import handle_keyboard_interrupt_properly
 
 
 def main() -> int:
@@ -77,8 +78,9 @@ def main() -> int:
         print(json.dumps(result, indent=2))
         return 0
 
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as ke:
         print("\nInterrupted by user", file=sys.stderr)
+        handle_keyboard_interrupt_properly(ke)
         return 130
     except Exception as e:
         result = {

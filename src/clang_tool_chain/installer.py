@@ -20,6 +20,7 @@ from pathlib import Path
 import fasteners
 
 from .archive import download_archive, extract_tarball
+from .interrupt_utils import handle_keyboard_interrupt_properly
 from .logging_config import configure_logging
 from .manifest import (
     Manifest,
@@ -177,6 +178,8 @@ def is_toolchain_installed(platform: str, arch: str) -> bool:
         logger.debug(f"SHA256 matches for {platform}/{arch}, toolchain is up to date")
         return True
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"Error checking toolchain installation status: {e}, will re-download")
         return False
@@ -320,6 +323,8 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
                     logger.info("Binaries synced to disk via fsync() on bin directory")
                 finally:
                     os.close(bin_dir_fd)
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
             except Exception as e:
                 # fsync on directories may not work on all filesystems
                 logger.warning(f"fsync() on bin directory failed: {e}, falling back to os.sync()")
@@ -427,6 +432,8 @@ def _subprocess_install_toolchain(platform: str, arch: str) -> int:  # pyright: 
             logger.info(f"[Subprocess] Toolchain installation complete for {platform}/{arch}")
             return 0
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"[Subprocess] Failed to install toolchain: {e}", exc_info=True)
         return 1
@@ -571,6 +578,8 @@ def is_iwyu_installed(platform: str, arch: str) -> bool:
 
         return True
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"Error checking IWYU installation: {e}, will re-download")
         return False
@@ -643,6 +652,8 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
                         logger.info(f"DEBUG:     bin/ contains {len(bin_items)} items:")
                         for bin_item in bin_items[:10]:  # First 10 items
                             logger.info(f"DEBUG:       - {bin_item.name} ({bin_item.stat().st_size} bytes)")
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
             except Exception as e:
                 logger.error(f"DEBUG: Error listing directory contents: {e}")
         else:
@@ -723,6 +734,8 @@ def _subprocess_install_iwyu(platform: str, arch: str) -> int:  # pyright: ignor
             logger.info(f"[Subprocess] IWYU installation complete for {platform}/{arch}")
             return 0
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"[Subprocess] Failed to install IWYU: {e}", exc_info=True)
         return 1
@@ -823,6 +836,8 @@ def is_lldb_installed(platform: str, arch: str) -> bool:
 
         return True
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"Error checking LLDB installation: {e}, will re-download")
         return False
@@ -946,6 +961,8 @@ def _subprocess_install_lldb(platform: str, arch: str) -> int:  # pyright: ignor
             logger.info(f"[Subprocess] LLDB installation complete for {platform}/{arch}")
             return 0
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"[Subprocess] Failed to install LLDB: {e}", exc_info=True)
         return 1
@@ -1111,6 +1128,8 @@ NODE_JS = '{node_js}'
                     )
             else:
                 logger.info("Updating .emscripten config file with new paths")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.warning(f"Failed to read existing config file: {e}, will recreate")
 
@@ -1146,6 +1165,8 @@ NODE_JS = '{node_js}'
                 f"This may indicate a filesystem sync delay, but the file should be accessible shortly."
             )
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Failed to create .emscripten config file: {e}")
         raise RuntimeError(
@@ -1320,6 +1341,8 @@ def link_clang_binaries_to_emscripten(platform: str, arch: str) -> None:
                         )
                     else:
                         logger.warning(f"Optional binary {binary} still not visible after 1s: {target}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             if binary in critical_binaries:
                 logger.error(f"Failed to link/copy critical binary {binary}: {e}")
@@ -1388,6 +1411,8 @@ def is_emscripten_installed(platform: str, arch: str) -> bool:
 
         return True
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"Error checking Emscripten installation: {e}, will re-download")
         return False
@@ -1495,6 +1520,8 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
                     # Verify the copied file is accessible
                     if not _verify_file_readable(clang_pp_exe, f"clang++{exe_ext}", timeout_seconds=1.0):
                         logger.warning(f"clang++{exe_ext} created but not immediately readable")
+                except KeyboardInterrupt as ke:
+                    handle_keyboard_interrupt_properly(ke)
                 except Exception as e:
                     logger.error(f"Failed to create clang++{exe_ext}: {e}")
                     raise RuntimeError(
@@ -1521,6 +1548,8 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
             try:
                 shutil.rmtree(cache_dir)
                 logger.info(f"Removed cache directory: {cache_dir}")
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
             except Exception as e:
                 logger.warning(f"Failed to remove cache directory (non-critical): {e}")
 
@@ -1545,6 +1574,8 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
         if not cached_archive and archive_path and archive_path.exists():
             archive_path.unlink()
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         # Clean up downloaded archive on error (but not if it came from cache)
         if not cached_archive and archive_path and archive_path.exists():
@@ -1697,6 +1728,8 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
                     # Verify the copied file is accessible
                     if not _verify_file_readable(clang_pp_binary, f"clang++{exe_ext}", timeout_seconds=1.0):
                         logger.warning(f"clang++{exe_ext} created but not immediately readable")
+                except KeyboardInterrupt as ke:
+                    handle_keyboard_interrupt_properly(ke)
                 except Exception as e:
                     logger.error(f"Failed to create clang++{exe_ext}: {e}")
                     # Don't fail here - the verification below will catch it
@@ -1826,6 +1859,8 @@ def is_nodejs_installed(platform: str, arch: str) -> bool:
 
         return True
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"Error checking Node.js installation: {e}, will re-download")
         return False
@@ -1945,6 +1980,8 @@ def download_and_install_nodejs(platform: str, arch: str) -> None:
             archive_path.unlink()
         # Re-raise infrastructure errors as-is
         raise
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         # Clean up downloaded archive on error (but not if it came from cache)
         if not cached_archive and archive_path and archive_path.exists():
@@ -2006,6 +2043,8 @@ def ensure_nodejs_available(platform: str, arch: str) -> Path:
         try:
             download_and_install_nodejs(platform, arch)
             logger.info(f"Node.js installation complete for {platform}/{arch}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.error(f"Node.js installation failed: {e}")
             raise

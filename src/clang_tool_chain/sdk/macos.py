@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 logger = logging.getLogger(__name__)
 
 
@@ -145,6 +147,8 @@ def _add_macos_sysroot_if_needed(args: list[str]) -> list[str]:  # pyright: igno
         logger.warning("xcrun command timed out")
         return args
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         # Unexpected error
         logger.warning(f"Unexpected error detecting SDK: {e}")

@@ -21,6 +21,8 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 logger = logging.getLogger(__name__)
 
 
@@ -225,6 +227,8 @@ def ensure_nodejs_available() -> Path:
                 f"  Installation directory: {nodejs_install_dir}"
             )
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         # Download failed - provide helpful error message
         logger.error(f"Failed to download Node.js: {e}")
@@ -420,6 +424,8 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
         logger.error(f"Failed to execute Python: {python_exe}")
         print(f"\nError: Python interpreter not found: {python_exe}", file=sys.stderr)
         sys.exit(1)
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Failed to execute Emscripten tool: {e}")
         print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
@@ -506,10 +512,14 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
                     print(f"sccache stats: {stats_output}", file=sys.stderr)
                 else:
                     print("Warning: Could not get sccache stats", file=sys.stderr)
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
             except Exception as e:
                 print(f"Warning: Could not start sccache server: {e}", file=sys.stderr)
                 print("Continuing anyway - sccache will use standalone mode if needed", file=sys.stderr)
             print(f"{'='*60}\n", file=sys.stderr)
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"Warning: Could not verify sccache version: {e}", file=sys.stderr)
 
@@ -832,6 +842,7 @@ exec "{real_clangpp}" "$@"
     print(f"[{current_time}] Starting compilation (timeout=none, will track manually)...", file=sys.stderr)
 
     # Execute with periodic progress updates
+    return_code: int = 1  # Default error code if execution fails
     try:
         logger.debug(f"Subprocess command: {' '.join(cmd[:2])} [+ {len(args)} args]")
 
@@ -868,6 +879,8 @@ exec "{real_clangpp}" "$@"
         logger.error(f"Failed to execute Python: {python_exe}")
         print(f"\nError: Python interpreter not found: {python_exe}", file=sys.stderr)
         return_code = 1
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Failed to execute Emscripten tool: {e}")
         print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
@@ -880,6 +893,8 @@ exec "{real_clangpp}" "$@"
             try:
                 shutil.rmtree(trampoline_dir)
                 logger.debug(f"Cleaned up trampoline directory: {trampoline_dir}")
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
             except Exception as e:
                 logger.warning(f"Failed to clean up trampoline directory: {e}")
 

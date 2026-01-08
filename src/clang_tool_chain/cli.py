@@ -9,6 +9,8 @@ import subprocess
 import sys
 from typing import Any, NoReturn
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 from . import sccache_runner, wrapper
 from .abi.windows_gnu import _get_gnu_target_args, _should_use_gnu_abi
 from .linker import _add_lld_linker_if_needed
@@ -369,6 +371,8 @@ def cmd_install_clang(args: argparse.Namespace) -> int:
             print("✗ Installation verification failed - bin directory not found")
             return 1
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         print()
         print(f"✗ Installation failed: {e}")
@@ -419,6 +423,8 @@ def cmd_purge(args: argparse.Namespace) -> int:
         total_size = sum(f.stat().st_size for f in toolchain_dir.rglob("*") if f.is_file())
         total_size_mb = total_size / (1024 * 1024)
         print(f"Total size: {total_size_mb:.2f} MB")
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception:
         print("Total size: (unable to calculate)")
 
@@ -442,6 +448,8 @@ def cmd_purge(args: argparse.Namespace) -> int:
                 try:
                     setenvironment.remove_env_path(bin_path)
                     print(f"  ✓ Removed {component} from PATH")
+                except KeyboardInterrupt as ke:
+                    handle_keyboard_interrupt_properly(ke)
                 except Exception as e:
                     print(f"  ✗ Failed to remove {component} from PATH: {e}")
         except ImportError:
@@ -466,6 +474,8 @@ def cmd_purge(args: argparse.Namespace) -> int:
         component_db.remove_all_components()
 
         return 0
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         safe_print(f"✗ Failed to remove toolchain directory: {e}")
         return 1
@@ -521,6 +531,8 @@ def cmd_install_clang_env(args: argparse.Namespace) -> int:
 
         # Mark as installed to environment (for automatic cleanup during purge)
         env_breadcrumbs.mark_component_installed_to_env("clang", str(bin_dir))
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         print(f"✗ Failed to add to PATH: {e}")
         return 1
@@ -572,6 +584,8 @@ def cmd_uninstall_clang_env(args: argparse.Namespace) -> int:
 
         # Remove breadcrumb
         env_breadcrumbs.unmark_component_installed_to_env("clang")
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         print(f"✗ Failed to remove from PATH: {e}")
         return 1
@@ -604,10 +618,14 @@ def cmd_test(args: argparse.Namespace) -> int:
 
     # Test 1: Platform Detection
     print("[1/7] Testing platform detection...")
+    platform_name: str
+    arch: str
     try:
         platform_name, arch = wrapper.get_platform_info()
         print(f"      Platform: {platform_name}/{arch}")
         safe_print("      ✓ PASSED")
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         safe_print(f"      ✗ FAILED: {e}")
         return 1
@@ -623,6 +641,8 @@ def cmd_test(args: argparse.Namespace) -> int:
         else:
             safe_print(f"      ✗ FAILED: Binary directory does not exist: {bin_dir}")
             return 1
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         safe_print(f"      ✗ FAILED: {e}")
         return 1
@@ -630,6 +650,7 @@ def cmd_test(args: argparse.Namespace) -> int:
 
     # Test 3: Finding clang binary
     print("[3/7] Testing binary resolution (clang)...")
+    clang_path: Path
     try:
         clang_path = wrapper.find_tool_binary("clang")
         print(f"      Found: {clang_path}")
@@ -637,6 +658,8 @@ def cmd_test(args: argparse.Namespace) -> int:
             safe_print(f"      ✗ FAILED: Binary does not exist: {clang_path}")
             return 1
         safe_print("      ✓ PASSED")
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         safe_print(f"      ✗ FAILED: {e}")
         return 1
@@ -644,6 +667,7 @@ def cmd_test(args: argparse.Namespace) -> int:
 
     # Test 4: Finding clang++ binary
     print("[4/7] Testing binary resolution (clang++)...")
+    clang_cpp_path: Path
     try:
         clang_cpp_path = wrapper.find_tool_binary("clang++")
         print(f"      Found: {clang_cpp_path}")
@@ -651,6 +675,8 @@ def cmd_test(args: argparse.Namespace) -> int:
             safe_print(f"      ✗ FAILED: Binary does not exist: {clang_cpp_path}")
             return 1
         safe_print("      ✓ PASSED")
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         safe_print(f"      ✗ FAILED: {e}")
         return 1
@@ -668,6 +694,8 @@ def cmd_test(args: argparse.Namespace) -> int:
             safe_print(f"      ✗ FAILED: clang --version returned {result.returncode}")
             print(f"      stderr: {result.stderr}")
             return 1
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         safe_print(f"      ✗ FAILED: {e}")
         return 1
@@ -711,6 +739,8 @@ int main() {
 
             print(f"      Compiled: {test_out}")
             safe_print("      ✓ PASSED")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             safe_print(f"      ✗ FAILED: {e}")
             return 1
@@ -754,6 +784,8 @@ int main() {
 
             print(f"      Compiled: {test_out}")
             safe_print("      ✓ PASSED")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             safe_print(f"      ✗ FAILED: {e}")
             return 1
@@ -995,6 +1027,8 @@ def sccache_c_main() -> int:
         try:
             gnu_args = _get_gnu_target_args(platform_name, arch, args)
             args = gnu_args + args
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
             print("Continuing with default target (may use MSVC linker)...\n", file=sys.stderr)
@@ -1039,6 +1073,8 @@ def sccache_cpp_main() -> int:
         try:
             gnu_args = _get_gnu_target_args(platform_name, arch, args)
             args = gnu_args + args
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
             print("Continuing with default target (may use MSVC linker)...\n", file=sys.stderr)

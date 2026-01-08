@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 from ..cli_parsers import parse_build_args, parse_build_run_args
 from ..platform import get_platform_info
 from .core import execute_tool, run_tool
@@ -145,6 +147,8 @@ def build_run_main() -> NoReturn:
                     should_compile = False
                 else:
                     print("Cache miss: Hash mismatch, recompiling...", file=sys.stderr)
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
             except Exception as e:
                 print(f"Warning: Could not read hash file: {e}", file=sys.stderr)
                 print("Recompiling...", file=sys.stderr)
@@ -176,6 +180,8 @@ def build_run_main() -> NoReturn:
                 current_hash = _compute_file_hash(source_path)
                 hash_file.write_text(current_hash)
                 print(f"Updated cache hash: {hash_file}", file=sys.stderr)
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
             except Exception as e:
                 print(f"Warning: Could not write hash file: {e}", file=sys.stderr)
 
@@ -198,6 +204,8 @@ def build_run_main() -> NoReturn:
         print("\nThe compilation appeared to succeed, but the output file cannot be found.", file=sys.stderr)
         print(f"{'='*60}\n", file=sys.stderr)
         sys.exit(1)
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         print(f"\n{'='*60}", file=sys.stderr)
         print("Execution Error", file=sys.stderr)

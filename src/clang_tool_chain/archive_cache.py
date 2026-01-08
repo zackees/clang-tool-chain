@@ -10,6 +10,8 @@ import hashlib
 import shutil
 from pathlib import Path
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 from .logging_config import configure_logging
 from .path_utils import get_archive_cache_dir, get_cached_archive_path
 
@@ -52,6 +54,8 @@ def verify_archive_hash(archive_path: Path, expected_sha256: str) -> bool:
             )
 
         return matches
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"Error verifying cached archive hash: {e}")
         return False
@@ -87,6 +91,8 @@ def get_cached_archive(component: str, platform: str, arch: str, sha256: str) ->
         logger.warning(f"Removing invalid cached archive: {cache_path.name}")
         try:
             cache_path.unlink()
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.warning(f"Failed to remove invalid cache: {e}")
         return None
@@ -125,6 +131,8 @@ def save_archive_to_cache(source_path: Path, component: str, platform: str, arch
             logger.warning(f"Removing existing cache with mismatched hash: {cache_path.name}")
             try:
                 cache_path.unlink()
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
             except Exception as e:
                 logger.warning(f"Failed to remove invalid cache: {e}")
 
@@ -142,6 +150,8 @@ def save_archive_to_cache(source_path: Path, component: str, platform: str, arch
             cache_path.unlink()
             return None
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"Failed to cache archive: {e}")
         return None
@@ -166,6 +176,8 @@ def clear_archive_cache() -> int:
             archive.unlink()
             count += 1
             logger.debug(f"Removed cached archive: {archive.name}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.warning(f"Failed to remove {archive.name}: {e}")
 

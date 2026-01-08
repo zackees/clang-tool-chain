@@ -10,9 +10,12 @@ Tests cover:
 """
 
 import os
+import shutil
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+from types import TracebackType
 from unittest.mock import Mock, patch
 
 import pytest
@@ -25,6 +28,68 @@ from clang_tool_chain.deployment.dll_deployer import (
     get_mingw_sysroot_bin_dir,
     post_link_dll_deployment,
 )
+
+
+@contextmanager
+def windows_safe_temp_directory():
+    """
+    Context manager for temporary directories that handles Windows DLL cleanup.
+
+    On Windows, DLL files can remain locked even after processes exit, causing
+    PermissionError during cleanup. This uses ignore_errors=True to handle such cases.
+    """
+    tmpdir = tempfile.mkdtemp()
+    try:
+        yield tmpdir
+    finally:
+        # On Windows, DLLs can be locked - use ignore_errors to prevent test failures
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+# Monkey-patch tempfile.TemporaryDirectory for Windows safety
+_original_temp_directory = tempfile.TemporaryDirectory
+
+
+class WindowsSafeTemporaryDirectory:
+    """
+    Drop-in replacement for tempfile.TemporaryDirectory that handles Windows DLL cleanup.
+
+    Uses ignore_errors=True on cleanup to prevent PermissionError when DLLs are locked.
+    """
+
+    def __init__(
+        self,
+        suffix: str | None = None,
+        prefix: str | None = None,
+        dir: str | None = None,
+        ignore_cleanup_errors: bool = True,
+    ):
+        self._tmpdir = None
+        self.name = None
+        self._suffix = suffix
+        self._prefix = prefix
+        self._dir = dir
+        self._ignore_cleanup_errors = ignore_cleanup_errors
+
+    def __enter__(self):
+        self._tmpdir = tempfile.mkdtemp(suffix=self._suffix, prefix=self._prefix, dir=self._dir)
+        self.name = self._tmpdir
+        return self._tmpdir
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool:
+        if self._tmpdir:
+            # Use ignore_errors to handle locked DLLs on Windows
+            shutil.rmtree(self._tmpdir, ignore_errors=True)
+        return False
+
+
+# Apply monkey-patch for all tests in this module
+tempfile.TemporaryDirectory = WindowsSafeTemporaryDirectory
 
 
 class TestMingwDllPatternMatching:

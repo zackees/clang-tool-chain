@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from typing import Any, TypeVar
 from urllib.request import Request, urlopen
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 from .logging_config import configure_logging
 
 # Configure logging using centralized configuration
@@ -177,6 +179,8 @@ def _fetch_json_raw(url: str) -> dict[str, Any]:
             result: dict[str, Any] = json.loads(data.decode("utf-8"))
             logger.info(f"Successfully fetched and parsed JSON from {url}")
             return result
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Failed to fetch JSON from {url}: {e}")
         raise ToolchainInfrastructureError(f"Failed to fetch JSON from {url}: {e}") from e

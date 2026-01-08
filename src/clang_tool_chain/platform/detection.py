@@ -9,6 +9,8 @@ import platform
 import subprocess
 from pathlib import Path
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 from .. import downloader
 from ..logging_config import configure_logging
 
@@ -49,6 +51,8 @@ def _get_toolchain_directory_listing(platform_name: str) -> str:
                 ["find", str(toolchain_dir), "-maxdepth", "2"], capture_output=True, text=True, timeout=5
             )
             return result.stdout
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         return f"Could not list directory: {e}"
 

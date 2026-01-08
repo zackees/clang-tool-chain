@@ -10,6 +10,7 @@ import sys
 from dataclasses import dataclass
 
 from . import downloader, wrapper
+from .interrupt_utils import handle_keyboard_interrupt_properly
 
 
 @dataclass
@@ -142,8 +143,9 @@ def main() -> int:
             print("ERROR: Toolchain installation failed", file=sys.stderr)
             return 1
 
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as ke:
         print("\nInterrupted by user", file=sys.stderr)
+        handle_keyboard_interrupt_properly(ke)
         return 130
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)

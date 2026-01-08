@@ -47,6 +47,7 @@ dev = [
     "pyright>=1.1.350",
     "pre-commit>=3.6.0",
     "sccache>=0.7.0",
+    "flake8>=7.0.0",
 ]
 sccache = [
     "sccache>=0.7.0",
@@ -56,6 +57,9 @@ sccache = [
 Homepage = "https://github.com/zackees/clang-tool-chain"
 Repository = "https://github.com/zackees/clang-tool-chain"
 Issues = "https://github.com/zackees/clang-tool-chain/issues"
+
+[project.entry-points."flake8.extension"]
+KBI = "lint_plugins.flake8.keyboard_interrupt_checker:KeyboardInterruptChecker"
 
 [project.scripts]
 clang-tool-chain = "clang_tool_chain.cli:main"
@@ -116,6 +120,10 @@ packages = ["src/clang_tool_chain"]
 include = [
     "src/clang_tool_chain/assets/**/*",
 ]
+
+# Force include lint_plugins without path rewriting
+[tool.hatch.build.force-include]
+"lint_plugins" = "lint_plugins"
 
 [tool.hatch.build.targets.sdist]
 include = [

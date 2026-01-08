@@ -25,6 +25,7 @@ from ..abi import (
     _should_use_msvc_abi,
 )
 from ..deployment.dll_deployer import post_link_dll_deployment
+from ..interrupt_utils import handle_keyboard_interrupt_properly
 from ..linker import _add_lld_linker_if_needed
 from ..logging_config import configure_logging
 from ..platform.detection import get_platform_info
@@ -142,6 +143,8 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
             gnu_args = _get_gnu_target_args(platform_name, arch, args)
             args = gnu_args + args
             logger.info(f"Using GNU ABI with args: {gnu_args}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             # If GNU setup fails, let the tool try anyway (may fail at compile time)
             logger.error(f"Failed to set up GNU ABI: {e}")
@@ -154,6 +157,8 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
             msvc_args = _get_msvc_target_args(platform_name, arch)
             args = msvc_args + args
             logger.info(f"Using MSVC ABI with args: {msvc_args}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             # If MSVC setup fails, let the tool try anyway (may fail at compile time)
             logger.error(f"Failed to set up MSVC ABI: {e}")
@@ -181,6 +186,8 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
                     use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
                     try:
                         post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                    except KeyboardInterrupt as ke:
+                        handle_keyboard_interrupt_properly(ke)
                     except Exception as e:
                         logger.warning(f"DLL deployment failed: {e}")
 
@@ -198,6 +205,8 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
             print("  - Report issue: https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
             print(f"{'='*60}\n", file=sys.stderr)
             sys.exit(1)
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"\n{'='*60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
@@ -229,6 +238,8 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
             print("  - Report issue: https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
             print(f"{'='*60}\n", file=sys.stderr)
             sys.exit(1)
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"\n{'='*60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
@@ -286,6 +297,8 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
             gnu_args = _get_gnu_target_args(platform_name, arch, args)
             args = gnu_args + args
             logger.info(f"Using GNU ABI with args: {gnu_args}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             # If GNU setup fails, let the tool try anyway (may fail at compile time)
             logger.error(f"Failed to set up GNU ABI: {e}")
@@ -298,6 +311,8 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
             msvc_args = _get_msvc_target_args(platform_name, arch)
             args = msvc_args + args
             logger.info(f"Using MSVC ABI with args: {msvc_args}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             # If MSVC setup fails, let the tool try anyway (may fail at compile time)
             logger.error(f"Failed to set up MSVC ABI: {e}")
@@ -318,12 +333,16 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
                 use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
                 try:
                     post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                except KeyboardInterrupt as ke:
+                    handle_keyboard_interrupt_properly(ke)
                 except Exception as e:
                     logger.warning(f"DLL deployment failed: {e}")
 
         return result.returncode
     except FileNotFoundError as err:
         raise RuntimeError(f"Tool not found: {tool_path}") from err
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         raise RuntimeError(f"Error executing tool: {e}") from e
 
@@ -376,6 +395,8 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
             gnu_args = _get_gnu_target_args(platform_name, arch, args)
             args = gnu_args + args
             logger.info(f"Using GNU ABI with sccache: {gnu_args}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.error(f"Failed to set up GNU ABI: {e}")
             print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
@@ -387,6 +408,8 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
             msvc_args = _get_msvc_target_args(platform_name, arch)
             args = msvc_args + args
             logger.info(f"Using MSVC ABI with sccache: {msvc_args}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.error(f"Failed to set up MSVC ABI: {e}")
             print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
@@ -410,10 +433,14 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
                     use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
                     try:
                         post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                    except KeyboardInterrupt as ke:
+                        handle_keyboard_interrupt_properly(ke)
                     except Exception as e:
                         logger.warning(f"DLL deployment failed: {e}")
 
             sys.exit(result.returncode)
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"\n{'='*60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
@@ -425,6 +452,8 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
         # Unix: use exec to replace current process
         try:
             os.execv(sccache_path, cmd)
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"\n{'='*60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
@@ -477,6 +506,8 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
             gnu_args = _get_gnu_target_args(platform_name, arch, args)
             args = gnu_args + args
             logger.info(f"Using GNU ABI with sccache: {gnu_args}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.error(f"Failed to set up GNU ABI: {e}")
             print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
@@ -488,6 +519,8 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
             msvc_args = _get_msvc_target_args(platform_name, arch)
             args = msvc_args + args
             logger.info(f"Using MSVC ABI with sccache: {msvc_args}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.error(f"Failed to set up MSVC ABI: {e}")
             print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
@@ -511,10 +544,14 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
                     use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
                     try:
                         post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                    except KeyboardInterrupt as ke:
+                        handle_keyboard_interrupt_properly(ke)
                     except Exception as e:
                         logger.warning(f"DLL deployment failed: {e}")
 
             sys.exit(result.returncode)
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"\n{'='*60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
@@ -526,6 +563,8 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
         # Unix: use exec to replace current process
         try:
             os.execv(sccache_path, cmd)
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"\n{'='*60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)

@@ -21,6 +21,8 @@ from urllib.request import Request, urlopen
 
 import pyzstd
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 from .logging_config import configure_logging
 from .manifest import ToolchainInfrastructureError, VersionInfo
 from .parallel_download import DownloadConfig, download_file_parallel
@@ -180,6 +182,8 @@ def _download_file_legacy(url: str, dest_path: Path, expected_sha256: str | None
     except ToolchainInfrastructureError:
         # Re-raise infrastructure errors as-is
         raise
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Download failed: {e}")
         # Clean up temporary file if it exists
@@ -243,6 +247,7 @@ def download_archive_parts(version_info: VersionInfo, temp_dir: Path) -> Path:
                 logger.info(f"Downloading part {i}/{len(parts)} from {part_url}")
 
                 # Download part to memory (parts should be <100 MB)
+                part_data: bytes
                 try:
                     req = Request(part_url, headers={"User-Agent": "clang-tool-chain"})
                     with urlopen(req, timeout=300) as response:
@@ -253,6 +258,8 @@ def download_archive_parts(version_info: VersionInfo, temp_dir: Path) -> Path:
                         part_data = response.read()
                         logger.info(f"Part {i} downloaded: {len(part_data) / (1024*1024):.2f} MB")
 
+                except KeyboardInterrupt as ke:
+                    handle_keyboard_interrupt_properly(ke)
                 except Exception as e:
                     raise ToolchainInfrastructureError(f"Failed to download part {i} from {part_url}: {e}") from e
 
@@ -284,6 +291,8 @@ def download_archive_parts(version_info: VersionInfo, temp_dir: Path) -> Path:
         if output_path.exists():
             output_path.unlink()
         raise
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Failed to download multi-part archive: {e}")
         if output_path.exists():
@@ -332,6 +341,8 @@ def _try_system_tar(tar_file: Path, extract_dir: Path) -> bool:
             logger.debug("System tar not available")
             return False
         logger.info(f"System tar available: {result.stdout.decode()[:100]}")
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
         logger.debug(f"System tar not available: {e}")
         return False
@@ -352,6 +363,8 @@ def _try_system_tar(tar_file: Path, extract_dir: Path) -> bool:
             logger.info(f"DEBUG: System tar extracted {len(extracted_items)} items to {extract_dir}")
             for item in extracted_items[:20]:  # First 20 items
                 logger.info(f"DEBUG:   - {item.name} ({'dir' if item.is_dir() else 'file'})")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.warning(f"DEBUG: Could not list extracted items: {e}")
 
@@ -359,6 +372,8 @@ def _try_system_tar(tar_file: Path, extract_dir: Path) -> bool:
     except subprocess.CalledProcessError as e:
         logger.warning(f"System tar extraction failed: {e.stderr.decode()[:500]}")
         return False
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"System tar extraction failed: {e}")
         return False
@@ -400,6 +415,8 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                     if parts:
                         verify_top.add(parts[0])
                 logger.info(f"Sample top-level dirs from tar: {sorted(verify_top)}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.warning(f"Could not verify tar file: {e}")
 
@@ -567,6 +584,8 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
                 logger.debug(f"Cleaning up temporary tar file: {temp_tar}")
                 temp_tar.unlink()
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Extraction failed: {e}")
         raise RuntimeError(f"Failed to extract {archive_path}: {e}") from e

@@ -14,6 +14,8 @@ import subprocess
 import uuid
 from pathlib import Path
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 logger = logging.getLogger(__name__)
 
 # MinGW runtime DLL patterns (case-insensitive matching)
@@ -226,6 +228,8 @@ def detect_required_dlls(exe_path: Path, platform_name: str = "win", arch: str =
                             logger.debug(f"Found transitive dependency: {dep_name} (via {current_dll})")
                             all_required_dlls.add(dep_name)
                             dlls_to_scan.append(dep_name)
+                except KeyboardInterrupt as ke:
+                    handle_keyboard_interrupt_properly(ke)
                 except Exception as e:
                     logger.debug(f"Failed to scan dependencies for {current_dll}: {e}")
 
@@ -247,6 +251,8 @@ def detect_required_dlls(exe_path: Path, platform_name: str = "win", arch: str =
         logger.warning("llvm-objdump timed out after 10 seconds, using heuristic DLL list")
         return HEURISTIC_MINGW_DLLS.copy()
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"DLL detection failed: {e}, using heuristic DLL list")
         return HEURISTIC_MINGW_DLLS.copy()
@@ -363,6 +369,8 @@ def _atomic_copy_dll(src_dll: Path, dest_dll: Path) -> bool:
             # Re-raise if we couldn't handle it
             raise
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception:
         # Clean up temp file on any error
         temp_dll.unlink(missing_ok=True)
@@ -448,6 +456,8 @@ def find_dll_in_toolchain(dll_name: str, platform_name: str, arch: str) -> Path 
     try:
         clang_bin_dir = get_platform_binary_dir()
         search_dirs.append(clang_bin_dir)
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.debug(f"Cannot access clang bin directory: {e}")
 
@@ -568,6 +578,8 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
         elif skipped_count > 0:
             logger.debug(f"All {skipped_count} runtime DLL(s) up-to-date for {output_exe_path.name}")
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         # Non-fatal: log warning but don't fail the build
         logger.warning(f"DLL deployment failed: {e}")

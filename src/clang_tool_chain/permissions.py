@@ -14,6 +14,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 from .logging_config import configure_logging
 
 # Configure logging using centralized configuration
@@ -55,6 +57,8 @@ def _robust_rmtree(path: Path, max_retries: int = 3) -> None:  # pyright: ignore
     # Try removing with readonly handler
     try:
         shutil.rmtree(path, onerror=handle_remove_readonly)
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"Failed to remove {path} on first attempt: {e}")
         # If that fails, try with ignore_errors as last resort
@@ -64,6 +68,8 @@ def _robust_rmtree(path: Path, max_retries: int = 3) -> None:  # pyright: ignore
             time.sleep(0.5)  # Wait briefly for file handles to close
             try:
                 shutil.rmtree(path, ignore_errors=False, onerror=handle_remove_readonly)
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
             except Exception as e2:
                 logger.warning(f"Failed to remove {path} on retry: {e2}")
                 # Last resort: ignore all errors

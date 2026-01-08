@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 from .. import downloader
 
 # Configure logging
@@ -352,6 +354,8 @@ def print_lldb_python_diagnostics() -> int:
             print("  2. Reinstall LLDB: clang-tool-chain purge --yes && clang-tool-chain install lldb")
             return 1
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         print(f"Error checking LLDB Python environment: {e}")
         return 1
@@ -451,6 +455,8 @@ def execute_lldb_tool(tool_name: str, args: list[str] | None = None, print_mode:
             sys.exit(result.returncode)
         except FileNotFoundError as err:
             raise RuntimeError(f"LLDB tool not found: {tool_path}") from err
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             raise RuntimeError(f"Error executing LLDB tool: {e}") from e
     else:
@@ -499,5 +505,7 @@ def execute_lldb_tool(tool_name: str, args: list[str] | None = None, print_mode:
             sys.exit(result.returncode)
         except FileNotFoundError as err:
             raise RuntimeError(f"LLDB tool not found: {tool_path}") from err
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             raise RuntimeError(f"Error executing LLDB tool: {e}") from e

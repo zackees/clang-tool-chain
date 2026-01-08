@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 
 def get_sccache_path() -> str | None:
     """
@@ -97,6 +99,8 @@ def run_sccache_via_isoenv(args: list[str]) -> int:
 
         return result.returncode if result.returncode is not None else 0
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         print("=" * 70, file=sys.stderr)
         print("ERROR: Failed to run sccache via iso-env", file=sys.stderr)
@@ -143,6 +147,8 @@ def run_sccache(args: list[str]) -> int:
         try:
             result = subprocess.run(cmd)
             return result.returncode
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"ERROR: Failed to execute sccache: {e}", file=sys.stderr)
             return 1
@@ -206,10 +212,14 @@ def run_sccache_with_compiler(compiler_path: str, args: list[str]) -> int:
                     use_gnu = _should_use_gnu_abi(platform_name, args)
                     try:
                         post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                    except KeyboardInterrupt as ke:
+                        handle_keyboard_interrupt_properly(ke)
                     except Exception as e:
                         logger.warning(f"DLL deployment failed: {e}")
 
             return exit_code
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             print(f"ERROR: Failed to execute sccache: {e}", file=sys.stderr)
             return 1
@@ -239,6 +249,8 @@ def run_sccache_with_compiler(compiler_path: str, args: list[str]) -> int:
                 use_gnu = _should_use_gnu_abi(platform_name, args)
                 try:
                     post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                except KeyboardInterrupt as ke:
+                    handle_keyboard_interrupt_properly(ke)
                 except Exception as e:
                     logger.warning(f"DLL deployment failed: {e}")
 

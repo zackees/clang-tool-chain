@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 from .logging_config import configure_logging
 from .manifest import ToolchainInfrastructureError
 
@@ -103,6 +105,8 @@ def check_server_capabilities(url: str, timeout: int = 30) -> ServerCapabilities
 
             return capabilities
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.warning(f"Failed to check server capabilities: {e}")
         # Return conservative defaults
@@ -155,6 +159,8 @@ def download_chunk(
 
             return (chunk.index, bytes_downloaded, True)
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Chunk {chunk.index + 1}/{chunk.total_chunks} failed: {e}")
         return (chunk.index, 0, False)
@@ -225,6 +231,9 @@ def download_file_parallel(
     chunks = _calculate_chunks(file_size, config.chunk_size)
     logger.info(f"Downloading in {len(chunks)} chunks using {config.max_workers} workers")
 
+    # Initialize tmp_path to avoid unbound variable errors
+    tmp_path: Path | None = None
+
     try:
         # Create parent directory if it doesn't exist
         dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -281,6 +290,8 @@ def download_file_parallel(
             tmp_path.replace(dest_path)
             logger.info(f"File downloaded successfully to {dest_path}")
 
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception:
             # Clean up temporary file on error
             if tmp_path.exists():
@@ -290,6 +301,8 @@ def download_file_parallel(
     except ToolchainInfrastructureError:
         # Re-raise infrastructure errors as-is
         raise
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Parallel download failed: {e}")
         raise ToolchainInfrastructureError(f"Failed to download {url}: {e}") from e
@@ -383,6 +396,8 @@ def _download_file_single_threaded(
     except ToolchainInfrastructureError:
         # Re-raise infrastructure errors as-is
         raise
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Download failed: {e}")
         # Clean up temporary file if it exists

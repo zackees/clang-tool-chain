@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 from .. import downloader
 
 # Configure logging
@@ -96,7 +98,18 @@ def get_iwyu_binary_dir() -> Path:
     bin_dir = install_dir / "bin"
     logger.debug(f"IWYU binary directory: {bin_dir}")
 
-    if not bin_dir.exists():
+    # Check if bin_dir exists with retry for Windows file system issues
+    bin_dir_exists = bin_dir.exists()
+    if not bin_dir_exists and platform_name == "win":
+        # On Windows, Path.exists() can sometimes return False due to file system
+        # caching or hardlink issues, especially during parallel test execution.
+        # Retry with a small delay and also check with os.path.exists()
+        import time
+
+        time.sleep(0.01)  # 10ms delay
+        bin_dir_exists = bin_dir.exists() or os.path.exists(str(bin_dir))
+
+    if not bin_dir_exists:
         logger.error(f"IWYU binary directory does not exist: {bin_dir}")
         raise RuntimeError(
             f"IWYU binaries not found for {platform_name}-{arch}\n"
@@ -200,6 +213,8 @@ def execute_iwyu_tool(tool_name: str, args: list[str] | None = None) -> NoReturn
             sys.exit(result.returncode)
         except FileNotFoundError as err:
             raise RuntimeError(f"IWYU tool not found: {tool_path}") from err
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             raise RuntimeError(f"Error executing IWYU tool: {e}") from e
     else:
@@ -236,5 +251,7 @@ def execute_iwyu_tool(tool_name: str, args: list[str] | None = None) -> NoReturn
                     os.execv(cmd[0], cmd)
         except FileNotFoundError as err:
             raise RuntimeError(f"IWYU tool not found: {tool_path}") from err
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             raise RuntimeError(f"Error executing IWYU tool: {e}") from e
