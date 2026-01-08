@@ -183,6 +183,7 @@ jobs:
 
           # Build LLDB archive with Python 3.10 modules (including python310.dll)
           python create_lldb_archives.py \
+            --lldb-root ../assets/lldb \
             --platform win \
             --arch x86_64 \
             --source-dir "$LLVM_ROOT" \
