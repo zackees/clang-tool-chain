@@ -103,6 +103,9 @@ jobs:
 
           echo "Extracted LLDB binaries:"
           find . -name "lldb*.exe" -o -name "liblldb.dll"
+
+          echo "Full directory listing after extraction:"
+          ls -lhR .
         shell: bash
 
       - name: Prepare Python modules for LLDB
