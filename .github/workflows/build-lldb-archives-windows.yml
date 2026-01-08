@@ -29,6 +29,11 @@ jobs:
           pip install pyzstd requests
         shell: bash
 
+      - name: Create working directory
+        run: |
+          mkdir -p downloads-bins/work
+        shell: bash
+
       - name: Download Python 3.10 embeddable package
         run: |
           cd downloads-bins/work
