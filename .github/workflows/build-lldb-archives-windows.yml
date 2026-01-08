@@ -78,27 +78,24 @@ jobs:
           import tarfile
           import pyzstd
           from pathlib import Path
+          import io
 
           archive_path = Path('../../assets/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst')
           print(f'Extracting {archive_path}...')
 
-          with pyzstd.open(archive_path, 'rb') as zst_file:
-              with tarfile.open(fileobj=zst_file, mode='r|') as tar:
-                  # Extract only LLDB-related files
-                  members_to_extract = []
-                  for member in tar:
-                      if any(name in member.name for name in ['lldb.exe', 'lldb-server.exe', 'lldb-argdumper.exe', 'liblldb.dll']):
-                          members_to_extract.append(member)
-                          print(f'  Extracting: {member.name} ({member.size / (1024*1024):.2f} MB)')
+          # Read and decompress the zstd file
+          with open(archive_path, 'rb') as compressed:
+              compressed_data = compressed.read()
+              print(f'Decompressing {len(compressed_data) / (1024*1024):.2f} MB...')
+              decompressed_data = pyzstd.decompress(compressed_data)
+              print(f'Decompressed to {len(decompressed_data) / (1024*1024):.2f} MB')
 
-                  # Reset and extract
-                  pass
-
-          with pyzstd.open(archive_path, 'rb') as zst_file:
-              with tarfile.open(fileobj=zst_file, mode='r|') as tar:
-                  for member in tar:
-                      if any(name in member.name for name in ['lldb.exe', 'lldb-server.exe', 'lldb-argdumper.exe', 'liblldb.dll']):
-                          tar.extract(member, path='.')
+          # Extract LLDB-related files from the tar
+          with tarfile.open(fileobj=io.BytesIO(decompressed_data), mode='r|') as tar:
+              for member in tar:
+                  if any(name in member.name for name in ['lldb.exe', 'lldb-server.exe', 'lldb-argdumper.exe', 'liblldb.dll']):
+                      print(f'  Extracting: {member.name} ({member.size / (1024*1024):.2f} MB)')
+                      tar.extract(member, path='.')
 
           print('Extraction complete')
           "
@@ -137,6 +134,7 @@ jobs:
           import pyzstd
           from pathlib import Path
           import urllib.request
+          import io
 
           # Download current LLDB archive temporarily
           archive_url = 'https://media.githubusercontent.com/media/zackees/clang-tool-chain-bins/main/assets/lldb/win/x86_64/lldb-21.1.5-win-x86_64.tar.zst'
@@ -147,15 +145,20 @@ jobs:
 
           # Extract Python module files
           print('Extracting LLDB Python module...')
-          with pyzstd.open(archive_path, 'rb') as zst_file:
-              with tarfile.open(fileobj=zst_file, mode='r|') as tar:
-                  for member in tar:
-                      if 'python/Lib/site-packages/lldb/' in member.name:
-                          # Strip the python/Lib/site-packages/lldb/ prefix
-                          member.name = member.name.split('python/Lib/site-packages/lldb/', 1)[1]
-                          if member.name:  # Skip if empty (the directory itself)
-                              print(f'  {member.name}')
-                              tar.extract(member, path='.')
+          with open(archive_path, 'rb') as compressed:
+              compressed_data = compressed.read()
+              print(f'Decompressing {len(compressed_data) / (1024*1024):.2f} MB...')
+              decompressed_data = pyzstd.decompress(compressed_data)
+              print(f'Decompressed to {len(decompressed_data) / (1024*1024):.2f} MB')
+
+          with tarfile.open(fileobj=io.BytesIO(decompressed_data), mode='r|') as tar:
+              for member in tar:
+                  if 'python/Lib/site-packages/lldb/' in member.name:
+                      # Strip the python/Lib/site-packages/lldb/ prefix
+                      member.name = member.name.split('python/Lib/site-packages/lldb/', 1)[1]
+                      if member.name:  # Skip if empty (the directory itself)
+                          print(f'  {member.name}')
+                          tar.extract(member, path='.')
 
           # Clean up
           archive_path.unlink()
@@ -202,20 +205,24 @@ jobs:
           import tarfile
           import pyzstd
           from pathlib import Path
+          import io
 
           archive = Path('downloads-bins/assets/lldb/win/x86_64/lldb-${{ github.event.inputs.llvm_version }}-win-x86_64.tar.zst')
-          with pyzstd.open(archive, 'rb') as zst_file:
-              with tarfile.open(fileobj=zst_file, mode='r|') as tar:
-                  has_python_dll = False
-                  for member in tar:
-                      if 'bin/python310.dll' in member.name:
-                          print(f'✓ Found: {member.name} ({member.size / (1024*1024):.2f} MB)')
-                          has_python_dll = True
-                          break
+          with open(archive, 'rb') as compressed:
+              compressed_data = compressed.read()
+              decompressed_data = pyzstd.decompress(compressed_data)
 
-                  if not has_python_dll:
-                      print('✗ ERROR: python310.dll NOT found in archive!')
-                      exit(1)
+          with tarfile.open(fileobj=io.BytesIO(decompressed_data), mode='r|') as tar:
+              has_python_dll = False
+              for member in tar:
+                  if 'bin/python310.dll' in member.name:
+                      print(f'✓ Found: {member.name} ({member.size / (1024*1024):.2f} MB)')
+                      has_python_dll = True
+                      break
+
+              if not has_python_dll:
+                  print('✗ ERROR: python310.dll NOT found in archive!')
+                  exit(1)
           "
         shell: bash
 
