@@ -80,7 +80,7 @@ jobs:
           from pathlib import Path
           import io
 
-          archive_path = Path('../../assets/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst')
+          archive_path = Path('../../../downloads-bins/assets/clang/win/x86_64/llvm-21.1.5-win-x86_64.tar.zst')
           print(f'Extracting {archive_path}...')
 
           # Read and decompress the zstd file
