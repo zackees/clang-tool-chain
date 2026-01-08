@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
+from ..cli_parsers import parse_build_args, parse_build_run_args
 from ..platform import get_platform_info
 from .core import execute_tool, run_tool
 
@@ -29,30 +30,14 @@ def build_main() -> NoReturn:
         clang-tool-chain-build main.c main -O2
         clang-tool-chain-build main.cpp app.exe -std=c++17 -Wall
     """
-    args = sys.argv[1:]
-
-    if len(args) < 2:
-        print("\n" + "=" * 60, file=sys.stderr)
-        print("clang-tool-chain-build - Build Utility", file=sys.stderr)
-        print("=" * 60, file=sys.stderr)
-        print("Usage: clang-tool-chain-build <source_file> <output_file> [compiler_flags...]", file=sys.stderr)
-        print("\nExamples:", file=sys.stderr)
-        print("  clang-tool-chain-build main.cpp main.exe", file=sys.stderr)
-        print("  clang-tool-chain-build main.c main -O2", file=sys.stderr)
-        print("  clang-tool-chain-build main.cpp app.exe -std=c++17 -Wall", file=sys.stderr)
-        print("\nArguments:", file=sys.stderr)
-        print("  source_file     - C/C++ source file to compile (.c, .cpp, .cc, .cxx)", file=sys.stderr)
-        print("  output_file     - Output executable file", file=sys.stderr)
-        print("  compiler_flags  - Optional additional compiler flags", file=sys.stderr)
-        print("=" * 60 + "\n", file=sys.stderr)
-        sys.exit(1)
-
-    source_file = args[0]
-    output_file = args[1]
-    additional_flags = args[2:] if len(args) > 2 else []
+    try:
+        args = parse_build_args()
+    except SystemExit as e:
+        # ArgumentParser calls sys.exit on error or --help
+        sys.exit(e.code if e.code is not None else 1)
 
     # Determine if this is C or C++ based on file extension
-    source_path = Path(source_file)
+    source_path = Path(args.source_file)
     cpp_extensions = {".cpp", ".cc", ".cxx", ".C", ".c++"}
     is_cpp = source_path.suffix.lower() in cpp_extensions
 
@@ -60,7 +45,7 @@ def build_main() -> NoReturn:
     compiler = "clang++" if is_cpp else "clang"
 
     # Build the compiler command
-    compiler_args = [source_file, "-o", output_file] + additional_flags
+    compiler_args = [args.source_file, "-o", args.output_file] + args.compiler_flags
 
     # Execute the compiler
     execute_tool(compiler, compiler_args)
@@ -109,62 +94,16 @@ def build_run_main() -> NoReturn:
         clang-tool-chain-build-run main.cpp -std=c++17 -Wall
         clang-tool-chain-build-run --cached main.cpp -- arg1 arg2  # Pass args to program
     """
-    args = sys.argv[1:]
+    try:
+        args = parse_build_run_args()
+    except SystemExit as e:
+        # ArgumentParser calls sys.exit on error or --help
+        sys.exit(e.code if e.code is not None else 1)
 
-    if len(args) < 1:
-        print("\n" + "=" * 60, file=sys.stderr)
-        print("clang-tool-chain-build-run - Build and Run Utility", file=sys.stderr)
-        print("=" * 60, file=sys.stderr)
-        print(
-            "Usage: clang-tool-chain-build-run [--cached] <source_file> [compiler_flags...] [-- program_args...]",
-            file=sys.stderr,
-        )
-        print("\nExamples:", file=sys.stderr)
-        print("  clang-tool-chain-build-run main.cpp", file=sys.stderr)
-        print("  clang-tool-chain-build-run --cached main.c", file=sys.stderr)
-        print("  clang-tool-chain-build-run --cached main.cpp -O2", file=sys.stderr)
-        print("  clang-tool-chain-build-run main.cpp -std=c++17 -Wall", file=sys.stderr)
-        print("  clang-tool-chain-build-run --cached main.cpp -- arg1 arg2  # Pass args to program", file=sys.stderr)
-        print("\nBehavior:", file=sys.stderr)
-        print("  - Compiles source_file to an executable with the same base name", file=sys.stderr)
-        print("  - On Windows: src.cpp -> src.exe", file=sys.stderr)
-        print("  - On Unix: src.cpp -> src", file=sys.stderr)
-        print("  - Runs the executable immediately after successful compilation", file=sys.stderr)
-        print("  - Use '--' to separate compiler flags from program arguments", file=sys.stderr)
-        print("\nCaching (--cached flag):", file=sys.stderr)
-        print("  - Computes SHA256 hash of source file", file=sys.stderr)
-        print("  - Stores hash in src.hash file", file=sys.stderr)
-        print("  - Skips compilation if hash matches and executable exists", file=sys.stderr)
-        print("  - Useful for quick development iterations", file=sys.stderr)
-        print("\nArguments:", file=sys.stderr)
-        print("  --cached        - Enable hash-based compilation caching", file=sys.stderr)
-        print("  source_file     - C/C++ source file to compile (.c, .cpp, .cc, .cxx)", file=sys.stderr)
-        print("  compiler_flags  - Optional compiler flags (before '--')", file=sys.stderr)
-        print("  program_args    - Optional arguments to pass to the program (after '--')", file=sys.stderr)
-        print("=" * 60 + "\n", file=sys.stderr)
-        sys.exit(1)
-
-    # Check for --cached flag
-    use_cache = False
-    if args[0] == "--cached":
-        use_cache = True
-        args = args[1:]
-
-    if len(args) < 1:
-        print("Error: source_file is required", file=sys.stderr)
-        sys.exit(1)
-
-    # Split args into compiler flags and program args
-    if "--" in args:
-        separator_idx = args.index("--")
-        compile_args = args[:separator_idx]
-        program_args = args[separator_idx + 1 :]
-    else:
-        compile_args = args
-        program_args = []
-
-    source_file = compile_args[0]
-    compiler_flags = compile_args[1:] if len(compile_args) > 1 else []
+    use_cache = args.cached
+    source_file = args.source_file
+    compiler_flags = args.compiler_flags
+    program_args = args.program_args
 
     # Determine output executable name from source file
     source_path = Path(source_file)

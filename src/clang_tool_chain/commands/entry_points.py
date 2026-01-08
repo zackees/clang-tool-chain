@@ -215,24 +215,23 @@ def lldb_main() -> NoReturn | int:
     """
     import sys
 
+    from ..cli_parsers import parse_lldb_args
     from ..execution.lldb import execute_lldb_tool
 
-    args = sys.argv[1:]
+    try:
+        args = parse_lldb_args()
+    except SystemExit as e:
+        # ArgumentParser calls sys.exit on error or --help
+        sys.exit(e.code if e.code is not None else 1)
 
-    # Check for --print mode
-    print_mode = False
-    if args and args[0] == "--print":
-        print_mode = True
-        args = args[1:]
-
-        if not args:
+    if args.print_mode:
+        # Automated crash analysis mode
+        # Run executable under LLDB, capture crash, print stack trace
+        if not args.executable:
             print("Error: --print requires executable path", file=sys.stderr)
             return 1
 
-    if print_mode:
-        # Automated crash analysis mode
-        # Run executable under LLDB, capture crash, print stack trace
-        exe_path = args[0]
+        exe_path = args.executable
 
         # LLDB batch command to run and print backtrace on crash
         # Use -k flag for commands that should run after the process stops (crashes)
@@ -253,7 +252,10 @@ def lldb_main() -> NoReturn | int:
         return execute_lldb_tool("lldb", lldb_args, print_mode=True)
 
     # Interactive LLDB mode (never returns - calls sys.exit)
-    execute_lldb_tool("lldb", args)
+    # If executable is provided, pass it; otherwise, pass additional args
+    lldb_args = [args.executable] + args.lldb_args if args.executable else args.lldb_args
+
+    execute_lldb_tool("lldb", lldb_args)
     raise AssertionError("execute_lldb_tool should never return in interactive mode")
 
 
