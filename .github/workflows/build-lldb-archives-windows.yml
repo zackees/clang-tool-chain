@@ -58,9 +58,9 @@ jobs:
 
           echo "Verifying python310.dll exists..."
           if [ -f "python310.dll" ]; then
-            echo "✓ python310.dll found ($(stat -c%s python310.dll 2>/dev/null || stat -f%z python310.dll) bytes)"
+            echo "python310.dll found ($(stat -c%s python310.dll 2>/dev/null || stat -f%z python310.dll) bytes)"
           else
-            echo "✗ python310.dll NOT FOUND"
+            echo "ERROR: python310.dll NOT FOUND"
             exit 1
           fi
         shell: bash
@@ -118,11 +118,11 @@ jobs:
 
           # Copy python310.dll from embeddable package
           cp ../python_windows_x64/python310.dll ./
-          echo "✓ Copied python310.dll"
+          echo "Copied python310.dll"
 
           # Copy python310.zip (Python standard library)
           cp ../python_windows_x64/python310.zip ./
-          echo "✓ Copied python310.zip"
+          echo "Copied python310.zip"
 
           # Extract LLDB Python module from existing archive
           echo "Extracting LLDB Python module from current archive..."
@@ -163,7 +163,7 @@ jobs:
 
           # Clean up
           archive_path.unlink()
-          print('✓ LLDB Python module extracted')
+          print('LLDB Python module extracted successfully')
           "
 
           cd ../../../..
@@ -217,12 +217,12 @@ jobs:
               has_python_dll = False
               for member in tar:
                   if 'bin/python310.dll' in member.name:
-                      print(f'✓ Found: {member.name} ({member.size / (1024*1024):.2f} MB)')
+                      print(f'Found: {member.name} ({member.size / (1024*1024):.2f} MB)')
                       has_python_dll = True
                       break
 
               if not has_python_dll:
-                  print('✗ ERROR: python310.dll NOT found in archive!')
+                  print('ERROR: python310.dll NOT found in archive!')
                   exit(1)
           "
         shell: bash
