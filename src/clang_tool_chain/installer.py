@@ -222,13 +222,24 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         print(f"Latest version: {latest_version}")
         print(f"Download URL: {version_info.href}")
 
-    # Download archive to a temporary file
-    # Use tempfile to avoid conflicts with test cleanup that removes temp directories
-    # Create temporary file for download
-    with tempfile.NamedTemporaryFile(mode="wb", suffix=".tar.zst", delete=False) as tmp:
-        archive_path = Path(tmp.name)
+    # Check if archive is cached
+    from .archive_cache import get_cached_archive, save_archive_to_cache
 
-    try:
+    cached_archive = get_cached_archive("clang", platform, arch, version_info.sha256)
+
+    if cached_archive:
+        # Use cached archive (no download needed)
+        archive_path = cached_archive
+        if verbose:
+            print(f"Using cached archive: {archive_path}")
+        print("Using cached Clang/LLVM archive (skipping download)", file=sys.stderr, flush=True)
+    else:
+        # Download archive to a temporary file
+        # Use tempfile to avoid conflicts with test cleanup that removes temp directories
+        # Create temporary file for download
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".tar.zst", delete=False) as tmp:
+            archive_path = Path(tmp.name)
+
         # Get file size information and print to stderr before download
         # This helps users understand that downloading is in progress and not stalled
         from .parallel_download import check_server_capabilities
@@ -246,7 +257,13 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
 
         download_archive(version_info, archive_path)
 
-        print("Download complete. Extracting toolchain...", file=sys.stderr, flush=True)
+        print("Download complete. Caching and extracting toolchain...", file=sys.stderr, flush=True)
+
+        # Save to cache for future use
+        save_archive_to_cache(archive_path, "clang", platform, arch, version_info.sha256)
+
+    try:
+        print("Extracting toolchain...", file=sys.stderr, flush=True)
 
         if verbose:
             print("Download complete. Verifying checksum...")
@@ -365,8 +382,8 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
         print("Clang/LLVM toolchain installation complete!", file=sys.stderr, flush=True)
 
     finally:
-        # Clean up downloaded archive
-        if archive_path.exists():
+        # Clean up downloaded archive (but not if it came from cache)
+        if not cached_archive and archive_path.exists():
             archive_path.unlink()
 
     if verbose:
@@ -585,14 +602,27 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
         logger.info("Removing old IWYU installation")
         _robust_rmtree(install_dir)
 
-    # Create temp directory for download
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-        archive_file = temp_path / "iwyu.tar.zst"
+    # Check if archive is cached
+    from .archive_cache import get_cached_archive, save_archive_to_cache
+
+    cached_archive = get_cached_archive("iwyu", platform, arch, version_info.sha256)
+
+    if cached_archive:
+        # Use cached archive (no download needed)
+        archive_file = cached_archive
+        logger.info(f"Using cached IWYU archive: {archive_file}")
+    else:
+        # Create temp file for download
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".tar.zst", delete=False) as tmp:
+            archive_file = Path(tmp.name)
 
         # Download the archive (handles both single-file and multi-part)
         download_archive(version_info, archive_file)
 
+        # Save to cache for future use
+        save_archive_to_cache(archive_file, "iwyu", platform, arch, version_info.sha256)
+
+    try:
         # Extract to installation directory
         logger.info("Extracting IWYU archive")
         extract_tarball(archive_file, install_dir)
@@ -660,6 +690,11 @@ def download_and_install_iwyu(platform: str, arch: str) -> None:
             f.write(f"IWYU {manifest.latest} installed successfully\n" f"SHA256: {version_info.sha256}\n")
 
         logger.info(f"IWYU installation complete for {platform}/{arch}")
+
+    finally:
+        # Clean up downloaded archive (but not if it came from cache)
+        if not cached_archive and archive_file.exists():
+            archive_file.unlink()
 
 
 def _subprocess_install_iwyu(platform: str, arch: str) -> int:  # pyright: ignore[reportUnusedFunction]
@@ -819,14 +854,27 @@ def download_and_install_lldb(platform: str, arch: str) -> None:
         logger.info("Removing old LLDB installation")
         _robust_rmtree(install_dir)
 
-    # Create temp directory for download
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-        archive_file = temp_path / "lldb.tar.zst"
+    # Check if archive is cached
+    from .archive_cache import get_cached_archive, save_archive_to_cache
+
+    cached_archive = get_cached_archive("lldb", platform, arch, version_info.sha256)
+
+    if cached_archive:
+        # Use cached archive (no download needed)
+        archive_file = cached_archive
+        logger.info(f"Using cached LLDB archive: {archive_file}")
+    else:
+        # Create temp file for download
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".tar.zst", delete=False) as tmp:
+            archive_file = Path(tmp.name)
 
         # Download the archive (handles both single-file and multi-part)
         download_archive(version_info, archive_file)
 
+        # Save to cache for future use
+        save_archive_to_cache(archive_file, "lldb", platform, arch, version_info.sha256)
+
+    try:
         # Extract to installation directory
         logger.info("Extracting LLDB archive")
         extract_tarball(archive_file, install_dir)
@@ -865,6 +913,11 @@ def download_and_install_lldb(platform: str, arch: str) -> None:
             f.write(f"LLDB {manifest.latest} installed successfully\n" f"SHA256: {version_info.sha256}\n")
 
         logger.info(f"LLDB installation complete for {platform}/{arch}")
+
+    finally:
+        # Clean up downloaded archive (but not if it came from cache)
+        if not cached_archive and archive_file.exists():
+            archive_file.unlink()
 
 
 def _subprocess_install_lldb(platform: str, arch: str) -> int:  # pyright: ignore[reportUnusedFunction]
@@ -1353,6 +1406,10 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
     """
     logger.info(f"Starting Emscripten download and installation for {platform}/{arch}")
 
+    # Initialize to avoid unbound variable errors in exception handler
+    cached_archive: Path | None = None
+    archive_path: Path | None = None
+
     try:
         # Fetch manifest
         manifest = fetch_emscripten_platform_manifest(platform, arch)
@@ -1369,10 +1426,19 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
         logger.info(f"Download URL: {download_url}")
         logger.info(f"Expected SHA256: {expected_checksum}")
 
-        # Create temp directory for download
-        with tempfile.TemporaryDirectory(prefix="emscripten_download_") as temp_dir:
-            temp_path = Path(temp_dir)
-            archive_path = temp_path / f"emscripten-{latest_version}-{platform}-{arch}.tar.zst"
+        # Check if archive is cached
+        from .archive_cache import get_cached_archive, save_archive_to_cache
+
+        cached_archive = get_cached_archive("emscripten", platform, arch, version_info.sha256)
+
+        if cached_archive:
+            # Use cached archive (no download needed)
+            archive_path = cached_archive
+            logger.info(f"Using cached Emscripten archive: {archive_path}")
+        else:
+            # Create temp file for download
+            with tempfile.NamedTemporaryFile(mode="wb", suffix=".tar.zst", delete=False) as tmp:
+                archive_path = Path(tmp.name)
 
             logger.info(f"Downloading to: {archive_path}")
 
@@ -1380,99 +1446,109 @@ def download_and_install_emscripten(platform: str, arch: str) -> None:
             download_archive(version_info, archive_path)
             logger.info("Download and checksum verification successful")
 
-            # Extract
-            install_dir = get_emscripten_install_dir(platform, arch)
-            logger.info(f"Extracting to: {install_dir}")
-            install_dir.mkdir(parents=True, exist_ok=True)
+            # Save to cache for future use
+            save_archive_to_cache(archive_path, "emscripten", platform, arch, version_info.sha256)
 
-            extract_tarball(archive_path, install_dir)
+        # Extract
+        install_dir = get_emscripten_install_dir(platform, arch)
+        logger.info(f"Extracting to: {install_dir}")
+        install_dir.mkdir(parents=True, exist_ok=True)
 
-            # CRITICAL: On Windows, verify extracted files are visible before proceeding
-            # This prevents race conditions where extraction completes but files aren't
-            # yet visible to other processes due to filesystem caching
-            exe_ext = ".exe" if platform == "win" else ""
-            bin_dir = install_dir / "bin"
-            critical_extracted_files = [
-                (install_dir / "emscripten" / "emcc.py", "emcc.py script"),
-                (bin_dir / f"wasm-opt{exe_ext}", "wasm-opt binary"),
-            ]
+        extract_tarball(archive_path, install_dir)
 
-            logger.info("Verifying critical extracted files are accessible...")
-            for file_path, description in critical_extracted_files:
-                if not _verify_file_readable(file_path, description, timeout_seconds=2.0):
-                    raise RuntimeError(
-                        f"Critical file not accessible after extraction: {description}\n"
-                        f"Expected: {file_path}\n"
-                        f"This indicates a filesystem sync issue or corrupted archive.\n"
-                        f"Try removing ~/.clang-tool-chain/emscripten and reinstalling."
-                    )
-            logger.info("All critical extracted files verified")
+        # CRITICAL: On Windows, verify extracted files are visible before proceeding
+        # This prevents race conditions where extraction completes but files aren't
+        # yet visible to other processes due to filesystem caching
+        exe_ext = ".exe" if platform == "win" else ""
+        bin_dir = install_dir / "bin"
+        critical_extracted_files = [
+            (install_dir / "emscripten" / "emcc.py", "emcc.py script"),
+            (bin_dir / f"wasm-opt{exe_ext}", "wasm-opt binary"),
+        ]
 
-            # Fix permissions on Unix systems
-            if platform in ("linux", "darwin"):
-                logger.info("Fixing file permissions...")
-                fix_file_permissions(install_dir)
+        logger.info("Verifying critical extracted files are accessible...")
+        for file_path, description in critical_extracted_files:
+            if not _verify_file_readable(file_path, description, timeout_seconds=2.0):
+                raise RuntimeError(
+                    f"Critical file not accessible after extraction: {description}\n"
+                    f"Expected: {file_path}\n"
+                    f"This indicates a filesystem sync issue or corrupted archive.\n"
+                    f"Try removing ~/.clang-tool-chain/emscripten and reinstalling."
+                )
+        logger.info("All critical extracted files verified")
 
-            # On Windows, create clang++.exe from clang.exe if it doesn't exist
-            # Some Emscripten distributions may not include clang++.exe
-            if platform == "win":
-                clang_exe = bin_dir / f"clang{exe_ext}"
-                clang_pp_exe = bin_dir / f"clang++{exe_ext}"
-                if clang_exe.exists() and not clang_pp_exe.exists():
-                    logger.info(f"Creating clang++{exe_ext} from clang{exe_ext}...")
-                    try:
-                        shutil.copy2(clang_exe, clang_pp_exe)
-                        logger.info(f"Successfully created {clang_pp_exe}")
-                        # Verify the copied file is accessible
-                        if not _verify_file_readable(clang_pp_exe, f"clang++{exe_ext}", timeout_seconds=1.0):
-                            logger.warning(f"clang++{exe_ext} created but not immediately readable")
-                    except Exception as e:
-                        logger.error(f"Failed to create clang++{exe_ext}: {e}")
-                        raise RuntimeError(
-                            f"Failed to create clang++{exe_ext} from clang{exe_ext}: {e}\n"
-                            f"This is required for C++ compilation with Emscripten."
-                        ) from e
+        # Fix permissions on Unix systems
+        if platform in ("linux", "darwin"):
+            logger.info("Fixing file permissions...")
+            fix_file_permissions(install_dir)
 
-            # REMOVED: Binary linking no longer needed - Emscripten bundles its own LLVM 22
-            # Previously, we linked clang-tool-chain's LLVM 21.1.5 to Emscripten, causing version mismatch
-            # Emscripten distributions are self-contained with matching LLVM versions
-            # link_clang_binaries_to_emscripten(platform, arch)  # DEPRECATED
-
-            # Create .emscripten config file if it doesn't exist
-            create_emscripten_config(install_dir, platform, arch)
-
-            # CRITICAL: Remove entire cache directory to force proper header installation on first compile
-            # The extracted archive may contain an incomplete or corrupted cache from the build process.
-            # By removing it entirely, we ensure Emscripten's install_system_headers() runs on first use,
-            # properly generating all C/C++ headers from system/lib/libcxx/include to cache/sysroot/include.
-            # This fixes issues where iostream, bits/alltypes.h, and other headers are missing after installation.
-            cache_dir = install_dir / "emscripten" / "cache"
-            if cache_dir.exists():
-                logger.info("Removing Emscripten cache directory to ensure proper header installation on first compile")
+        # On Windows, create clang++.exe from clang.exe if it doesn't exist
+        # Some Emscripten distributions may not include clang++.exe
+        if platform == "win":
+            clang_exe = bin_dir / f"clang{exe_ext}"
+            clang_pp_exe = bin_dir / f"clang++{exe_ext}"
+            if clang_exe.exists() and not clang_pp_exe.exists():
+                logger.info(f"Creating clang++{exe_ext} from clang{exe_ext}...")
                 try:
-                    shutil.rmtree(cache_dir)
-                    logger.info(f"Removed cache directory: {cache_dir}")
+                    shutil.copy2(clang_exe, clang_pp_exe)
+                    logger.info(f"Successfully created {clang_pp_exe}")
+                    # Verify the copied file is accessible
+                    if not _verify_file_readable(clang_pp_exe, f"clang++{exe_ext}", timeout_seconds=1.0):
+                        logger.warning(f"clang++{exe_ext} created but not immediately readable")
                 except Exception as e:
-                    logger.warning(f"Failed to remove cache directory (non-critical): {e}")
+                    logger.error(f"Failed to create clang++{exe_ext}: {e}")
+                    raise RuntimeError(
+                        f"Failed to create clang++{exe_ext} from clang{exe_ext}: {e}\n"
+                        f"This is required for C++ compilation with Emscripten."
+                    ) from e
 
-            # Write done marker
-            done_file = install_dir / "done.txt"
-            with open(done_file, "w") as f:
-                f.write(f"Emscripten {latest_version} installed on {datetime.datetime.now()}\n")
-                f.write(f"Platform: {platform}\n")
-                f.write(f"Architecture: {arch}\n")
-                f.write(f"SHA256: {version_info.sha256}\n")
-                # Flush and sync to ensure file is fully written
-                f.flush()
-                os.fsync(f.fileno())
+        # REMOVED: Binary linking no longer needed - Emscripten bundles its own LLVM 22
+        # Previously, we linked clang-tool-chain's LLVM 21.1.5 to Emscripten, causing version mismatch
+        # Emscripten distributions are self-contained with matching LLVM versions
+        # link_clang_binaries_to_emscripten(platform, arch)  # DEPRECATED
 
-            # Verify done.txt is readable
-            if not _verify_file_readable(done_file, "done.txt marker file", timeout_seconds=1.0):
-                logger.warning(f"done.txt file verification failed: {done_file}")
+        # Create .emscripten config file if it doesn't exist
+        create_emscripten_config(install_dir, platform, arch)
 
-            logger.info("Emscripten installation complete")
+        # CRITICAL: Remove entire cache directory to force proper header installation on first compile
+        # The extracted archive may contain an incomplete or corrupted cache from the build process.
+        # By removing it entirely, we ensure Emscripten's install_system_headers() runs on first use,
+        # properly generating all C/C++ headers from system/lib/libcxx/include to cache/sysroot/include.
+        # This fixes issues where iostream, bits/alltypes.h, and other headers are missing after installation.
+        cache_dir = install_dir / "emscripten" / "cache"
+        if cache_dir.exists():
+            logger.info("Removing Emscripten cache directory to ensure proper header installation on first compile")
+            try:
+                shutil.rmtree(cache_dir)
+                logger.info(f"Removed cache directory: {cache_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to remove cache directory (non-critical): {e}")
+
+        # Write done marker
+        done_file = install_dir / "done.txt"
+        with open(done_file, "w") as f:
+            f.write(f"Emscripten {latest_version} installed on {datetime.datetime.now()}\n")
+            f.write(f"Platform: {platform}\n")
+            f.write(f"Architecture: {arch}\n")
+            f.write(f"SHA256: {version_info.sha256}\n")
+            # Flush and sync to ensure file is fully written
+            f.flush()
+            os.fsync(f.fileno())
+
+        # Verify done.txt is readable
+        if not _verify_file_readable(done_file, "done.txt marker file", timeout_seconds=1.0):
+            logger.warning(f"done.txt file verification failed: {done_file}")
+
+        logger.info("Emscripten installation complete")
+
+        # Clean up downloaded archive (but not if it came from cache)
+        if not cached_archive and archive_path and archive_path.exists():
+            archive_path.unlink()
 
     except Exception as e:
+        # Clean up downloaded archive on error (but not if it came from cache)
+        if not cached_archive and archive_path and archive_path.exists():
+            archive_path.unlink()
         logger.error(f"Failed to download and install Emscripten: {e}")
         raise RuntimeError(f"Failed to install Emscripten for {platform}/{arch}: {e}") from e
 
@@ -1776,6 +1852,10 @@ def download_and_install_nodejs(platform: str, arch: str) -> None:
 
     logger.info(f"Starting Node.js download and installation for {platform}/{arch}")
 
+    # Initialize to avoid unbound variable errors in exception handler
+    cached_archive: Path | None = None
+    archive_path: Path | None = None
+
     try:
         # Fetch manifest
         manifest = fetch_nodejs_platform_manifest(platform, arch)
@@ -1792,10 +1872,19 @@ def download_and_install_nodejs(platform: str, arch: str) -> None:
         logger.info(f"Download URL: {download_url}")
         logger.info(f"Expected SHA256: {expected_checksum}")
 
-        # Create temp directory for download
-        with tempfile.TemporaryDirectory(prefix="nodejs_download_") as temp_dir:
-            temp_path = Path(temp_dir)
-            archive_path = temp_path / f"nodejs-{latest_version}-{platform}-{arch}.tar.zst"
+        # Check if archive is cached
+        from .archive_cache import get_cached_archive, save_archive_to_cache
+
+        cached_archive = get_cached_archive("nodejs", platform, arch, version_info.sha256)
+
+        if cached_archive:
+            # Use cached archive (no download needed)
+            archive_path = cached_archive
+            logger.info(f"Using cached Node.js archive: {archive_path}")
+        else:
+            # Create temp file for download
+            with tempfile.NamedTemporaryFile(mode="wb", suffix=".tar.zst", delete=False) as tmp:
+                archive_path = Path(tmp.name)
 
             logger.info(f"Downloading to: {archive_path}")
 
@@ -1803,50 +1892,63 @@ def download_and_install_nodejs(platform: str, arch: str) -> None:
             download_archive(version_info, archive_path)
             logger.info("Download and checksum verification successful")
 
-            # Extract
-            install_dir = get_nodejs_install_dir(platform, arch)
-            logger.info(f"Extracting to: {install_dir}")
+            # Save to cache for future use
+            save_archive_to_cache(archive_path, "nodejs", platform, arch, version_info.sha256)
 
-            # Remove old installation if it exists (BEFORE extraction)
-            if install_dir.exists():
-                logger.info("Removing old Node.js installation")
-                _robust_rmtree(install_dir)
+        # Extract
+        install_dir = get_nodejs_install_dir(platform, arch)
+        logger.info(f"Extracting to: {install_dir}")
 
-            # Ensure parent directory exists
-            install_dir.parent.mkdir(parents=True, exist_ok=True)
+        # Remove old installation if it exists (BEFORE extraction)
+        if install_dir.exists():
+            logger.info("Removing old Node.js installation")
+            _robust_rmtree(install_dir)
 
-            extract_tarball(archive_path, install_dir)
+        # Ensure parent directory exists
+        install_dir.parent.mkdir(parents=True, exist_ok=True)
 
-            # Fix permissions on Unix systems
-            if platform in ("linux", "darwin"):
-                logger.info("Fixing file permissions...")
-                fix_file_permissions(install_dir)
+        extract_tarball(archive_path, install_dir)
 
-            # Verify node binary exists
-            node_binary = install_dir / "bin" / ("node.exe" if platform == "win" else "node")
-            if not node_binary.exists():
-                raise RuntimeError(
-                    f"Node.js binary not found after extraction: {node_binary}\n"
-                    f"Expected location: {node_binary}\n"
-                    f"Installation may be corrupted. Please try again."
-                )
+        # Fix permissions on Unix systems
+        if platform in ("linux", "darwin"):
+            logger.info("Fixing file permissions...")
+            fix_file_permissions(install_dir)
 
-            logger.info(f"Node.js binary found: {node_binary}")
+        # Verify node binary exists
+        node_binary = install_dir / "bin" / ("node.exe" if platform == "win" else "node")
+        if not node_binary.exists():
+            raise RuntimeError(
+                f"Node.js binary not found after extraction: {node_binary}\n"
+                f"Expected location: {node_binary}\n"
+                f"Installation may be corrupted. Please try again."
+            )
 
-            # Write done marker
-            done_file = install_dir / "done.txt"
-            with open(done_file, "w") as f:
-                f.write(f"Node.js {latest_version} installed on {datetime.datetime.now()}\n")
-                f.write(f"Platform: {platform}\n")
-                f.write(f"Architecture: {arch}\n")
-                f.write(f"SHA256: {version_info.sha256}\n")
+        logger.info(f"Node.js binary found: {node_binary}")
 
-            logger.info("Node.js installation complete")
+        # Write done marker
+        done_file = install_dir / "done.txt"
+        with open(done_file, "w") as f:
+            f.write(f"Node.js {latest_version} installed on {datetime.datetime.now()}\n")
+            f.write(f"Platform: {platform}\n")
+            f.write(f"Architecture: {arch}\n")
+            f.write(f"SHA256: {version_info.sha256}\n")
+
+        logger.info("Node.js installation complete")
+
+        # Clean up downloaded archive (but not if it came from cache)
+        if not cached_archive and archive_path and archive_path.exists():
+            archive_path.unlink()
 
     except ToolchainInfrastructureError:
+        # Clean up downloaded archive on error (but not if it came from cache)
+        if not cached_archive and archive_path and archive_path.exists():
+            archive_path.unlink()
         # Re-raise infrastructure errors as-is
         raise
     except Exception as e:
+        # Clean up downloaded archive on error (but not if it came from cache)
+        if not cached_archive and archive_path and archive_path.exists():
+            archive_path.unlink()
         logger.error(f"Failed to download and install Node.js: {e}")
         # Clean up failed installation
         install_dir = get_nodejs_install_dir(platform, arch)

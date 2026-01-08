@@ -191,6 +191,49 @@ def get_lldb_lock_path(platform: str, arch: str) -> Path:
 
 
 # ============================================================================
+# Archive Cache Paths
+# ============================================================================
+
+
+def get_archive_cache_dir() -> Path:
+    """
+    Get the directory for cached downloaded archives.
+
+    Archives are stored here to avoid re-downloading when toolchains are purged.
+    Structure: ~/.clang-tool-chain/archives/
+
+    Returns:
+        Path to the archive cache directory
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    cache_dir = toolchain_dir / "archives"
+    return cache_dir
+
+
+def get_cached_archive_path(component: str, platform: str, arch: str, sha256: str) -> Path:
+    """
+    Get the path for a cached archive file.
+
+    Archives are named with their SHA256 hash to ensure uniqueness and integrity.
+    Format: {component}-{platform}-{arch}-{sha256[:16]}.tar.zst
+
+    Args:
+        component: Component name (e.g., "clang", "iwyu", "lldb", "emscripten", "nodejs")
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+        sha256: Full SHA256 hash of the archive
+
+    Returns:
+        Path to the cached archive file
+    """
+    cache_dir = get_archive_cache_dir()
+    # Use first 16 chars of SHA256 for filename (enough to avoid collisions)
+    short_hash = sha256[:16]
+    filename = f"{component}-{platform}-{arch}-{short_hash}.tar.zst"
+    return cache_dir / filename
+
+
+# ============================================================================
 # Node.js Paths
 # ============================================================================
 

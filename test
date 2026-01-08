@@ -6,8 +6,8 @@ echo "Running unittests"
 # Run parallel-safe tests first (excludes @pytest.mark.serial tests)
 # Emscripten tests now run in parallel - locking handled by fasteners
 echo "==> Running parallel tests (includes Emscripten tests)..."
-uv run pytest -n auto -m "not serial" tests -v --durations=0
+uv run pytest -n auto -m "not serial" tests -v --durations=20
 
 # Run serial tests sequentially (IWYU, build_run, etc. that need serial execution)
 echo "==> Running serial tests..."
-uv run pytest -m "serial" tests -v --durations=0
+uv run pytest -m "serial" tests -v --durations=20
