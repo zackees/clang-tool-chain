@@ -13,6 +13,7 @@ Compilers:
 
 Linker:
     - lld_main: LLVM linker (lld-link on Windows, lld on Unix)
+    - wasm_ld_main: WebAssembly linker (wasm-ld)
 
 Binary Utilities:
     - llvm_ar_main: Archive utility
@@ -77,6 +78,7 @@ from .entry_points import (
     llvm_strip_main,
     sccache_emcc_main,
     sccache_empp_main,
+    wasm_ld_main,
 )
 
 __all__ = [
@@ -87,6 +89,7 @@ __all__ = [
     "clang_cpp_msvc_main",
     # Linker
     "lld_main",
+    "wasm_ld_main",
     # Binary Utilities
     "llvm_ar_main",
     "llvm_nm_main",

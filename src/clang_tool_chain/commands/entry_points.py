@@ -58,6 +58,13 @@ def lld_main() -> NoReturn:
         execute_tool("lld")
 
 
+def wasm_ld_main() -> NoReturn:
+    """Entry point for wasm-ld linker wrapper (WebAssembly linker)."""
+    from ..execution.core import execute_tool
+
+    execute_tool("wasm-ld")
+
+
 # ============================================================================
 # LLVM Binary Utilities Entry Points
 # ============================================================================

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clang-tool-chain"
-version = "1.0.26"
+version = "1.0.27"
 description = "Clang Tool Chain - C/C++ compilation toolchain utilities"
 readme = "README.md"
 license = "Apache-2.0"
@@ -78,6 +78,7 @@ clang-tool-chain-c-msvc = "clang_tool_chain.wrapper:clang_msvc_main"
 clang-tool-chain-cpp-msvc = "clang_tool_chain.wrapper:clang_cpp_msvc_main"
 # Linker and Archiver
 clang-tool-chain-ld = "clang_tool_chain.wrapper:lld_main"
+clang-tool-chain-wasm-ld = "clang_tool_chain.wrapper:wasm_ld_main"
 clang-tool-chain-ar = "clang_tool_chain.wrapper:llvm_ar_main"
 # Binary Utilities
 clang-tool-chain-nm = "clang_tool_chain.wrapper:llvm_nm_main"

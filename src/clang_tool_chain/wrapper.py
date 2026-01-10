@@ -88,6 +88,7 @@ from .commands import (
     llvm_strip_main,
     sccache_emcc_main,
     sccache_empp_main,
+    wasm_ld_main,
 )
 
 # ============================================================================
@@ -226,6 +227,7 @@ __all__ = [
     "clang_msvc_main",
     "clang_cpp_msvc_main",
     "lld_main",
+    "wasm_ld_main",
     "llvm_ar_main",
     "llvm_nm_main",
     "llvm_objdump_main",
