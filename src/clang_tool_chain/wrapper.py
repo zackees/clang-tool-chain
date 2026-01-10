@@ -86,6 +86,7 @@ from .commands import (
     llvm_ranlib_main,
     llvm_readelf_main,
     llvm_strip_main,
+    meson_main,
     sccache_emcc_main,
     sccache_empp_main,
     wasm_ld_main,
@@ -247,6 +248,7 @@ __all__ = [
     "fix_includes_main",
     "lldb_main",
     "lldb_check_python_main",
+    "meson_main",
     "sccache_emcc_main",
     "sccache_empp_main",
 ]

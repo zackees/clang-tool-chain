@@ -304,3 +304,16 @@ def sccache_empp_main() -> NoReturn:
     from ..execution.emscripten import execute_emscripten_tool_with_sccache
 
     execute_emscripten_tool_with_sccache("em++")
+
+
+# ============================================================================
+# Build System Entry Points
+# ============================================================================
+
+
+def meson_main() -> int:
+    """Entry point for meson build system wrapper."""
+    from mesonbuild.mesonmain import main as meson_main_impl
+
+    # Pass all arguments to meson
+    return meson_main_impl()

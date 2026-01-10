@@ -33,6 +33,7 @@ dependencies = [
     "pyzstd>=0.16.0",
     "uv-iso-env>=1.0.0",
     "setenvironment>=1.1.0",
+    "meson>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -113,6 +114,8 @@ clang-tool-chain-emar = "clang_tool_chain.wrapper:emar_main"
 # Emscripten + sccache (WebAssembly compilation with caching)
 clang-tool-chain-sccache-emcc = "clang_tool_chain.wrapper:sccache_emcc_main"
 clang-tool-chain-sccache-empp = "clang_tool_chain.wrapper:sccache_empp_main"
+# Build Systems
+clang-tool-chain-meson = "clang_tool_chain.wrapper:meson_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clang_tool_chain"]
