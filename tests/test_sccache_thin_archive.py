@@ -21,9 +21,38 @@ from pathlib import Path
 import pytest
 
 
+@pytest.mark.serial
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific test for MSVC vs lld")
 class TestSccacheThinArchiveWindows(unittest.TestCase):
-    """Test that sccache wrapper uses ld.lld and supports thin archives on Windows."""
+    """Test that sccache wrapper uses ld.lld and supports thin archives on Windows.
+
+    Note: Marked as serial because sccache tests can experience resource contention
+    when run in parallel with other compilation tests, leading to timeouts.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Pre-install sccache once for all tests to avoid timeout during individual tests."""
+        # Check if sccache is already installed in PATH
+        import shutil
+
+        if shutil.which("sccache") is None:
+            # Try to pre-install sccache via iso-env by calling sccache --version
+            # This will trigger the iso-env installation on first use
+            # Use a longer timeout for this one-time setup
+            try:
+                result = subprocess.run(
+                    ["clang-tool-chain-sccache-cpp", "--help"],
+                    capture_output=True,
+                    text=True,
+                    timeout=180,  # 3 minutes for initial download/setup
+                )
+                if result.returncode != 0:
+                    print(f"Warning: sccache pre-installation failed: {result.stderr}", file=sys.stderr)
+            except subprocess.TimeoutExpired:
+                print("Warning: sccache pre-installation timed out", file=sys.stderr)
+            except Exception as e:
+                print(f"Warning: sccache pre-installation error: {e}", file=sys.stderr)
 
     def setUp(self):
         """Set up test environment."""
@@ -65,7 +94,7 @@ int main() {
             ["clang-tool-chain-sccache-cpp", str(test_cpp), "-o", "test_linker.exe", "-v"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         # Verify compilation succeeded
@@ -84,7 +113,7 @@ int main() {
         # The actual target used is shown in "Target:" line and "-triple" argument
 
         # Verify executable runs
-        exe_result = subprocess.run(["./test_linker.exe"], capture_output=True, text=True, timeout=10)
+        exe_result = subprocess.run(["./test_linker.exe"], capture_output=True, text=True, timeout=5)
         self.assertEqual(exe_result.returncode, 0, "Executable should run successfully")
         self.assertIn("Testing linker selection", exe_result.stdout)
 
@@ -133,7 +162,7 @@ int main() {
             ["clang-tool-chain-sccache-cpp", "-c", str(lib_cpp), "-o", "mathlib.o"],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=10,
         )
         self.assertEqual(compile_result.returncode, 0, f"Library compilation failed\n{compile_result.stderr}")
         self.assertTrue((self.temp_path / "mathlib.o").exists(), "Object file should be created")
@@ -144,7 +173,7 @@ int main() {
             ["clang-tool-chain-ar", "rcsT", "libmath_thin.a", "mathlib.o"],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=10,
         )
         self.assertEqual(archive_result.returncode, 0, f"Archive creation failed\n{archive_result.stderr}")
 
@@ -155,7 +184,7 @@ int main() {
         # Use 'file' command if available to verify thin archive format
         try:
             file_result = subprocess.run(
-                ["file", str(archive_file)], capture_output=True, text=True, timeout=10, check=False
+                ["file", str(archive_file)], capture_output=True, text=True, timeout=5, check=False
             )
             if file_result.returncode == 0:
                 self.assertIn("thin archive", file_result.stdout.lower(), "Should be a thin archive")
@@ -169,7 +198,7 @@ int main() {
             ["clang-tool-chain-sccache-cpp", str(main_cpp), "libmath_thin.a", "-o", "test_thin.exe"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         # Verify linking succeeded (would fail with link.exe)
@@ -185,7 +214,7 @@ int main() {
         self.assertNotIn("fatal error LNK", link_result.stderr, "Should not get any MSVC linker errors")
 
         # Step 4: Run the executable
-        exe_result = subprocess.run(["./test_thin.exe"], capture_output=True, text=True, timeout=10)
+        exe_result = subprocess.run(["./test_thin.exe"], capture_output=True, text=True, timeout=5)
 
         # Verify execution
         self.assertEqual(
@@ -218,27 +247,27 @@ int main() { return get_value(); }
         subprocess.run(
             ["clang-tool-chain-sccache-cpp", "-c", str(lib_cpp), "-o", "lib.o"],
             check=True,
-            timeout=30,
+            timeout=10,
         )
 
         # Test 1: Regular (fat) archive
-        subprocess.run(["clang-tool-chain-ar", "rcs", "libfat.a", "lib.o"], check=True, timeout=30)
+        subprocess.run(["clang-tool-chain-ar", "rcs", "libfat.a", "lib.o"], check=True, timeout=10)
         subprocess.run(
             ["clang-tool-chain-sccache-cpp", str(main_cpp), "libfat.a", "-o", "test_fat.exe"],
             check=True,
-            timeout=60,
+            timeout=10,
         )
-        fat_result = subprocess.run(["./test_fat.exe"], capture_output=True, timeout=10)
+        fat_result = subprocess.run(["./test_fat.exe"], capture_output=True, timeout=5)
         self.assertEqual(fat_result.returncode, 42, "Fat archive should work")
 
         # Test 2: Thin archive
-        subprocess.run(["clang-tool-chain-ar", "rcsT", "libthin.a", "lib.o"], check=True, timeout=30)
+        subprocess.run(["clang-tool-chain-ar", "rcsT", "libthin.a", "lib.o"], check=True, timeout=10)
         subprocess.run(
             ["clang-tool-chain-sccache-cpp", str(main_cpp), "libthin.a", "-o", "test_thin.exe"],
             check=True,
-            timeout=60,
+            timeout=10,
         )
-        thin_result = subprocess.run(["./test_thin.exe"], capture_output=True, timeout=10)
+        thin_result = subprocess.run(["./test_thin.exe"], capture_output=True, timeout=5)
         self.assertEqual(thin_result.returncode, 42, "Thin archive should work (was broken before fix)")
 
         # Both should produce the same result

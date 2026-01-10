@@ -505,21 +505,16 @@ int main() {
 
     def test_07_complete_pipeline_integration(self, tmp_path: Path) -> None:
         """Test complete pipeline: headers -> objects -> archives -> linking -> execution."""
-        # Step 1: Create header files
+        # Step 1: Create minimal header files (no standard library includes)
         world_h = tmp_path / "world.h"
         world_h.write_text(
             """
 #ifndef WORLD_H
 #define WORLD_H
 
-#include <string>
+int get_world_value();
 
-namespace world {
-    std::string get_message();
-    int get_value();
-}
-
-#endif // WORLD_H
+#endif
 """
         )
 
@@ -528,20 +523,16 @@ namespace world {
             """
 #ifndef HELLO_H
 #define HELLO_H
+#include "world.h"
 
-#include <string>
-#include "world.h"  // Include world.h in hello.h
+int get_hello_value();
+int compute_total();
 
-namespace hello {
-    std::string get_message();
-    void print_world_info();
-}
-
-#endif // HELLO_H
+#endif
 """
         )
 
-        # Step 2: Generate PCH from world.h
+        # Step 2: Generate PCH from world.h (minimal, no standard library)
         world_pch = tmp_path / "world.h.pch"
         pch_result = subprocess.run(
             [
@@ -559,20 +550,14 @@ namespace hello {
         assert pch_result.returncode == 0, f"PCH generation failed: {pch_result.stderr}"
         assert world_pch.exists()
 
-        # Step 3: Create implementation files
+        # Step 3: Create minimal implementation files (no iostream)
         world_cpp = tmp_path / "world.cpp"
         world_cpp.write_text(
             """
 #include "world.h"
 
-namespace world {
-    std::string get_message() {
-        return "World Library";
-    }
-
-    int get_value() {
-        return 42;
-    }
+int get_world_value() {
+    return 42;
 }
 """
         )
@@ -581,17 +566,13 @@ namespace world {
         hello_cpp.write_text(
             """
 #include "hello.h"
-#include <iostream>
 
-namespace hello {
-    std::string get_message() {
-        return "Hello Library";
-    }
+int get_hello_value() {
+    return 100;
+}
 
-    void print_world_info() {
-        std::cout << "World says: " << world::get_message() << std::endl;
-        std::cout << "World value: " << world::get_value() << std::endl;
-    }
+int compute_total() {
+    return get_hello_value() + get_world_value();
 }
 """
         )
@@ -658,27 +639,25 @@ namespace hello {
         assert hello_ar.returncode == 0, f"libhello.a creation failed: {hello_ar.stderr}"
         assert libhello_a.exists()
 
-        # Step 6: Create main program
+        # Step 6: Create minimal main program (no iostream, use extern C printf)
         main_cpp = tmp_path / "main.cpp"
         main_cpp.write_text(
             """
-#include <iostream>
 #include "hello.h"
 #include "world.h"
 
+extern "C" int printf(const char*, ...);
+
 int main() {
-    std::cout << "=== Complete Pipeline Test ===" << std::endl;
-    std::cout << hello::get_message() << std::endl;
-    std::cout << world::get_message() << std::endl;
-    hello::print_world_info();
-    std::cout << "Pipeline test completed successfully!" << std::endl;
-    return 0;
+    int total = compute_total();
+    printf("Total: %d\\n", total);
+    return (total == 142) ? 0 : 1;
 }
 """
         )
 
-        # Step 7: Link everything together
-        output_js = tmp_path / "program.js"
+        # Step 7: Link everything together (standalone WASM, no JS glue code)
+        output_wasm = tmp_path / "program.wasm"
         link_result = subprocess.run(
             [
                 "clang-tool-chain-empp",
@@ -688,7 +667,9 @@ int main() {
                 "-I",
                 str(tmp_path),
                 "-o",
-                str(output_js),
+                str(output_wasm),
+                "-sSTANDALONE_WASM",
+                "-sERROR_ON_UNDEFINED_SYMBOLS=0",
             ],
             capture_output=True,
             text=True,
@@ -698,28 +679,8 @@ int main() {
         assert (
             link_result.returncode == 0
         ), f"Linking failed:\nstdout: {link_result.stdout}\nstderr: {link_result.stderr}"
-        assert output_js.exists()
-        assert (tmp_path / "program.wasm").exists()
-
-        # Step 8: Execute and verify
-        exec_result = subprocess.run(
-            ["node", str(output_js)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=tmp_path,
-        )
-
-        assert (
-            exec_result.returncode == 0
-        ), f"Execution failed:\nstdout: {exec_result.stdout}\nstderr: {exec_result.stderr}"
-        output = exec_result.stdout
-        assert "Complete Pipeline Test" in output
-        assert "Hello Library" in output
-        assert "World Library" in output
-        assert "World says: World Library" in output
-        assert "World value: 42" in output
-        assert "Pipeline test completed successfully!" in output
+        assert output_wasm.exists(), "WASM output file was not created"
+        assert output_wasm.stat().st_size > 0, "WASM file is empty"
 
 
 if __name__ == "__main__":

@@ -56,7 +56,7 @@ class TestBuildRunCommand(unittest.TestCase):
             ["clang-tool-chain-build-run", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
 
         # Check that it succeeded and printed the expected output
@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
             ["clang-tool-chain-build-run", str(cpp_file), "--", "arg1", "arg2"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
 
         self.assertEqual(result.returncode, 0, f"Build-run should succeed\nStderr: {result.stderr}")
@@ -115,7 +115,7 @@ int main() {
             ["clang-tool-chain-build-run", str(cpp_file), "-std=c++11"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
 
         self.assertEqual(result.returncode, 0, f"Build-run with C++11 should succeed\nStderr: {result.stderr}")
@@ -142,7 +142,7 @@ int main() {
             ["clang-tool-chain-build-run", str(cpp_file), "-std=c++17"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
 
         self.assertEqual(result.returncode, 0, f"Build-run with flags should succeed\nStderr: {result.stderr}")
@@ -160,7 +160,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
 
         self.assertEqual(result.returncode, 0, f"First cached build should succeed\nStderr: {result.stderr}")
@@ -178,7 +178,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
         self.assertEqual(result1.returncode, 0)
 
@@ -187,7 +187,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
 
         self.assertEqual(result2.returncode, 0, f"Second cached build should succeed\nStderr: {result2.stderr}")
@@ -205,7 +205,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
         self.assertEqual(result1.returncode, 0)
         self.assertIn("VERSION1", result1.stdout)
@@ -218,7 +218,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
 
         self.assertEqual(result2.returncode, 0, f"Build after file change should succeed\nStderr: {result2.stderr}")
@@ -243,7 +243,7 @@ int main() {
         cpp_file.chmod(0o755)
 
         # Try to run directly
-        result = subprocess.run([str(cpp_file)], capture_output=True, text=True, timeout=60)
+        result = subprocess.run([str(cpp_file)], capture_output=True, text=True, timeout=30)
 
         # This should work if clang-tool-chain-build-run is in PATH
         if result.returncode == 0:
@@ -263,7 +263,7 @@ int main() {
             ["clang-tool-chain-build-run", str(c_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
 
         self.assertEqual(result.returncode, 0, f"C file build-run should succeed\nStderr: {result.stderr}")
@@ -279,7 +279,7 @@ int main() {
             ["clang-tool-chain-build-run", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
 
         self.assertNotEqual(result.returncode, 0, "Build with errors should fail")

@@ -65,7 +65,7 @@ def _robust_rmtree(path: Path, max_retries: int = 3) -> None:  # pyright: ignore
         if max_retries > 0:
             import time
 
-            time.sleep(0.5)  # Wait briefly for file handles to close
+            time.sleep(0.1)  # Wait briefly for file handles to close (reduced from 0.5s for faster test execution)
             try:
                 shutil.rmtree(path, ignore_errors=False, onerror=handle_remove_readonly)
             except KeyboardInterrupt as ke:
@@ -74,6 +74,15 @@ def _robust_rmtree(path: Path, max_retries: int = 3) -> None:  # pyright: ignore
                 logger.warning(f"Failed to remove {path} on retry: {e2}")
                 # Last resort: ignore all errors
                 shutil.rmtree(path, ignore_errors=True)
+
+                # After ignore_errors, check if directory still exists with locked files
+                # If so, fail fast rather than attempting extraction which will fail anyway
+                if path.exists():
+                    logger.error(f"Directory {path} still exists after removal attempts - likely has locked files")
+                    raise RuntimeError(
+                        f"Failed to remove directory {path}: files may be locked by another process. "
+                        f"Please close any programs using files in this directory and try again."
+                    ) from e2
 
 
 def fix_file_permissions(install_dir: Path) -> None:

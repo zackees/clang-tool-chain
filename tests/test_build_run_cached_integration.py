@@ -8,7 +8,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
 
@@ -62,7 +61,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         # Verify first run
@@ -77,16 +76,13 @@ int main() {
         initial_hash = hash_file.read_text().strip()
         initial_exe_mtime = exe_file.stat().st_mtime
 
-        # Small delay to ensure timestamps differ if recompilation occurs
-        time.sleep(0.1)
-
         # Step 3: Second run with --cached (should use cache)
         print("\n=== Step 2: Second run (cache hit) ===")
         result2 = subprocess.run(
             ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         # Verify second run used cache
@@ -108,9 +104,6 @@ int main() {
         second_hash = hash_file.read_text().strip()
         self.assertEqual(initial_hash, second_hash, "Hash should remain unchanged on cache hit")
 
-        # Small delay before modification
-        time.sleep(0.1)
-
         # Step 4: Modify source file
         print("\n=== Step 3: Modify source (cache invalidation) ===")
         cpp_file.write_text(
@@ -128,7 +121,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         # Verify recompilation occurred
@@ -152,16 +145,13 @@ int main() {
         third_hash = hash_file.read_text().strip()
         self.assertNotEqual(initial_hash, third_hash, "Hash should be updated after source change")
 
-        # Small delay before final run
-        time.sleep(0.1)
-
         # Step 6: Fourth run (should use new cache)
         print("\n=== Step 4: Fourth run (cache hit with new version) ===")
         result4 = subprocess.run(
             ["clang-tool-chain-build-run", "--cached", str(cpp_file)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         # Verify cache works with modified version
@@ -205,7 +195,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file), "-std=c++11"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         self.assertEqual(result1.returncode, 0, f"First run with C++11 should succeed\nStderr: {result1.stderr}")
@@ -217,7 +207,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file), "-std=c++11"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         self.assertEqual(result2.returncode, 0, f"Second run should succeed\nStderr: {result2.stderr}")
@@ -246,7 +236,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file), "-std=c++17"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         self.assertEqual(result1.returncode, 0, f"First run with flags should succeed\nStderr: {result1.stderr}")
@@ -258,7 +248,7 @@ int main() {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file), "-std=c++17"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         self.assertEqual(result2.returncode, 0, f"Second run should succeed\nStderr: {result2.stderr}")
@@ -287,7 +277,7 @@ int main(int argc, char* argv[]) {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file), "--", "hello", "world"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         self.assertEqual(result1.returncode, 0, f"First run should succeed\nStderr: {result1.stderr}")
@@ -299,7 +289,7 @@ int main(int argc, char* argv[]) {
             ["clang-tool-chain-build-run", "--cached", str(cpp_file), "--", "foo", "bar", "baz"],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=10,
         )
 
         self.assertEqual(result2.returncode, 0, f"Second run should succeed\nStderr: {result2.stderr}")

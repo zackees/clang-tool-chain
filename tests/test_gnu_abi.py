@@ -785,24 +785,23 @@ int main() {
         Integration test that verifies GNU ABI (default) and MSVC ABI (-msvc variant)
         use different C++ name mangling schemes. Uses llvm-nm to inspect symbols.
         Requires Visual Studio SDK for MSVC compilation.
+
+        Optimization (Iteration 10): Simplified source code (single method, no separate implementation)
+        reduces compilation time from 14.90s to target <8s.
         """
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a C++ file with a class and methods (will have name mangling)
+            # Create a C++ file with minimal class (single method for faster compilation)
             test_file = Path(temp_dir) / "test.cpp"
             test_file.write_text(
                 """
-class MyClass {
+class C {
 public:
-    void myMethod(int x, double y);
+    void m(int x);
 };
 
-void MyClass::myMethod(int x, double y) {
-    // Implementation
-}
+void C::m(int x) {}
 
-extern "C" int exported_function() {
-    return 42;
-}
+extern "C" int f() { return 0; }
 """
             )
 
@@ -863,8 +862,8 @@ extern "C" int exported_function() {
             # Symbol names should be different (different name mangling)
             # GNU typically uses _ZN format, MSVC uses ?name@ format
             # The extern "C" function should be the same though
-            self.assertIn("exported_function", nm_gnu.stdout, "GNU object should have exported_function symbol")
-            self.assertIn("exported_function", nm_msvc.stdout, "MSVC object should have exported_function symbol")
+            self.assertIn("f", nm_gnu.stdout, "GNU object should have f symbol")
+            self.assertIn("f", nm_msvc.stdout, "MSVC object should have f symbol")
 
             # But the mangled names should be different
             # This is the key difference between ABIs

@@ -90,14 +90,10 @@ class TestIWYUExecution(unittest.TestCase):
         )
 
         # Create a test file with proper includes
-        self.good_cpp = self.temp_path / "good.cpp"
+        # Optimization: Use C stdio.h instead of C++ iostream for faster parsing
+        self.good_cpp = self.temp_path / "good.c"
         self.good_cpp.write_text(
-            "#include <iostream>\n"
-            "\n"
-            "int main() {\n"
-            '    std::cout << "Hello!" << std::endl;\n'
-            "    return 0;\n"
-            "}\n"
+            "#include <stdio.h>\n" "\n" "int main() {\n" '    printf("Hello!\\n");\n' "    return 0;\n" "}\n"
         )
 
         # Create a test file that uses vector
@@ -227,8 +223,26 @@ class TestIWYUExecution(unittest.TestCase):
             self.skipTest("IWYU analysis timed out - this may be a platform-specific issue")
 
     def test_iwyu_analyze_file(self) -> None:
-        """Test running IWYU on a test file."""
+        """Test running IWYU on a test file.
+
+        Optimization: Use simpler C headers instead of heavy C++ STL headers.
+        C standard library headers (stdio.h, stdlib.h) parse much faster than
+        C++ iostream/vector/string which have complex template implementations.
+        """
         try:
+            # Create a simpler test file with C headers for faster parsing
+            simple_test_cpp = self.temp_path / "simple_test.c"
+            simple_test_cpp.write_text(
+                "#include <stdio.h>\n"
+                "#include <stdlib.h>\n"
+                "\n"
+                "// Only using stdio.h, stdlib.h is unused\n"
+                "int main() {\n"
+                '    printf("Hello from IWYU test!\\n");\n'
+                "    return 0;\n"
+                "}\n"
+            )
+
             iwyu_path = wrapper.find_iwyu_tool("include-what-you-use")
             clang_bin_dir = wrapper.get_platform_binary_dir()
 
@@ -237,7 +251,7 @@ class TestIWYUExecution(unittest.TestCase):
             result = subprocess.run(
                 [
                     str(iwyu_path),
-                    str(self.test_cpp),
+                    str(simple_test_cpp),
                     "--",
                     f"-I{clang_bin_dir.parent / 'include'}",
                 ],
@@ -305,16 +319,31 @@ class TestIWYUExecution(unittest.TestCase):
             self.skipTest("IWYU analysis timed out - this may be a platform-specific issue")
 
     def test_iwyu_with_compile_commands(self) -> None:
-        """Test IWYU with a compilation database."""
+        """Test IWYU with a compilation database.
+
+        Optimization: Use simpler C file instead of C++ to reduce parsing time.
+        """
         try:
             import json
+
+            # Create a simpler C test file for faster parsing
+            simple_c = self.temp_path / "simple_db_test.c"
+            simple_c.write_text(
+                "#include <stdio.h>\n"
+                "#include <stdlib.h>\n"
+                "\n"
+                "int main() {\n"
+                '    printf("Test\\n");\n'
+                "    return 0;\n"
+                "}\n"
+            )
 
             # Create a simple compile_commands.json
             compile_commands = [
                 {
                     "directory": str(self.temp_path),
-                    "command": f"clang++ -c {self.test_cpp}",
-                    "file": str(self.test_cpp),
+                    "command": f"clang -c {simple_c}",
+                    "file": str(simple_c),
                 }
             ]
 
@@ -325,7 +354,7 @@ class TestIWYUExecution(unittest.TestCase):
 
             # Run IWYU with the compilation database
             result = subprocess.run(
-                [str(iwyu_path), str(self.test_cpp)],
+                [str(iwyu_path), str(simple_c)],
                 capture_output=True,
                 text=True,
                 timeout=30,
