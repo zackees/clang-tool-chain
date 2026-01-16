@@ -11,6 +11,8 @@ This module provides functions for:
 import logging
 import os
 
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,6 +42,8 @@ def _ensure_ld64_lld_symlink() -> bool:
 
     try:
         bin_dir = get_platform_binary_dir()
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.debug(f"Could not get platform binary dir: {e}")
         return False
