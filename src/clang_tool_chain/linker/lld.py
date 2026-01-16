@@ -5,11 +5,68 @@ This module provides functions for:
 - Forcing LLVM's lld linker for consistent cross-platform behavior
 - Translating GNU ld flags to ld64.lld equivalents on macOS
 - Managing linker selection based on platform and user preferences
+- Ensuring ld64.lld symlink exists on macOS (runtime fallback)
 """
 
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_ld64_lld_symlink() -> bool:
+    """
+    Ensure the ld64.lld symlink exists on macOS, creating it if needed.
+
+    LLVM's LLD linker uses different binary names for different "personalities":
+    - lld: Generic dispatcher
+    - ld.lld: ELF linker (Linux)
+    - ld64.lld: Mach-O linker (macOS)
+    - lld-link: COFF linker (Windows)
+    - wasm-ld: WebAssembly linker
+
+    These are typically symlinks to the same `lld` binary, which detects
+    the target format from argv[0]. Some LLVM distributions may not include
+    ld64.lld, so we create it at runtime if missing.
+
+    Returns:
+        True if ld64.lld exists or was created successfully, False otherwise
+    """
+    from ..platform.detection import get_platform_binary_dir, get_platform_info
+
+    platform_name, _ = get_platform_info()
+    if platform_name != "darwin":
+        return True  # Only relevant for macOS
+
+    try:
+        bin_dir = get_platform_binary_dir()
+    except Exception as e:
+        logger.debug(f"Could not get platform binary dir: {e}")
+        return False
+
+    lld_path = bin_dir / "lld"
+    ld64_lld_path = bin_dir / "ld64.lld"
+
+    # Check if ld64.lld already exists
+    if ld64_lld_path.exists():
+        logger.debug(f"ld64.lld already exists at {ld64_lld_path}")
+        return True
+
+    # Check if lld exists (source for symlink)
+    if not lld_path.exists():
+        logger.warning(f"lld binary not found at {lld_path}, cannot create ld64.lld symlink")
+        return False
+
+    # Try to create the symlink
+    try:
+        # Use relative symlink for portability
+        os.symlink("lld", ld64_lld_path)
+        logger.info(f"Created ld64.lld symlink: {ld64_lld_path} -> lld")
+        return True
+    except OSError as e:
+        # May fail due to permissions (e.g., read-only filesystem)
+        logger.warning(f"Could not create ld64.lld symlink at {ld64_lld_path}: {e}")
+        return False
 
 
 def _should_force_lld(platform_name: str, args: list[str]) -> bool:
@@ -216,6 +273,9 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
         args = _translate_linker_flags_for_macos_lld(args)
         # macOS requires explicit Mach-O linker variant (ld64.lld)
         # LLVM 21.x+ on macOS supports both -fuse-ld=lld and -fuse-ld=ld64.lld
+        # Ensure ld64.lld symlink exists (some distributions may not include it)
+        if not _ensure_ld64_lld_symlink():
+            logger.warning("Could not ensure ld64.lld symlink exists, linker may fail")
         return ["-fuse-ld=ld64.lld"] + args
     else:
         # Linux uses standard lld

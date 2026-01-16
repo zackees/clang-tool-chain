@@ -96,10 +96,11 @@ def find_tool_binary(tool_name: str) -> Path:
         logger.warning(f"Tool not found at primary location: {tool_path}")
         # Try alternative names for some tools
         alternatives = {
-            "lld": ["lld-link", "ld.lld"],
+            "lld": ["lld-link", "ld.lld", "ld64.lld"],
             "clang": ["clang++", "clang-cpp"],
             "lld-link": ["lld", "ld.lld"],
             "ld.lld": ["lld", "lld-link"],
+            "ld64.lld": ["lld", "ld.lld"],  # macOS Mach-O linker variant
         }
 
         if tool_name in alternatives:

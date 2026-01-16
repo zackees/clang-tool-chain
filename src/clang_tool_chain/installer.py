@@ -302,6 +302,32 @@ def download_and_install_toolchain(platform: str, arch: str, verbose: bool = Fal
                     print("Copying clang++ to clang on Linux...")
                 shutil.copy2(clang_cpp, clang)
 
+        # On macOS, create ld64.lld symlink for -fuse-ld=ld64.lld support
+        # LLVM's LLD has multiple "personalities" accessed via different binary names:
+        # - lld: Generic dispatcher
+        # - ld.lld: ELF linker (Linux)
+        # - ld64.lld: Mach-O linker (macOS)
+        # - lld-link: COFF linker (Windows)
+        # The clang-tool-chain linker module injects -fuse-ld=ld64.lld on macOS,
+        # so we need to ensure ld64.lld exists as a symlink to lld.
+        if platform == "darwin":
+            bin_dir = install_dir / "bin"
+            lld_path = bin_dir / "lld"
+            ld64_lld_path = bin_dir / "ld64.lld"
+            if lld_path.exists() and not ld64_lld_path.exists():
+                if verbose:
+                    print("Creating ld64.lld symlink for macOS Mach-O linker support...")
+                try:
+                    # Create relative symlink to lld (same directory)
+                    os.symlink("lld", ld64_lld_path)
+                    logger.info(f"Created ld64.lld symlink at {ld64_lld_path}")
+                except OSError as e:
+                    # If symlink fails (e.g., permissions), log warning but continue
+                    # Runtime fallback in linker/lld.py will handle this
+                    logger.warning(f"Failed to create ld64.lld symlink: {e}")
+            elif ld64_lld_path.exists():
+                logger.info(f"ld64.lld already exists at {ld64_lld_path}")
+
         # Force filesystem sync to ensure all extracted files are fully written to disk
         # This prevents "Text file busy" errors when another thread/process tries to
         # execute the binaries immediately after we release the lock and see done.txt
