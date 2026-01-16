@@ -24,6 +24,7 @@ from .interrupt_utils import handle_keyboard_interrupt_properly
 from .logging_config import configure_logging
 from .manifest import (
     Manifest,
+    fetch_cosmocc_platform_manifest,
     fetch_emscripten_platform_manifest,
     fetch_iwyu_platform_manifest,
     fetch_lldb_platform_manifest,
@@ -31,6 +32,8 @@ from .manifest import (
     fetch_platform_manifest,
 )
 from .path_utils import (
+    get_cosmocc_install_dir,
+    get_cosmocc_lock_path,
     get_emscripten_install_dir,
     get_emscripten_lock_path,
     get_install_dir,
@@ -2111,3 +2114,366 @@ def get_latest_version_info(platform_manifest: Manifest) -> tuple[str, str, str]
         raise RuntimeError(f"No download URL for version {latest_version}")
 
     return latest_version, download_url, sha256
+
+
+# ============================================================================
+# Cosmocc (Cosmopolitan) Installation
+# ============================================================================
+
+
+def is_cosmocc_installed(platform: str | None = None, arch: str | None = None) -> bool:
+    """
+    Check if Cosmocc is already installed and hash matches current manifest.
+
+    Note: Cosmocc (Cosmopolitan Libc) produces Actually Portable Executables (APE)
+    that can run on any platform. The installation is universal/shared across
+    all platforms. The platform/arch parameters are optional and kept for
+    backward compatibility.
+
+    Args:
+        platform: Optional platform name (ignored, kept for backward compatibility)
+        arch: Optional architecture name (ignored, kept for backward compatibility)
+
+    Returns:
+        True if installed and hash matches, False otherwise
+    """
+    install_dir = get_cosmocc_install_dir()
+    done_file = install_dir / "done.txt"
+
+    if not done_file.exists():
+        return False
+
+    try:
+        done_content = done_file.read_text()
+        installed_sha256 = None
+        for line in done_content.splitlines():
+            if line.startswith("SHA256:"):
+                installed_sha256 = line.split(":", 1)[1].strip()
+                break
+
+        if not installed_sha256:
+            logger.warning(f"No SHA256 found in Cosmocc {done_file}, will re-download")
+            return False
+
+        # Fetch current manifest
+        platform_manifest = fetch_cosmocc_platform_manifest()
+        latest_version = platform_manifest.latest
+        if not latest_version:
+            return False
+
+        version_info = platform_manifest.versions.get(latest_version)
+        if not version_info:
+            return False
+
+        current_sha256 = version_info.sha256
+
+        if installed_sha256.lower() != current_sha256.lower():
+            logger.info("Cosmocc SHA256 mismatch - will re-download")
+            return False
+
+        return True
+
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        logger.warning(f"Error checking Cosmocc installation: {e}, will re-download")
+        return False
+
+
+def _fix_cosmocc_symlinks_on_windows(install_dir: Path) -> None:
+    """
+    Fix cosmoc++ and other symlink-like files on Windows.
+
+    The Cosmocc distribution uses a Unix-style symlink workaround where files like
+    `cosmoc++` contain just the text "cosmocc" (7 bytes). This is meant to work like
+    a symlink on Unix systems where the shell script checks $0 (argv[0]) to determine
+    the invocation mode.
+
+    On Windows, this doesn't work because:
+    1. Git Bash treats the file as a shell script that runs "cosmocc" with no args
+    2. This causes "no input files" or "precompiled headers" errors
+
+    The fix is to replace these placeholder files with actual copies of the main script.
+    When the copied script is run, $0 will be "cosmoc++" which triggers C++ mode.
+
+    Args:
+        install_dir: Path to the Cosmocc installation directory
+    """
+    import sys
+
+    # Only needed on Windows
+    if sys.platform != "win32":
+        logger.debug("Skipping cosmoc++ fix on non-Windows platform")
+        return
+
+    bin_dir = install_dir / "bin"
+    if not bin_dir.exists():
+        logger.warning(f"Cosmocc bin directory not found at {bin_dir}")
+        return
+
+    # Files that need to be fixed (symlink placeholders)
+    symlink_files = ["cosmoc++"]
+
+    # The source script that these should be copies of
+    cosmocc_script = bin_dir / "cosmocc"
+
+    if not cosmocc_script.exists():
+        logger.warning(f"cosmocc script not found at {cosmocc_script}, cannot fix symlinks")
+        return
+
+    # Read the cosmocc script content
+    cosmocc_content = cosmocc_script.read_bytes()
+
+    for symlink_name in symlink_files:
+        symlink_path = bin_dir / symlink_name
+
+        if not symlink_path.exists():
+            logger.debug(f"Symlink placeholder {symlink_name} not found, skipping")
+            continue
+
+        # Check if it's a small placeholder file (not a real script)
+        file_size = symlink_path.stat().st_size
+        if file_size > 100:
+            # File is larger than expected for a placeholder, skip
+            logger.debug(f"{symlink_name} is {file_size} bytes, not a placeholder - skipping")
+            continue
+
+        # Read the content to verify it's a placeholder
+        content = symlink_path.read_text(encoding="utf-8", errors="ignore").strip()
+        if content != "cosmocc":
+            logger.debug(f"{symlink_name} content is '{content[:50]}...', not a placeholder - skipping")
+            continue
+
+        # This is a placeholder file - replace it with a copy of cosmocc
+        logger.info(f"Fixing {symlink_name} placeholder on Windows (replacing with copy of cosmocc)")
+
+        try:
+            # Remove the placeholder and write the full script
+            symlink_path.unlink()
+            symlink_path.write_bytes(cosmocc_content)
+            logger.info(f"Fixed {symlink_name}: replaced placeholder with {len(cosmocc_content)} byte script")
+        except Exception as e:
+            logger.warning(f"Failed to fix {symlink_name}: {e}")
+
+
+def download_and_install_cosmocc(platform: str | None = None, arch: str | None = None) -> None:
+    """
+    Download and install Cosmocc (universal installation).
+
+    Cosmocc is the Cosmopolitan Libc toolchain that produces Actually Portable
+    Executables (APE) - single-file executables that run on Windows, Linux, macOS,
+    FreeBSD, NetBSD, and OpenBSD without modification.
+
+    The installation is universal/shared across all platforms. The platform/arch
+    parameters are optional and kept for backward compatibility.
+
+    Args:
+        platform: Optional platform name (ignored, kept for backward compatibility)
+        arch: Optional architecture name (ignored, kept for backward compatibility)
+    """
+    import sys
+
+    logger.info("Downloading and installing Cosmocc (universal)")
+
+    # Initialize to avoid unbound variable errors in exception handler
+    cached_archive: Path | None = None
+    archive_file: Path | None = None
+
+    try:
+        # Fetch the manifest to get download URL and checksum
+        manifest = fetch_cosmocc_platform_manifest()
+        version_info = manifest.versions[manifest.latest]
+
+        logger.info(f"Cosmocc version: {manifest.latest}")
+        logger.info(f"Download URL: {version_info.href}")
+
+        # Get installation directory
+        install_dir = get_cosmocc_install_dir()
+        logger.info(f"Installation directory: {install_dir}")
+
+        # Remove old installation if exists
+        if install_dir.exists():
+            logger.info("Removing old Cosmocc installation")
+            _robust_rmtree(install_dir)
+
+        # Check if archive is cached
+        from .archive_cache import get_cached_archive, save_archive_to_cache
+
+        # Use "universal" as platform/arch for cache key since cosmocc is universal
+        cached_archive = get_cached_archive("cosmocc", "universal", "universal", version_info.sha256)
+
+        if cached_archive:
+            # Use cached archive (no download needed)
+            archive_file = cached_archive
+            logger.info(f"Using cached Cosmocc archive: {archive_file}")
+            print("Using cached Cosmocc archive (skipping download)", file=sys.stderr, flush=True)
+        else:
+            # Create temp file for download
+            with tempfile.NamedTemporaryFile(mode="wb", suffix=".tar.zst", delete=False) as tmp:
+                archive_file = Path(tmp.name)
+
+            # Get file size information and print to stderr before download
+            from .parallel_download import check_server_capabilities
+
+            print("Downloading Cosmocc toolchain for first-time installation...", file=sys.stderr, flush=True)
+            capabilities = check_server_capabilities(version_info.href, timeout=10)
+            if capabilities.content_length:
+                size_mb = capabilities.content_length / (1024 * 1024)
+                print(f"Download size: {size_mb:.1f} MB", file=sys.stderr, flush=True)
+            else:
+                print("Download size: (size unknown, checking...)", file=sys.stderr, flush=True)
+
+            # Download the archive (handles both single-file and multi-part)
+            download_archive(version_info, archive_file)
+
+            print("Download complete. Caching and extracting toolchain...", file=sys.stderr, flush=True)
+
+            # Save to cache for future use (use "universal" as platform/arch)
+            save_archive_to_cache(archive_file, "cosmocc", "universal", "universal", version_info.sha256)
+
+        # Extract to installation directory
+        print("Extracting Cosmocc toolchain...", file=sys.stderr, flush=True)
+        logger.info("Extracting Cosmocc archive")
+
+        # Ensure parent directory exists
+        install_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        extract_tarball(archive_file, install_dir)
+
+        # Fix permissions on Unix systems
+        if os.name != "nt":
+            logger.info("Setting executable permissions on Cosmocc binaries")
+            fix_file_permissions(install_dir)
+
+        # Verify the cosmocc binary actually exists before marking as complete
+        # cosmocc uses APE (Actually Portable Executables) which work on all platforms
+        # without needing a platform-specific extension like .exe
+        cosmocc_binary = install_dir / "bin" / "cosmocc"
+        logger.info(f"Looking for Cosmocc binary at: {cosmocc_binary}")
+
+        if not cosmocc_binary.exists():
+            # Additional debugging before failing
+            bin_dir = install_dir / "bin"
+            logger.error(f"bin_dir ({bin_dir}) exists: {bin_dir.exists()}")
+            if bin_dir.exists():
+                bin_contents = list(bin_dir.iterdir())
+                logger.error(f"bin_dir contains {len(bin_contents)} items:")
+                for item in bin_contents[:20]:  # Limit to first 20
+                    logger.error(f"  - {item.name}")
+
+            raise RuntimeError(
+                f"Cosmocc installation verification failed: binary not found at {cosmocc_binary}. "
+                f"Extraction may have failed or archive structure is incorrect."
+            )
+        logger.info(f"Cosmocc binary verified at: {cosmocc_binary}")
+
+        # Fix cosmoc++ on Windows
+        # The cosmoc++ file in cosmocc is a Unix symlink workaround (a text file containing "cosmocc")
+        # which doesn't work on Windows. We need to replace it with an actual copy of the cosmocc script.
+        # The cosmocc script checks $0 (argv[0]) to determine if it was invoked as "cosmoc++"
+        # and enables C++ mode if so.
+        _fix_cosmocc_symlinks_on_windows(install_dir)
+
+        # Mark installation as complete
+        install_dir.mkdir(parents=True, exist_ok=True)
+        done_file = install_dir / "done.txt"
+        with open(done_file, "w") as f:
+            f.write(f"Cosmocc {manifest.latest} installed successfully\n" f"SHA256: {version_info.sha256}\n")
+
+        print("Cosmocc toolchain installation complete!", file=sys.stderr, flush=True)
+        logger.info("Cosmocc installation complete (universal)")
+
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        logger.error(f"Failed to install Cosmocc: {e}", exc_info=True)
+        # Clean up failed installation
+        install_dir = get_cosmocc_install_dir()
+        if install_dir.exists():
+            logger.info("Cleaning up failed Cosmocc installation")
+            _robust_rmtree(install_dir)
+        raise RuntimeError(f"Failed to install Cosmocc: {e}") from e
+    finally:
+        # Clean up downloaded archive (but not if it came from cache)
+        if not cached_archive and archive_file and archive_file.exists():
+            archive_file.unlink()
+
+
+def _subprocess_install_cosmocc(platform: str | None = None, arch: str | None = None) -> int:  # pyright: ignore[reportUnusedFunction]
+    """
+    Install Cosmocc in a subprocess with proper process-level locking.
+
+    The installation is universal/shared across all platforms. The platform/arch
+    parameters are optional and kept for backward compatibility.
+
+    Args:
+        platform: Optional platform name (ignored, kept for backward compatibility)
+        arch: Optional architecture name (ignored, kept for backward compatibility)
+
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
+    try:
+        logger.info("[Subprocess] Installing Cosmocc (universal)")
+        lock_path = get_cosmocc_lock_path()
+        lock = fasteners.InterProcessLock(str(lock_path))
+
+        with lock:
+            logger.info("[Subprocess] Cosmocc lock acquired")
+            if is_cosmocc_installed():
+                logger.info("[Subprocess] Another process installed Cosmocc while we waited")
+                return 0
+
+            download_and_install_cosmocc()
+            logger.info("[Subprocess] Cosmocc installation complete (universal)")
+            return 0
+
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        logger.error(f"[Subprocess] Failed to install Cosmocc: {e}", exc_info=True)
+        return 1
+
+
+def ensure_cosmocc(platform: str | None = None, arch: str | None = None) -> None:
+    """
+    Ensure Cosmocc is installed (universal installation).
+
+    Uses subprocess-based installation with file locking to prevent concurrent downloads.
+    InterProcessLock only works across processes, not threads, so we use subprocess.
+
+    The installation is universal/shared across all platforms. The platform/arch
+    parameters are optional and kept for backward compatibility.
+
+    Args:
+        platform: Optional platform name (ignored, kept for backward compatibility)
+        arch: Optional architecture name (ignored, kept for backward compatibility)
+    """
+    import subprocess
+    import sys
+
+    logger.info("Ensuring Cosmocc is installed (universal)")
+
+    # Quick check without lock
+    if is_cosmocc_installed():
+        logger.info("Cosmocc already installed (universal)")
+        return
+
+    # Spawn subprocess for installation
+    logger.info("Cosmocc not installed, spawning subprocess to install (universal)")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from clang_tool_chain.installer import _subprocess_install_cosmocc; "
+            "import sys; "
+            "sys.exit(_subprocess_install_cosmocc())",
+        ],
+        capture_output=False,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to install Cosmocc (subprocess exited with code {result.returncode})")
+
+    logger.info("Cosmocc installation verified (universal)")

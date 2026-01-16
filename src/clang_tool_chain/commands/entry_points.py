@@ -317,3 +317,32 @@ def meson_main() -> int:
 
     # Pass all arguments to meson
     return meson_main_impl()
+
+
+# ============================================================================
+# Cosmocc (Cosmopolitan) Entry Points
+# ============================================================================
+
+
+def cosmocc_main() -> NoReturn:
+    """
+    Entry point for cosmocc wrapper (Cosmopolitan C compiler).
+
+    Produces Actually Portable Executables (APE) that run on Windows,
+    Linux, macOS, FreeBSD, NetBSD, and OpenBSD without modification.
+    """
+    from ..execution.cosmocc import execute_cosmocc_tool
+
+    execute_cosmocc_tool("cosmocc")
+
+
+def cosmocpp_main() -> NoReturn:
+    """
+    Entry point for cosmoc++ wrapper (Cosmopolitan C++ compiler).
+
+    Produces Actually Portable Executables (APE) that run on Windows,
+    Linux, macOS, FreeBSD, NetBSD, and OpenBSD without modification.
+    """
+    from ..execution.cosmocc import execute_cosmocc_tool
+
+    execute_cosmocc_tool("cosmoc++")

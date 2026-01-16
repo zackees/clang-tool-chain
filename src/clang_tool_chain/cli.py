@@ -607,6 +607,245 @@ def cmd_uninstall_clang_env(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_install_cosmocc(args: argparse.Namespace) -> int:
+    """Pre-download and install the Cosmopolitan (cosmocc) toolchain."""
+    from . import env_breadcrumbs, installer
+    from .path_utils import get_cosmocc_install_dir
+
+    print("Clang Tool Chain - Install Cosmopolitan (cosmocc)")
+    print("=" * 60)
+    print()
+
+    # Get current platform info (for display and file extension handling only)
+    try:
+        platform_name, arch = wrapper.get_platform_info()
+        print(f"Current platform: {platform_name}/{arch}")
+        print("Note: Cosmocc is universal and runs on all platforms")
+        print()
+    except RuntimeError as e:
+        print(f"Error detecting platform: {e}")
+        return 1
+
+    # Check if already installed (universal - no platform/arch args needed)
+    if installer.is_cosmocc_installed():
+        install_dir = get_cosmocc_install_dir()
+        print("✓ Cosmopolitan (cosmocc) toolchain already installed at:")
+        print(f"  {install_dir}")
+        print()
+
+        # Mark as installed in database
+        env_breadcrumbs.mark_component_installed("cosmocc", str(install_dir))
+
+        print("To verify installation, run:")
+        print("  clang-tool-chain-cosmocc --version")
+        return 0
+
+    # Download and install
+    print("Downloading and installing universal Cosmopolitan (cosmocc) toolchain...")
+    print()
+    print("This will download approximately:")
+    print("  - ~441 MB (Cosmopolitan produces universal 'Actually Portable Executables')")
+    print()
+    print("Cosmopolitan features:")
+    print("  - Single binary that runs on Windows, Linux, macOS, FreeBSD, NetBSD, OpenBSD")
+    print("  - No runtime dependencies required")
+    print("  - Executables are completely self-contained")
+    print()
+
+    try:
+        # Use the installer to ensure cosmocc is installed (universal - no platform/arch args needed)
+        installer.ensure_cosmocc()
+
+        # Verify installation (universal - no platform/arch args needed)
+        install_dir = get_cosmocc_install_dir()
+        bin_dir = install_dir / "bin"
+        if bin_dir.exists():
+            print()
+            print("=" * 60)
+            print("✓ Universal Installation Complete!")
+            print()
+            print(f"Toolchain installed at: {install_dir}")
+            print()
+
+            # Mark as installed in database
+            env_breadcrumbs.mark_component_installed("cosmocc", str(install_dir))
+
+            # Count tools
+            tool_count = len(list(bin_dir.glob("*")))
+            print(f"Available tools: {tool_count}")
+            print()
+
+            # Show some key tools
+            key_tools = ["cosmocc", "cosmoc++"]
+            print("Key tools installed:")
+            for tool in key_tools:
+                # On Windows, cosmocc tools might have .exe or no extension
+                if platform_name == "win":
+                    for ext in [".exe", ".bat", ""]:
+                        tool_path = bin_dir / f"{tool}{ext}"
+                        if tool_path.exists():
+                            print(f"  ✓ {tool}")
+                            break
+                else:
+                    tool_path = bin_dir / tool
+                    if tool_path.exists():
+                        print(f"  ✓ {tool}")
+            print()
+
+            print("To use these tools:")
+            print("  clang-tool-chain-cosmocc hello.c -o hello.com")
+            print("  clang-tool-chain-cosmocpp hello.cpp -o hello.com")
+            print()
+            print("The resulting .com files run on all platforms without modification!")
+            print()
+            return 0
+        else:
+            print("✗ Installation verification failed - bin directory not found")
+            return 1
+
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        print()
+        print(f"✗ Installation failed: {e}")
+        return 1
+
+
+def cmd_install_cosmocc_env(args: argparse.Namespace) -> int:
+    """Install Cosmopolitan (cosmocc) toolchain binaries to system environment (PATH)."""
+    import setenvironment
+
+    from . import env_breadcrumbs, installer
+    from .path_utils import get_cosmocc_install_dir
+
+    print("Clang Tool Chain - Install Cosmopolitan to Environment")
+    print("=" * 60)
+    print()
+
+    # Get current platform info (for display only)
+    try:
+        platform_name, arch = wrapper.get_platform_info()
+        print(f"Current platform: {platform_name}/{arch}")
+        print("Note: Cosmocc is universal and runs on all platforms")
+        print()
+    except RuntimeError as e:
+        print(f"Error: Failed to detect platform: {e}")
+        return 1
+
+    # First, ensure cosmocc is installed (universal - no platform/arch args needed)
+    if not installer.is_cosmocc_installed():
+        print("Universal Cosmopolitan (cosmocc) toolchain not found. Installing first...")
+        print()
+        installer.ensure_cosmocc()
+        print()
+        print("✓ Universal Cosmopolitan (cosmocc) toolchain installed")
+        print()
+
+    # Get the binary directory (universal - no platform/arch args needed)
+    install_dir = get_cosmocc_install_dir()
+    bin_dir = install_dir / "bin"
+
+    if not bin_dir.exists():
+        print(f"Error: Binary directory does not exist: {bin_dir}")
+        print()
+        print("Installation failed. Please try running:")
+        print("  clang-tool-chain install cosmocc")
+        return 1
+
+    print(f"Binary directory: {bin_dir}")
+    print()
+
+    # Add bin directory to PATH
+    print("Adding cosmocc bin directory to PATH...")
+    try:
+        setenvironment.add_env_path(str(bin_dir))
+        print(f"✓ Added to PATH: {bin_dir}")
+
+        # Mark as installed to environment (for automatic cleanup during purge)
+        env_breadcrumbs.mark_component_installed_to_env("cosmocc", str(bin_dir))
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        print(f"✗ Failed to add to PATH: {e}")
+        return 1
+
+    print()
+    print("=" * 60)
+    print("Installation Complete!")
+    print()
+    print("The following tools are now available globally:")
+    print("  cosmocc, cosmoc++, and other Cosmopolitan tools...")
+    print()
+    print("IMPORTANT: You may need to:")
+    print("  - Restart your terminal/shell for changes to take effect")
+    print("  - On some systems, log out and log back in")
+    print()
+    print("To verify installation, open a new terminal and run:")
+    print("  cosmocc --version")
+    print()
+
+    return 0
+
+
+def cmd_uninstall_cosmocc_env(args: argparse.Namespace) -> int:
+    """Remove Cosmopolitan (cosmocc) toolchain binaries from system environment (PATH)."""
+    import setenvironment
+
+    from . import env_breadcrumbs
+    from .path_utils import get_cosmocc_install_dir
+
+    print("Clang Tool Chain - Uninstall Cosmopolitan from Environment")
+    print("=" * 60)
+    print()
+
+    # Get current platform info (for display only)
+    try:
+        platform_name, arch = wrapper.get_platform_info()
+        print(f"Current platform: {platform_name}/{arch}")
+        print("Note: Cosmocc is universal and runs on all platforms")
+        print()
+    except RuntimeError as e:
+        print(f"Error: Failed to detect platform: {e}")
+        return 1
+
+    # Get the binary directory (universal - no platform/arch args needed)
+    install_dir = get_cosmocc_install_dir()
+    bin_dir = install_dir / "bin"
+
+    print(f"Binary directory: {bin_dir}")
+    print()
+
+    # Remove bin directory from PATH
+    print("Removing cosmocc bin directory from PATH...")
+    try:
+        setenvironment.remove_env_path(str(bin_dir))
+        print(f"✓ Removed from PATH: {bin_dir}")
+
+        # Remove breadcrumb
+        env_breadcrumbs.unmark_component_installed_to_env("cosmocc")
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        print(f"✗ Failed to remove from PATH: {e}")
+        return 1
+
+    print()
+    print("=" * 60)
+    print("Uninstallation Complete!")
+    print()
+    print("The cosmocc binaries are no longer in your system PATH.")
+    print()
+    print("IMPORTANT: You may need to:")
+    print("  - Restart your terminal/shell for changes to take effect")
+    print("  - On some systems, log out and log back in")
+    print()
+    print("You can still use the tools via clang-tool-chain wrapper commands:")
+    print("  clang-tool-chain-cosmocc, clang-tool-chain-cosmocpp")
+    print()
+
+    return 0
+
+
 def cmd_test(args: argparse.Namespace) -> int:
     """Run diagnostic tests to verify the toolchain installation."""
     import tempfile
@@ -900,6 +1139,20 @@ def main() -> int:
     )
     parser_install_clang_env.set_defaults(func=cmd_install_clang_env)
 
+    # install cosmocc
+    parser_install_cosmocc = install_subparsers.add_parser(
+        "cosmocc",
+        help="Pre-download and install the Cosmopolitan (cosmocc) toolchain",
+    )
+    parser_install_cosmocc.set_defaults(func=cmd_install_cosmocc)
+
+    # install cosmocc-env
+    parser_install_cosmocc_env = install_subparsers.add_parser(
+        "cosmocc-env",
+        help="Install Cosmopolitan (cosmocc) toolchain binaries to system environment (PATH)",
+    )
+    parser_install_cosmocc_env.set_defaults(func=cmd_install_cosmocc_env)
+
     # uninstall command (with subcommands)
     parser_uninstall = subparsers.add_parser(
         "uninstall",
@@ -916,6 +1169,13 @@ def main() -> int:
         help="Remove Clang/LLVM toolchain binaries from system environment (PATH)",
     )
     parser_uninstall_clang_env.set_defaults(func=cmd_uninstall_clang_env)
+
+    # uninstall cosmocc-env
+    parser_uninstall_cosmocc_env = uninstall_subparsers.add_parser(
+        "cosmocc-env",
+        help="Remove Cosmopolitan (cosmocc) toolchain binaries from system environment (PATH)",
+    )
+    parser_uninstall_cosmocc_env.set_defaults(func=cmd_uninstall_cosmocc_env)
 
     # purge command
     parser_purge = subparsers.add_parser(
@@ -943,8 +1203,10 @@ def main() -> int:
         print("Error: Please specify what to install")
         print()
         print("Available options:")
-        print("  clang-tool-chain install clang       - Install core Clang/LLVM toolchain")
-        print("  clang-tool-chain install clang-env   - Add Clang to system PATH")
+        print("  clang-tool-chain install clang        - Install core Clang/LLVM toolchain")
+        print("  clang-tool-chain install clang-env    - Add Clang to system PATH")
+        print("  clang-tool-chain install cosmocc      - Install Cosmopolitan toolchain")
+        print("  clang-tool-chain install cosmocc-env  - Add Cosmopolitan to system PATH")
         print()
         print("For more information: clang-tool-chain install --help")
         return 1
@@ -953,7 +1215,8 @@ def main() -> int:
         print("Error: Please specify what to uninstall")
         print()
         print("Available options:")
-        print("  clang-tool-chain uninstall clang-env - Remove Clang from system PATH")
+        print("  clang-tool-chain uninstall clang-env   - Remove Clang from system PATH")
+        print("  clang-tool-chain uninstall cosmocc-env - Remove Cosmopolitan from system PATH")
         print()
         print("For more information: clang-tool-chain uninstall --help")
         return 1

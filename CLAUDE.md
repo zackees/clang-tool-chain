@@ -75,6 +75,37 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 See [LLDB Documentation](docs/LLDB.md) for complete Python integration details
 
+### Cosmopolitan Libc Support
+
+| Platform | Architecture | Cosmocc Version | Status |
+|----------|-------------|-----------------|--------|
+| Windows  | x86_64      | 4.0.2           | ✅ Available |
+| Linux    | x86_64      | 4.0.2           | ✅ Available |
+| Linux    | arm64       | 4.0.2           | ✅ Available |
+| macOS    | x86_64      | 4.0.2           | ✅ Available |
+| macOS    | arm64       | 4.0.2           | ✅ Available |
+
+*Cosmopolitan support added January 2026*
+
+**About Cosmopolitan Libc:**
+Cosmopolitan Libc makes C a build-once run-anywhere language. Executables produced by cosmocc are called "Actually Portable Executables" (APE) and run natively on Windows, Linux, macOS, FreeBSD, NetBSD, and OpenBSD without any runtime dependencies or modifications.
+
+**Usage:**
+```bash
+# Install cosmocc toolchain
+clang-tool-chain install cosmocc
+
+# Compile a portable executable
+clang-tool-chain-cosmocc hello.c -o hello.com
+clang-tool-chain-cosmocpp hello.cpp -o hello.com
+
+# The .com file runs on any supported OS!
+./hello.com  # Works on Linux, macOS, FreeBSD, etc.
+# On Windows: hello.com
+```
+
+For more information: https://github.com/jart/cosmopolitan
+
 **Key Features:**
 - Pre-built Clang/LLVM binaries (~50-400 MB per platform)
 - Cross-platform support (Windows x64, macOS x64/ARM64, Linux x64/ARM64)
@@ -88,6 +119,7 @@ See [LLDB Documentation](docs/LLDB.md) for complete Python integration details
 - **Automatic MinGW DLL deployment for Windows executables** (GNU ABI only)
 - Emscripten WebAssembly compilation
 - Bundled Node.js runtime
+- **Cosmopolitan Libc support for Actually Portable Executables (APE)**
 
 ## Documentation
 

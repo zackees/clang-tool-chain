@@ -68,6 +68,8 @@ from .commands import (
     clang_main,
     clang_msvc_main,
     clang_tidy_main,
+    cosmocc_main,
+    cosmocpp_main,
     emar_main,
     emcc_main,
     empp_main,
@@ -137,6 +139,15 @@ from .execution.lldb import (
     execute_lldb_tool,
     find_lldb_tool,
     get_lldb_binary_dir,
+)
+
+# ============================================================================
+# Cosmocc Tool Execution
+# ============================================================================
+from .execution.cosmocc import (
+    execute_cosmocc_tool,
+    find_cosmocc_tool,
+    get_cosmocc_binary_dir,
 )
 
 # ============================================================================
@@ -251,4 +262,10 @@ __all__ = [
     "meson_main",
     "sccache_emcc_main",
     "sccache_empp_main",
+    # Cosmocc (Cosmopolitan)
+    "cosmocc_main",
+    "cosmocpp_main",
+    "execute_cosmocc_tool",
+    "find_cosmocc_tool",
+    "get_cosmocc_binary_dir",
 ]

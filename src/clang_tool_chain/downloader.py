@@ -34,17 +34,20 @@ from .archive import (
 # Re-exports from installer.py
 # ============================================================================
 from .installer import (
+    download_and_install_cosmocc,
     download_and_install_emscripten,
     download_and_install_iwyu,
     download_and_install_lldb,
     download_and_install_nodejs,
     download_and_install_toolchain,
+    ensure_cosmocc,
     ensure_emscripten_available,
     ensure_iwyu,
     ensure_lldb,
     ensure_nodejs_available,
     ensure_toolchain,
     get_latest_version_info,
+    is_cosmocc_installed,
     is_emscripten_installed,
     is_iwyu_installed,
     is_lldb_installed,
@@ -87,6 +90,8 @@ from .manifest import (
 # Re-exports from path_utils.py
 # ============================================================================
 from .path_utils import (
+    get_cosmocc_install_dir,
+    get_cosmocc_lock_path,
     get_emscripten_install_dir,
     get_emscripten_lock_path,
     get_home_toolchain_dir,
@@ -161,6 +166,8 @@ __all__ = [
     "get_emscripten_lock_path",
     "get_nodejs_install_dir",
     "get_nodejs_lock_path",
+    "get_cosmocc_install_dir",
+    "get_cosmocc_lock_path",
     # Permissions
     "_robust_rmtree",
     "fix_file_permissions",
@@ -181,4 +188,7 @@ __all__ = [
     "is_nodejs_installed",
     "download_and_install_nodejs",
     "ensure_nodejs_available",
+    "is_cosmocc_installed",
+    "download_and_install_cosmocc",
+    "ensure_cosmocc",
 ]

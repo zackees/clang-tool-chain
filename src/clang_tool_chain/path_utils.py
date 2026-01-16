@@ -269,3 +269,44 @@ def get_nodejs_lock_path(platform: str, arch: str) -> Path:
     toolchain_dir.mkdir(parents=True, exist_ok=True)
     lock_path = toolchain_dir / f"nodejs-{platform}-{arch}.lock"
     return lock_path
+
+
+# ============================================================================
+# Cosmocc (Cosmopolitan) Paths
+# ============================================================================
+
+
+def get_cosmocc_install_dir(platform: str | None = None, arch: str | None = None) -> Path:
+    """
+    Get the installation directory for Cosmocc (Cosmopolitan Libc).
+
+    Cosmocc produces Actually Portable Executables (APE) that run on all platforms,
+    so a single universal installation is shared across all platforms.
+
+    Args:
+        platform: Deprecated, ignored. Kept for backward compatibility.
+        arch: Deprecated, ignored. Kept for backward compatibility.
+
+    Returns:
+        Path to the universal Cosmocc installation directory
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    install_dir = toolchain_dir / "cosmocc" / "universal"
+    return install_dir
+
+
+def get_cosmocc_lock_path(platform: str | None = None, arch: str | None = None) -> Path:
+    """
+    Get the lock file path for Cosmocc installation (universal).
+
+    Args:
+        platform: Deprecated, ignored. Kept for backward compatibility.
+        arch: Deprecated, ignored. Kept for backward compatibility.
+
+    Returns:
+        Path to the universal lock file
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    toolchain_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = toolchain_dir / "cosmocc-universal.lock"
+    return lock_path

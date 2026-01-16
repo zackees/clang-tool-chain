@@ -58,6 +58,8 @@ from .entry_points import (
     clang_main,
     clang_msvc_main,
     clang_tidy_main,
+    cosmocc_main,
+    cosmocpp_main,
     emar_main,
     emcc_main,
     empp_main,
@@ -120,4 +122,7 @@ __all__ = [
     "lldb_check_python_main",
     # Build Systems
     "meson_main",
+    # Cosmocc (Cosmopolitan)
+    "cosmocc_main",
+    "cosmocpp_main",
 ]

@@ -26,6 +26,7 @@ IWYU_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-c
 LLDB_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/lldb"
 EMSCRIPTEN_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/emscripten"
 NODEJS_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/nodejs"
+COSMOCC_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/cosmocc"
 
 # Generic type variable for JSON deserialization
 T = TypeVar("T")
@@ -501,3 +502,63 @@ def fetch_nodejs_platform_manifest(platform: str, arch: str) -> Manifest:
         f"If you believe this should be supported, please report at:\n"
         f"https://github.com/zackees/clang-tool-chain/issues"
     )
+
+
+# ============================================================================
+# Cosmocc (Cosmopolitan) Manifest Functions
+# ============================================================================
+
+
+def fetch_cosmocc_root_manifest() -> RootManifest:
+    """
+    Fetch the Cosmocc root manifest file.
+
+    Returns:
+        Root manifest as a RootManifest object
+
+    Raises:
+        ToolchainInfrastructureError: If fetching fails
+    """
+    logger.info("Fetching Cosmocc root manifest")
+    url = f"{COSMOCC_MANIFEST_BASE_URL}/manifest.json"
+    data = _fetch_json_raw(url)
+    manifest = _parse_root_manifest(data)
+    logger.info(f"Cosmocc root manifest loaded with {len(manifest.platforms)} platforms")
+    return manifest
+
+
+def fetch_cosmocc_platform_manifest(platform: str | None = None, arch: str | None = None) -> Manifest:
+    """
+    Fetch the Cosmocc manifest.
+
+    Cosmocc is universal (APE - Actually Portable Executables), so we use
+    a single manifest for all platforms. The platform/arch parameters are
+    ignored but kept for backward compatibility.
+
+    Args:
+        platform: Ignored - kept for backward compatibility
+        arch: Ignored - kept for backward compatibility
+
+    Returns:
+        Platform manifest as a Manifest object
+
+    Raises:
+        ToolchainInfrastructureError: If fetching fails
+    """
+    # Log what was passed for debugging, but note we ignore it
+    if platform is not None or arch is not None:
+        logger.debug(f"Cosmocc manifest requested for {platform}/{arch} - using universal manifest")
+
+    manifest_url = f"{COSMOCC_MANIFEST_BASE_URL}/manifest-universal.json"
+    logger.info(f"Fetching Cosmocc universal manifest from {manifest_url}")
+
+    try:
+        data = _fetch_json_raw(manifest_url)
+        manifest = _parse_manifest(data)
+        logger.info(f"Cosmocc universal manifest loaded: latest version = {manifest.latest}")
+        return manifest
+    except Exception as e:
+        raise ToolchainInfrastructureError(
+            f"Failed to fetch Cosmocc manifest from {manifest_url}: {e}\n"
+            f"This may indicate a network issue or that the manifest URL has changed."
+        ) from e
