@@ -16,17 +16,18 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 | Platform | Architecture | Clang/LLVM Version | Linker Used | Additional Components |
 |----------|-------------|-------------------|-------------|----------------------|
-| macOS    | x86_64      | 21.1.6            | System ld64 | -                    |
-| macOS    | arm64       | 21.1.6            | System ld64 | -                    |
+| macOS    | x86_64      | 21.1.6            | ld64.lld    | -                    |
+| macOS    | arm64       | 21.1.6            | ld64.lld    | -                    |
 | Windows  | x86_64      | 21.1.5            | lld         | MinGW-w64 (integrated) |
 | Linux    | x86_64      | 21.1.5            | lld         | -                    |
 | Linux    | arm64       | 21.1.5            | lld         | -                    |
 
-*Version information as of January 7, 2026*
+*Version information as of January 16, 2026*
 
 **Linker Notes:**
-- **macOS**: Both ARM64 and x86_64 use LLVM 21.1.6 (supports `-fuse-ld` flag). Both use system linker (ld64) by default.
+- **macOS**: Both ARM64 and x86_64 use LLVM 21.1.6 with ld64.lld (LLVM's Mach-O linker). GNU-style flags like `--no-undefined` are automatically translated to ld64.lld equivalents (`-undefined error`).
 - **Linux/Windows**: Uses LLVM lld for faster linking and cross-platform consistency
+- **Opt-out**: Set `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` to use the system linker instead of bundled LLD
 
 **Note:** The LLVM versions listed above are for the main clang-tool-chain toolchain. Emscripten uses its own bundled LLVM (LLVM 22 for Emscripten 4.0.19), which is installed separately and does not share binaries with the main toolchain.
 
@@ -82,7 +83,7 @@ See [LLDB Documentation](docs/LLDB.md) for complete Python integration details
 - Manifest-based distribution system with checksum verification
 - Python wrapper commands for all essential tools
 - Ultra-compressed archives using zstd level 22 (~94% size reduction)
-- **Platform-specific linker support** (system ld64 on macOS, lld on Linux/Windows)
+- **Consistent LLD linker across all platforms** (ld64.lld on macOS, ld.lld on Linux/Windows)
 - **Windows GNU ABI support with integrated MinGW headers and sysroot** (no separate download)
 - **Automatic MinGW DLL deployment for Windows executables** (GNU ABI only)
 - Emscripten WebAssembly compilation

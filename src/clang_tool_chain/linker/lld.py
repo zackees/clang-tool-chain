@@ -18,8 +18,8 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
 
     This provides consistent cross-platform behavior by using LLVM's lld
     on supported platforms instead of platform-specific system linkers:
-    - macOS: Uses system ld64 (temporarily disabled - ARM64 on 21.1.6 ready, x86_64 on 19.1.7 not ready)
-    - Linux: lld instead of GNU ld
+    - macOS: Uses ld64.lld (LLVM's Mach-O linker, requires LLVM 21.x+)
+    - Linux: Uses ld.lld (LLVM's ELF linker)
     - Windows: Already uses lld via -fuse-ld=lld in GNU ABI setup
 
     Args:
@@ -36,18 +36,9 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
         logger.debug("CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1, skipping lld injection")
         return False
 
-    # TEMPORARY: Disable LLD on macOS due to mixed LLVM versions across architectures
-    # - macOS ARM64: LLVM 21.1.6 (supports -fuse-ld flag) ✅
-    # - macOS x86_64: LLVM 19.1.7 (doesn't support -fuse-ld flag) ❌
-    # Cannot enable lld until both architectures support it to maintain consistent behavior
-    # This causes compilation failures on x86_64 with: "clang: error: invalid linker name in argument '-fuse-ld=...'"
-    # TODO: Re-enable when x86_64 upgrades to LLVM 21.x+ (blocked: no pre-built binary available)
-    if platform_name == "darwin":
-        logger.info("Skipping lld on macOS (x86_64 LLVM 19.1.7 doesn't support -fuse-ld flag)")
-        return False
-
-    # Only apply to Linux (macOS disabled above, Windows already handled in GNU ABI setup)
-    if platform_name not in ("linux",):
+    # Apply to macOS and Linux (Windows already handled in GNU ABI setup)
+    # macOS: Both ARM64 and x86_64 now use LLVM 21.1.6 which supports -fuse-ld flag
+    if platform_name not in ("linux", "darwin"):
         return False
 
     # Check if this is a compile-only operation (no linking)
@@ -159,6 +150,24 @@ def _translate_linker_flags_for_macos_lld(args: list[str]) -> list[str]:
     return result
 
 
+def _user_specified_lld_on_macos(args: list[str]) -> bool:
+    """
+    Check if the user explicitly specified LLD linker on macOS.
+
+    This detects when the user passes -fuse-ld=lld or -fuse-ld=ld64.lld,
+    which means they want to use ld64.lld and we should translate GNU flags.
+
+    Args:
+        args: Command-line arguments
+
+    Returns:
+        True if user explicitly specified LLD linker
+    """
+    args_str = " ".join(args)
+    # Check for explicit LLD specification (both generic and macOS-specific variants)
+    return "-fuse-ld=lld" in args_str or "-fuse-ld=ld64.lld" in args_str
+
+
 # pyright: reportUnusedFunction=false
 def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     """
@@ -172,16 +181,17 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     - Uniform toolchain across all platforms
 
     Platform-specific linker flags:
-    - macOS: Uses -fuse-ld=ld64.lld (explicit Mach-O variant required by LLVM 19.1.7+)
+    - macOS: Uses -fuse-ld=ld64.lld (explicit Mach-O variant required by LLVM 21.x+)
     - Linux: Uses -fuse-ld=lld (standard ELF linker)
 
     The function is skipped when:
     - User sets CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1
-    - User already specified -fuse-ld= in arguments
+    - User already specified -fuse-ld= in arguments (but flag translation still applies on macOS)
     - Compile-only operation (-c flag present)
     - Platform is Windows (already handled separately)
 
-    On macOS, this function also translates GNU ld flags to ld64.lld equivalents.
+    On macOS, this function also translates GNU ld flags to ld64.lld equivalents,
+    even when the user explicitly specifies -fuse-ld=lld or -fuse-ld=ld64.lld.
 
     Args:
         platform_name: Platform name ("win", "linux", "darwin")
@@ -190,6 +200,12 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     Returns:
         Modified arguments with platform-specific -fuse-ld flag prepended if needed
     """
+    # On macOS, if user explicitly specified LLD, we still need to translate flags
+    # even though we don't inject the -fuse-ld flag ourselves
+    if platform_name == "darwin" and _user_specified_lld_on_macos(args):
+        logger.debug("User specified LLD on macOS, translating GNU ld flags to ld64.lld equivalents")
+        return _translate_linker_flags_for_macos_lld(args)
+
     if not _should_force_lld(platform_name, args):
         return args
 
@@ -199,7 +215,7 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     if platform_name == "darwin":
         args = _translate_linker_flags_for_macos_lld(args)
         # macOS requires explicit Mach-O linker variant (ld64.lld)
-        # LLVM 19.1.7+ on macOS doesn't recognize generic "-fuse-ld=lld"
+        # LLVM 21.x+ on macOS supports both -fuse-ld=lld and -fuse-ld=ld64.lld
         return ["-fuse-ld=ld64.lld"] + args
     else:
         # Linux uses standard lld
