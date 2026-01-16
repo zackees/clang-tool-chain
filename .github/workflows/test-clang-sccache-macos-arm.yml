@@ -35,6 +35,10 @@ jobs:
         uname -a
         python --version
 
+    - name: Purge cached toolchain (ensure fresh download)
+      run: |
+        uv run clang-tool-chain purge --yes || true
+
     - name: Download and install toolchain
       run: |
         uv run clang-tool-chain-c --version
