@@ -102,21 +102,25 @@ class TestMacOSLLDIntegration(unittest.TestCase):
     def test_macos_auto_injects_ld64_lld(self):
         """Test that macOS automatically injects -fuse-ld=ld64.lld (explicit Mach-O variant)."""
         args = ["main.cpp", "-o", "main"]
-        result = _add_lld_linker_if_needed("darwin", args)
-        self.assertEqual(result[0], "-fuse-ld=ld64.lld")
+        # Mock LLVM version to 21.1.6 (supports ld64.lld)
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=(21, 1, 6)):
+            result = _add_lld_linker_if_needed("darwin", args)
+            self.assertEqual(result[0], "-fuse-ld=ld64.lld")
 
     def test_macos_flag_translation_with_auto_inject(self):
         """Test that flag translation happens when LLD is auto-injected on macOS."""
         args = ["-Wl,--no-undefined", "-Wl,--fatal-warnings", "main.cpp", "-o", "main"]
-        result = _add_lld_linker_if_needed("darwin", args)
-        # Should have ld64.lld flag first (explicit Mach-O variant)
-        self.assertEqual(result[0], "-fuse-ld=ld64.lld")
-        # Flags should be translated
-        self.assertIn("-Wl,-undefined,error", result)
-        self.assertIn("-Wl,-fatal_warnings", result)
-        # Original GNU flags should not be present
-        self.assertNotIn("-Wl,--no-undefined", result)
-        self.assertNotIn("-Wl,--fatal-warnings", result)
+        # Mock LLVM version to 21.1.6 (supports ld64.lld)
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=(21, 1, 6)):
+            result = _add_lld_linker_if_needed("darwin", args)
+            # Should have ld64.lld flag first (explicit Mach-O variant)
+            self.assertEqual(result[0], "-fuse-ld=ld64.lld")
+            # Flags should be translated
+            self.assertIn("-Wl,-undefined,error", result)
+            self.assertIn("-Wl,-fatal_warnings", result)
+            # Original GNU flags should not be present
+            self.assertNotIn("-Wl,--no-undefined", result)
+            self.assertNotIn("-Wl,--fatal-warnings", result)
 
     def test_macos_user_lld_triggers_flag_translation(self):
         """Test that user-specified -fuse-ld=lld triggers flag translation on macOS."""
