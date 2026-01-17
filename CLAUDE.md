@@ -137,9 +137,9 @@ Detailed documentation is organized into focused sub-documents:
 
 ## Windows MinGW DLL Deployment
 
-**Automatic DLL Deployment for Windows Executables (GNU ABI)**
+**Automatic DLL Deployment for Windows Executables and Shared Libraries (GNU ABI)**
 
-When compiling Windows executables with the GNU ABI (default on Windows), clang-tool-chain automatically copies required MinGW runtime DLLs to the executable directory. This ensures your executables run immediately in `cmd.exe` without PATH modifications.
+When compiling Windows executables (`.exe`) or shared libraries (`.dll`) with the GNU ABI (default on Windows), clang-tool-chain automatically copies required MinGW runtime DLLs to the output directory. This ensures your executables run immediately in `cmd.exe` without PATH modifications, and shared libraries have their transitive dependencies available.
 
 ### How It Works
 
@@ -150,7 +150,8 @@ When compiling Windows executables with the GNU ABI (default on Windows), clang-
 
 ### Environment Variables
 
-- **`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1`** - Disable automatic DLL deployment
+- **`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1`** - Disable automatic DLL deployment for all outputs
+- **`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1`** - Disable DLL deployment for .dll outputs only (default: enabled)
 - **`CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1`** - Enable verbose logging (DEBUG level)
 
 ### Example Usage
@@ -192,8 +193,9 @@ clang-tool-chain-cpp main.cpp -o program.exe
 - **Non-Windows platforms**: Linux/macOS (no-op)
 - **MSVC ABI**: `clang-tool-chain-cpp-msvc` (uses MSVC runtime)
 - **Compile-only**: `-c` flag present (no executable produced)
-- **Non-.exe outputs**: `.o`, `.obj`, `.a`, `.lib` files
+- **Non-.exe/.dll outputs**: `.o`, `.obj`, `.a`, `.lib` files
 - **Environment variable**: `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` set
+- **DLL outputs with opt-out**: `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1` set (for .dll only)
 
 ### Logging Levels
 

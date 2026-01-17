@@ -474,16 +474,20 @@ def find_dll_in_toolchain(dll_name: str, platform_name: str, arch: str) -> Path 
 
 def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_abi: bool) -> None:
     """
-    Deploy required MinGW runtime and sanitizer DLLs to the executable directory after linking.
+    Deploy required MinGW runtime and sanitizer DLLs to the output binary directory after linking.
 
     This function:
     1. Detects required DLLs using llvm-objdump (with fallback)
     2. Locates source DLLs in MinGW sysroot/bin or clang/bin (for sanitizers)
-    3. Copies DLLs to executable directory (with timestamp checking)
+    3. Copies DLLs to output directory (with timestamp checking)
     4. Handles all errors gracefully (warnings only, never fails the build)
 
+    Supports both .exe executables and .dll shared libraries. For .dll outputs,
+    deployment ensures that transitive dependencies are available alongside the
+    built library.
+
     Args:
-        output_exe_path: Path to the output executable
+        output_exe_path: Path to the output binary (.exe or .dll)
         platform_name: Platform name from get_platform_info() (e.g., "win")
         use_gnu_abi: Whether GNU ABI is being used
 
@@ -491,12 +495,15 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
         None
 
     Environment Variables:
-        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS: Set to "1" to disable deployment
+        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS: Set to "1" to disable all DLL deployment
+        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS: Set to "1" to disable deployment for .dll outputs only
         CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE: Set to "1" for verbose logging
 
     Examples:
         >>> post_link_dll_deployment(Path("test.exe"), "win", True)
         # Deploys libwinpthread-1.dll, libgcc_s_seh-1.dll, sanitizer DLLs, etc. to test.exe directory
+        >>> post_link_dll_deployment(Path("mylib.dll"), "win", True)
+        # Deploys runtime DLLs alongside the shared library
     """
     # Check opt-out environment variable
     if os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS") == "1":
@@ -517,9 +524,15 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
         logger.debug("DLL deployment skipped: not using GNU ABI")
         return
 
-    # Guard: only deploy for .exe files
-    if output_exe_path.suffix.lower() != ".exe":
-        logger.debug(f"DLL deployment skipped: not .exe file (suffix={output_exe_path.suffix})")
+    # Guard: only deploy for .exe and .dll files
+    suffix = output_exe_path.suffix.lower()
+    if suffix == ".dll":
+        # Check for DLL-specific opt-out
+        if os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS") == "1":
+            logger.debug("DLL deployment for .dll outputs disabled via CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS")
+            return
+    elif suffix != ".exe":
+        logger.debug(f"DLL deployment skipped: not .exe or .dll file (suffix={output_exe_path.suffix})")
         return
 
     # Guard: check if executable exists

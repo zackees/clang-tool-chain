@@ -65,20 +65,22 @@ def _extract_deploy_dependencies_flag(args: list[str]) -> tuple[list[str], bool]
 
 def _extract_output_path(args: list[str], tool_name: str) -> Path | None:
     """
-    Extract the output executable path from compiler/linker arguments.
+    Extract the output binary path from compiler/linker arguments.
 
     Args:
         args: Compiler/linker arguments
         tool_name: Name of the tool being executed
 
     Returns:
-        Path to output executable, or None if not a linking operation
+        Path to output binary (.exe or .dll), or None if not a linking operation
 
     Examples:
         >>> _extract_output_path(["-o", "test.exe", "test.cpp"], "clang++")
         Path('test.exe')
         >>> _extract_output_path(["-otest.exe", "test.cpp"], "clang++")
         Path('test.exe')
+        >>> _extract_output_path(["-o", "test.dll", "-shared", "test.cpp"], "clang++")
+        Path('test.dll')
         >>> _extract_output_path(["-c", "test.cpp"], "clang++")
         None
     """
@@ -95,18 +97,18 @@ def _extract_output_path(args: list[str], tool_name: str) -> Path | None:
     while i < len(args):
         arg = args[i]
 
-        # Format: -o output.exe
+        # Format: -o output.exe or -o output.dll
         if arg == "-o" and i + 1 < len(args):
             output_path = Path(args[i + 1]).resolve()
-            # Only deploy for .exe files (Windows linking operation)
-            if output_path.suffix.lower() == ".exe":
+            # Only deploy for .exe and .dll files (Windows linking operations)
+            if output_path.suffix.lower() in (".exe", ".dll"):
                 return output_path
             return None
 
-        # Format: -ooutput.exe
+        # Format: -ooutput.exe or -ooutput.dll
         if arg.startswith("-o") and len(arg) > 2:
             output_path = Path(arg[2:]).resolve()
-            if output_path.suffix.lower() == ".exe":
+            if output_path.suffix.lower() in (".exe", ".dll"):
                 return output_path
             return None
 

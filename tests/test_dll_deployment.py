@@ -1572,5 +1572,233 @@ int main() {
                 assert len(detected_dlls) == len(set(detected_dlls)), "Should not have duplicate DLLs"
 
 
+class TestDllDeploymentForDllOutputs:
+    """Test DLL deployment for .dll outputs (transitive dependencies)."""
+
+    def test_deployment_for_dll_output_default_enabled(self):
+        """Test that DLL deployment works for .dll outputs by default."""
+        # Mock setup similar to TestPostLinkDllDeployment tests
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create a mock .dll file
+            dll_path = tmpdir_path / "mylib.dll"
+            dll_path.touch()
+
+            # Mock platform info and DLL detection
+            with (
+                patch.dict(os.environ, {}, clear=False),
+                patch("clang_tool_chain.platform.detection.get_platform_info") as mock_get_platform_info,
+                patch("clang_tool_chain.deployment.dll_deployer.detect_required_dlls") as mock_detect_dlls,
+                patch("clang_tool_chain.deployment.dll_deployer.find_dll_in_toolchain") as mock_find_dll,
+            ):
+                # Clear any existing opt-out env vars
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS", None)
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS", None)
+
+                mock_get_platform_info.return_value = ("win", "x86_64")
+                mock_detect_dlls.return_value = ["libwinpthread-1.dll"]
+
+                # Create mock source DLL
+                sysroot_bin = tmpdir_path / "sysroot_bin"
+                sysroot_bin.mkdir()
+                src_dll = sysroot_bin / "libwinpthread-1.dll"
+                src_dll.touch()
+                mock_find_dll.return_value = src_dll
+
+                # Run deployment for .dll output
+                post_link_dll_deployment(dll_path, "win", True)
+
+                # Verify detect_required_dlls was called (deployment was attempted)
+                mock_detect_dlls.assert_called_once()
+
+    def test_deployment_for_dll_output_disabled_by_env_var(self):
+        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1 disables deployment for .dll."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create a mock .dll file
+            dll_path = tmpdir_path / "mylib.dll"
+            dll_path.touch()
+
+            # Set the env var to disable DLL deployment for .dll outputs
+            # Mock to ensure it would be called if not disabled
+            with (
+                patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS": "1"}),
+                patch("clang_tool_chain.deployment.dll_deployer.detect_required_dlls") as mock_detect_dlls,
+            ):
+                # Run deployment for .dll output
+                post_link_dll_deployment(dll_path, "win", True)
+
+                # Verify detect_required_dlls was NOT called (deployment was skipped)
+                mock_detect_dlls.assert_not_called()
+
+    def test_deployment_for_exe_not_affected_by_dll_env_var(self):
+        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS does not affect .exe deployment."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create a mock .exe file
+            exe_path = tmpdir_path / "test.exe"
+            exe_path.touch()
+
+            # Set the env var to disable DLL deployment for .dll outputs only
+            with (
+                patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS": "1"}),
+                patch("clang_tool_chain.platform.detection.get_platform_info") as mock_get_platform_info,
+                patch("clang_tool_chain.deployment.dll_deployer.detect_required_dlls") as mock_detect_dlls,
+            ):
+                mock_get_platform_info.return_value = ("win", "x86_64")
+                mock_detect_dlls.return_value = []  # No DLLs needed for this test
+
+                # Run deployment for .exe output
+                post_link_dll_deployment(exe_path, "win", True)
+
+                # Verify detect_required_dlls WAS called (deployment was attempted for .exe)
+                mock_detect_dlls.assert_called_once()
+
+    def test_global_opt_out_still_works_for_dll(self):
+        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1 disables deployment for both .exe and .dll."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create mock files
+            dll_path = tmpdir_path / "mylib.dll"
+            dll_path.touch()
+            exe_path = tmpdir_path / "test.exe"
+            exe_path.touch()
+
+            # Set the global opt-out env var
+            with (
+                patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS": "1"}),
+                patch("clang_tool_chain.deployment.dll_deployer.detect_required_dlls") as mock_detect_dlls,
+            ):
+                # Run deployment for both
+                post_link_dll_deployment(dll_path, "win", True)
+                post_link_dll_deployment(exe_path, "win", True)
+
+                # Verify detect_required_dlls was NOT called for either
+                mock_detect_dlls.assert_not_called()
+
+    @pytest.mark.skipif(os.name != "nt", reason="Windows-only test")
+    def test_shared_library_dll_deployment_integration(self):
+        """Integration test: build a .dll and verify runtime DLLs are deployed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create a simple C++ library source
+            lib_cpp = tmpdir_path / "mylib.cpp"
+            lib_cpp.write_text(
+                """
+#include <iostream>
+
+extern "C" __declspec(dllexport) void hello() {
+    std::cout << "Hello from DLL!" << std::endl;
+}
+"""
+            )
+
+            # Build the shared library
+            from clang_tool_chain.execution.core import run_tool
+
+            dll_path = tmpdir_path / "mylib.dll"
+            result = run_tool("clang++", ["-shared", str(lib_cpp), "-o", str(dll_path)])
+
+            # Verify build succeeded
+            assert result == 0, "Build should succeed"
+            assert dll_path.exists(), "DLL should exist"
+
+            # Verify DLL deployment (at least libwinpthread-1.dll should be present)
+            expected_dlls = ["libwinpthread-1.dll"]
+            for dll_name in expected_dlls:
+                deployed_dll_path = tmpdir_path / dll_name
+                assert deployed_dll_path.exists(), f"DLL {dll_name} should be deployed alongside mylib.dll"
+
+    @pytest.mark.skipif(os.name != "nt", reason="Windows-only test")
+    def test_shared_library_dll_deployment_disabled(self):
+        """Integration test: verify DLL deployment can be disabled for .dll outputs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create a simple C++ library source
+            lib_cpp = tmpdir_path / "mylib.cpp"
+            lib_cpp.write_text(
+                """
+extern "C" __declspec(dllexport) int add(int a, int b) {
+    return a + b;
+}
+"""
+            )
+
+            # Build with DLL deployment disabled for .dll outputs
+            from clang_tool_chain.execution.core import run_tool
+
+            dll_path = tmpdir_path / "mylib.dll"
+            old_env = os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS")
+            try:
+                os.environ["CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS"] = "1"
+                result = run_tool("clang++", ["-shared", str(lib_cpp), "-o", str(dll_path)])
+
+                # Verify build succeeded
+                assert result == 0, "Build should succeed"
+                assert dll_path.exists(), "DLL should exist"
+
+                # Verify runtime DLLs were NOT deployed
+                runtime_dll = tmpdir_path / "libwinpthread-1.dll"
+                assert not runtime_dll.exists(), "Runtime DLL should NOT be deployed when env var is set"
+
+            finally:
+                # Restore environment
+                if old_env is None:
+                    os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS", None)
+                else:
+                    os.environ["CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS"] = old_env
+
+
+class TestExtractOutputPathForDlls:
+    """Test _extract_output_path() for .dll outputs."""
+
+    def test_extract_output_path_dll_with_space(self):
+        """Test that .dll output paths are correctly extracted."""
+        from clang_tool_chain.execution.core import _extract_output_path
+
+        # Test -o format with .dll
+        result = _extract_output_path(["-o", "mylib.dll", "-shared", "test.cpp"], "clang++")
+        assert result is not None
+        assert result.name == "mylib.dll"
+
+    def test_extract_output_path_dll_combined_format(self):
+        """Test -omylib.dll format."""
+        from clang_tool_chain.execution.core import _extract_output_path
+
+        result = _extract_output_path(["-omylib.dll", "-shared", "test.cpp"], "clang++")
+        assert result is not None
+        assert result.name == "mylib.dll"
+
+    def test_extract_output_path_exe_still_works(self):
+        """Test that .exe extraction still works."""
+        from clang_tool_chain.execution.core import _extract_output_path
+
+        result = _extract_output_path(["-o", "test.exe", "test.cpp"], "clang++")
+        assert result is not None
+        assert result.name == "test.exe"
+
+    def test_extract_output_path_other_suffixes_return_none(self):
+        """Test that non-.exe/.dll suffixes return None."""
+        from clang_tool_chain.execution.core import _extract_output_path
+
+        # .obj should return None
+        result = _extract_output_path(["-o", "test.obj", "-c", "test.cpp"], "clang++")
+        assert result is None
+
+        # .o should return None
+        result = _extract_output_path(["-o", "test.o", "test.cpp"], "clang++")
+        assert result is None
+
+        # .a (static library) should return None
+        result = _extract_output_path(["-o", "libtest.a", "test.cpp"], "clang++")
+        assert result is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
