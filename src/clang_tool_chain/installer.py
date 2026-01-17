@@ -2252,6 +2252,8 @@ def _fix_cosmocc_symlinks_on_windows(install_dir: Path) -> None:
             symlink_path.unlink()
             symlink_path.write_bytes(cosmocc_content)
             logger.info(f"Fixed {symlink_name}: replaced placeholder with {len(cosmocc_content)} byte script")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.warning(f"Failed to fix {symlink_name}: {e}")
 
@@ -2399,7 +2401,9 @@ def download_and_install_cosmocc(platform: str | None = None, arch: str | None =
             archive_file.unlink()
 
 
-def _subprocess_install_cosmocc(platform: str | None = None, arch: str | None = None) -> int:  # pyright: ignore[reportUnusedFunction]
+def _subprocess_install_cosmocc(  # pyright: ignore[reportUnusedFunction]
+    platform: str | None = None, arch: str | None = None
+) -> int:
     """
     Install Cosmocc in a subprocess with proper process-level locking.
 

@@ -115,6 +115,15 @@ from .execution.core import (
 )
 
 # ============================================================================
+# Cosmocc Tool Execution
+# ============================================================================
+from .execution.cosmocc import (
+    execute_cosmocc_tool,
+    find_cosmocc_tool,
+    get_cosmocc_binary_dir,
+)
+
+# ============================================================================
 # Emscripten Tool Execution
 # ============================================================================
 from .execution.emscripten import (
@@ -139,15 +148,6 @@ from .execution.lldb import (
     execute_lldb_tool,
     find_lldb_tool,
     get_lldb_binary_dir,
-)
-
-# ============================================================================
-# Cosmocc Tool Execution
-# ============================================================================
-from .execution.cosmocc import (
-    execute_cosmocc_tool,
-    find_cosmocc_tool,
-    get_cosmocc_binary_dir,
 )
 
 # ============================================================================

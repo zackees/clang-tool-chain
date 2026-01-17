@@ -301,7 +301,7 @@ def cmd_install_clang(args: argparse.Namespace) -> int:
     # Check if already installed (without triggering auto-download)
     if installer.is_toolchain_installed(platform_name, arch):
         install_dir = get_install_dir(platform_name, arch)
-        print("✓ Clang/LLVM toolchain already installed at:")
+        safe_print("✓ Clang/LLVM toolchain already installed at:")
         print(f"  {install_dir}")
         print()
 
@@ -332,7 +332,7 @@ def cmd_install_clang(args: argparse.Namespace) -> int:
         if bin_dir.exists():
             print()
             print("=" * 60)
-            print("✓ Installation Complete!")
+            safe_print("✓ Installation Complete!")
             print()
             print(f"Toolchain installed at: {bin_dir.parent}")
             print()
@@ -352,7 +352,7 @@ def cmd_install_clang(args: argparse.Namespace) -> int:
                 tool_name = f"{tool}.exe" if platform_name == "win" else tool
                 tool_path = bin_dir / tool_name
                 if tool_path.exists():
-                    print(f"  ✓ {tool}")
+                    safe_print(f"  ✓ {tool}")
             print()
 
             print("To use these tools:")
@@ -368,14 +368,14 @@ def cmd_install_clang(args: argparse.Namespace) -> int:
             print()
             return 0
         else:
-            print("✗ Installation verification failed - bin directory not found")
+            safe_print("✗ Installation verification failed - bin directory not found")
             return 1
 
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         print()
-        print(f"✗ Installation failed: {e}")
+        safe_print(f"✗ Installation failed: {e}")
         return 1
 
 
@@ -447,13 +447,13 @@ def cmd_purge(args: argparse.Namespace) -> int:
             for component, bin_path in path_components:
                 try:
                     setenvironment.remove_env_path(bin_path)
-                    print(f"  ✓ Removed {component} from PATH")
+                    safe_print(f"  ✓ Removed {component} from PATH")
                 except KeyboardInterrupt as ke:
                     handle_keyboard_interrupt_properly(ke)
                 except Exception as e:
-                    print(f"  ✗ Failed to remove {component} from PATH: {e}")
+                    safe_print(f"  ✗ Failed to remove {component} from PATH: {e}")
         except ImportError:
-            print("  ⚠ setenvironment not installed, cannot auto-remove from PATH")
+            safe_print("  ⚠ setenvironment not installed, cannot auto-remove from PATH")
             print("  Please run the following commands manually:")
             for component, _bin_path in path_components:
                 print(f"    clang-tool-chain uninstall {component}-env")
@@ -503,7 +503,7 @@ def cmd_install_clang_env(args: argparse.Namespace) -> int:
         print()
         installer.ensure_toolchain(platform_name, arch)
         print()
-        print("✓ Clang/LLVM toolchain installed")
+        safe_print("✓ Clang/LLVM toolchain installed")
         print()
 
     # Get the binary directory
@@ -527,14 +527,14 @@ def cmd_install_clang_env(args: argparse.Namespace) -> int:
     print("Adding toolchain bin directory to PATH...")
     try:
         setenvironment.add_env_path(str(bin_dir))
-        print(f"✓ Added to PATH: {bin_dir}")
+        safe_print(f"✓ Added to PATH: {bin_dir}")
 
         # Mark as installed to environment (for automatic cleanup during purge)
         env_breadcrumbs.mark_component_installed_to_env("clang", str(bin_dir))
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
-        print(f"✗ Failed to add to PATH: {e}")
+        safe_print(f"✗ Failed to add to PATH: {e}")
         return 1
 
     print()
@@ -580,14 +580,14 @@ def cmd_uninstall_clang_env(args: argparse.Namespace) -> int:
     print("Removing toolchain bin directory from PATH...")
     try:
         setenvironment.remove_env_path(str(bin_dir))
-        print(f"✓ Removed from PATH: {bin_dir}")
+        safe_print(f"✓ Removed from PATH: {bin_dir}")
 
         # Remove breadcrumb
         env_breadcrumbs.unmark_component_installed_to_env("clang")
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
-        print(f"✗ Failed to remove from PATH: {e}")
+        safe_print(f"✗ Failed to remove from PATH: {e}")
         return 1
 
     print()
@@ -629,7 +629,7 @@ def cmd_install_cosmocc(args: argparse.Namespace) -> int:
     # Check if already installed (universal - no platform/arch args needed)
     if installer.is_cosmocc_installed():
         install_dir = get_cosmocc_install_dir()
-        print("✓ Cosmopolitan (cosmocc) toolchain already installed at:")
+        safe_print("✓ Cosmopolitan (cosmocc) toolchain already installed at:")
         print(f"  {install_dir}")
         print()
 
@@ -662,7 +662,7 @@ def cmd_install_cosmocc(args: argparse.Namespace) -> int:
         if bin_dir.exists():
             print()
             print("=" * 60)
-            print("✓ Universal Installation Complete!")
+            safe_print("✓ Universal Installation Complete!")
             print()
             print(f"Toolchain installed at: {install_dir}")
             print()
@@ -684,12 +684,12 @@ def cmd_install_cosmocc(args: argparse.Namespace) -> int:
                     for ext in [".exe", ".bat", ""]:
                         tool_path = bin_dir / f"{tool}{ext}"
                         if tool_path.exists():
-                            print(f"  ✓ {tool}")
+                            safe_print(f"  ✓ {tool}")
                             break
                 else:
                     tool_path = bin_dir / tool
                     if tool_path.exists():
-                        print(f"  ✓ {tool}")
+                        safe_print(f"  ✓ {tool}")
             print()
 
             print("To use these tools:")
@@ -700,14 +700,14 @@ def cmd_install_cosmocc(args: argparse.Namespace) -> int:
             print()
             return 0
         else:
-            print("✗ Installation verification failed - bin directory not found")
+            safe_print("✗ Installation verification failed - bin directory not found")
             return 1
 
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         print()
-        print(f"✗ Installation failed: {e}")
+        safe_print(f"✗ Installation failed: {e}")
         return 1
 
 
@@ -738,7 +738,7 @@ def cmd_install_cosmocc_env(args: argparse.Namespace) -> int:
         print()
         installer.ensure_cosmocc()
         print()
-        print("✓ Universal Cosmopolitan (cosmocc) toolchain installed")
+        safe_print("✓ Universal Cosmopolitan (cosmocc) toolchain installed")
         print()
 
     # Get the binary directory (universal - no platform/arch args needed)
@@ -759,14 +759,14 @@ def cmd_install_cosmocc_env(args: argparse.Namespace) -> int:
     print("Adding cosmocc bin directory to PATH...")
     try:
         setenvironment.add_env_path(str(bin_dir))
-        print(f"✓ Added to PATH: {bin_dir}")
+        safe_print(f"✓ Added to PATH: {bin_dir}")
 
         # Mark as installed to environment (for automatic cleanup during purge)
         env_breadcrumbs.mark_component_installed_to_env("cosmocc", str(bin_dir))
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
-        print(f"✗ Failed to add to PATH: {e}")
+        safe_print(f"✗ Failed to add to PATH: {e}")
         return 1
 
     print()
@@ -819,14 +819,14 @@ def cmd_uninstall_cosmocc_env(args: argparse.Namespace) -> int:
     print("Removing cosmocc bin directory from PATH...")
     try:
         setenvironment.remove_env_path(str(bin_dir))
-        print(f"✓ Removed from PATH: {bin_dir}")
+        safe_print(f"✓ Removed from PATH: {bin_dir}")
 
         # Remove breadcrumb
         env_breadcrumbs.unmark_component_installed_to_env("cosmocc")
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
-        print(f"✗ Failed to remove from PATH: {e}")
+        safe_print(f"✗ Failed to remove from PATH: {e}")
         return 1
 
     print()

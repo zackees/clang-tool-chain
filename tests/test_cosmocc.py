@@ -88,23 +88,23 @@ class TestCosmoccExecution(unittest.TestCase):
         # Create a simple C test file
         self.test_c = self.temp_path / "hello.c"
         self.test_c.write_text(
-            '#include <stdio.h>\n'
-            '\n'
-            'int main() {\n'
+            "#include <stdio.h>\n"
+            "\n"
+            "int main() {\n"
             '    printf("Hello from Cosmopolitan!\\n");\n'
-            '    return 0;\n'
-            '}\n'
+            "    return 0;\n"
+            "}\n"
         )
 
         # Create a simple C++ test file
         self.test_cpp = self.temp_path / "hello.cpp"
         self.test_cpp.write_text(
-            '#include <iostream>\n'
-            '\n'
-            'int main() {\n'
+            "#include <iostream>\n"
+            "\n"
+            "int main() {\n"
             '    std::cout << "Hello from Cosmopolitan C++!" << std::endl;\n'
-            '    return 0;\n'
-            '}\n'
+            "    return 0;\n"
+            "}\n"
         )
 
     def tearDown(self) -> None:
@@ -431,67 +431,67 @@ class TestCosmoccExecution(unittest.TestCase):
             # Create a test file that uses cosmo_dlopen to load libm
             dlopen_test_c = self.temp_path / "dlopen_test.c"
             dlopen_test_c.write_text(
-                '#include <stdio.h>\n'
-                '#include <dlfcn.h>\n'
-                '#include <math.h>\n'
-                '\n'
-                '// Test cosmo_dlopen by loading libm and calling sqrt\n'
-                'int main() {\n'
-                '    void *handle;\n'
-                '    double (*sqrt_func)(double);\n'
-                '    char *error;\n'
-                '\n'
-                '    // Try to load libm - cosmo_dlopen handles platform differences\n'
-                '    // On Linux: libm.so.6, on macOS: libm.dylib, on Windows: handled differently\n'
-                '#if defined(__APPLE__)\n'
+                "#include <stdio.h>\n"
+                "#include <dlfcn.h>\n"
+                "#include <math.h>\n"
+                "\n"
+                "// Test cosmo_dlopen by loading libm and calling sqrt\n"
+                "int main() {\n"
+                "    void *handle;\n"
+                "    double (*sqrt_func)(double);\n"
+                "    char *error;\n"
+                "\n"
+                "    // Try to load libm - cosmo_dlopen handles platform differences\n"
+                "    // On Linux: libm.so.6, on macOS: libm.dylib, on Windows: handled differently\n"
+                "#if defined(__APPLE__)\n"
                 '    handle = cosmo_dlopen("libm.dylib", RTLD_LAZY);\n'
-                '#elif defined(_WIN32)\n'
-                '    // On Windows, math functions are in ucrtbase.dll or msvcrt.dll\n'
+                "#elif defined(_WIN32)\n"
+                "    // On Windows, math functions are in ucrtbase.dll or msvcrt.dll\n"
                 '    handle = cosmo_dlopen("ucrtbase.dll", RTLD_LAZY);\n'
-                '    if (!handle) {\n'
+                "    if (!handle) {\n"
                 '        handle = cosmo_dlopen("msvcrt.dll", RTLD_LAZY);\n'
-                '    }\n'
-                '#else\n'
+                "    }\n"
+                "#else\n"
                 '    handle = cosmo_dlopen("libm.so.6", RTLD_LAZY);\n'
-                '#endif\n'
-                '\n'
-                '    if (!handle) {\n'
-                '        // Fallback: use built-in sqrt (statically linked)\n'
+                "#endif\n"
+                "\n"
+                "    if (!handle) {\n"
+                "        // Fallback: use built-in sqrt (statically linked)\n"
                 '        printf("dlopen not available, using static sqrt\\n");\n'
-                '        double result = sqrt(16.0);\n'
+                "        double result = sqrt(16.0);\n"
                 '        printf("sqrt(16.0) = %.1f\\n", result);\n'
-                '        if (result == 4.0) {\n'
+                "        if (result == 4.0) {\n"
                 '            printf("DLOPEN_TEST: PASS (static fallback)\\n");\n'
-                '            return 0;\n'
-                '        }\n'
-                '        return 1;\n'
-                '    }\n'
-                '\n'
-                '    // Get sqrt function pointer\n'
+                "            return 0;\n"
+                "        }\n"
+                "        return 1;\n"
+                "    }\n"
+                "\n"
+                "    // Get sqrt function pointer\n"
                 '    sqrt_func = (double (*)(double))cosmo_dlsym(handle, "sqrt");\n'
-                '    if (!sqrt_func) {\n'
+                "    if (!sqrt_func) {\n"
                 '        printf("Could not find sqrt symbol, using static\\n");\n'
-                '        cosmo_dlclose(handle);\n'
-                '        double result = sqrt(16.0);\n'
+                "        cosmo_dlclose(handle);\n"
+                "        double result = sqrt(16.0);\n"
                 '        printf("sqrt(16.0) = %.1f\\n", result);\n'
                 '        printf("DLOPEN_TEST: PASS (static fallback)\\n");\n'
-                '        return 0;\n'
-                '    }\n'
-                '\n'
-                '    // Call the dynamically loaded sqrt\n'
-                '    double result = sqrt_func(16.0);\n'
+                "        return 0;\n"
+                "    }\n"
+                "\n"
+                "    // Call the dynamically loaded sqrt\n"
+                "    double result = sqrt_func(16.0);\n"
                 '    printf("Dynamic sqrt(16.0) = %.1f\\n", result);\n'
-                '\n'
-                '    cosmo_dlclose(handle);\n'
-                '\n'
-                '    if (result == 4.0) {\n'
+                "\n"
+                "    cosmo_dlclose(handle);\n"
+                "\n"
+                "    if (result == 4.0) {\n"
                 '        printf("DLOPEN_TEST: PASS (dynamic)\\n");\n'
-                '        return 0;\n'
-                '    }\n'
-                '\n'
+                "        return 0;\n"
+                "    }\n"
+                "\n"
                 '    printf("DLOPEN_TEST: FAIL\\n");\n'
-                '    return 1;\n'
-                '}\n'
+                "    return 1;\n"
+                "}\n"
             )
 
             # Compile the dlopen test
@@ -571,36 +571,36 @@ class TestCosmoccExecution(unittest.TestCase):
             # Create a simple library source
             lib_c = self.temp_path / "mylib.c"
             lib_c.write_text(
-                'int add(int a, int b) {\n'
-                '    return a + b;\n'
-                '}\n'
-                '\n'
-                'int multiply(int a, int b) {\n'
-                '    return a * b;\n'
-                '}\n'
+                "int add(int a, int b) {\n"
+                "    return a + b;\n"
+                "}\n"
+                "\n"
+                "int multiply(int a, int b) {\n"
+                "    return a * b;\n"
+                "}\n"
             )
 
             # Create main program that uses the library (statically linked)
             main_c = self.temp_path / "main_with_lib.c"
             main_c.write_text(
-                '#include <stdio.h>\n'
-                '\n'
-                '// Declare external functions from our library\n'
-                'extern int add(int a, int b);\n'
-                'extern int multiply(int a, int b);\n'
-                '\n'
-                'int main() {\n'
-                '    int sum = add(3, 4);\n'
-                '    int product = multiply(3, 4);\n'
+                "#include <stdio.h>\n"
+                "\n"
+                "// Declare external functions from our library\n"
+                "extern int add(int a, int b);\n"
+                "extern int multiply(int a, int b);\n"
+                "\n"
+                "int main() {\n"
+                "    int sum = add(3, 4);\n"
+                "    int product = multiply(3, 4);\n"
                 '    printf("add(3, 4) = %d\\n", sum);\n'
                 '    printf("multiply(3, 4) = %d\\n", product);\n'
-                '    if (sum == 7 && product == 12) {\n'
+                "    if (sum == 7 && product == 12) {\n"
                 '        printf("LIBRARY_TEST: PASS\\n");\n'
-                '        return 0;\n'
-                '    }\n'
+                "        return 0;\n"
+                "    }\n"
                 '    printf("LIBRARY_TEST: FAIL\\n");\n'
-                '    return 1;\n'
-                '}\n'
+                "    return 1;\n"
+                "}\n"
             )
 
             # Compile both files together (static linking - Cosmopolitan's strength)

@@ -557,6 +557,8 @@ def fetch_cosmocc_platform_manifest(platform: str | None = None, arch: str | Non
         manifest = _parse_manifest(data)
         logger.info(f"Cosmocc universal manifest loaded: latest version = {manifest.latest}")
         return manifest
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         raise ToolchainInfrastructureError(
             f"Failed to fetch Cosmocc manifest from {manifest_url}: {e}\n"
