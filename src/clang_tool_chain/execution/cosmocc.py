@@ -204,7 +204,22 @@ def execute_cosmocc_tool(tool_name: str, args: list[str] | None = None) -> NoRet
     env = os.environ.copy()
 
     # Add Cosmocc bin directory to PATH
-    env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+    # Also add libexec directories for GCC internal executables (cc1, cc1plus, etc.)
+    libexec_dir = install_dir / "libexec"
+    libexec_gcc_dir = libexec_dir / "gcc"
+
+    path_dirs = [str(bin_dir)]
+    if libexec_gcc_dir.exists():
+        path_dirs.append(str(libexec_gcc_dir))
+    elif libexec_dir.exists():
+        path_dirs.append(str(libexec_dir))
+
+    env["PATH"] = f"{os.pathsep.join(path_dirs)}{os.pathsep}{env.get('PATH', '')}"
+
+    # Set GCC_EXEC_PREFIX to help GCC find internal executables (cc1, cc1plus, etc.)
+    # GCC uses this prefix to locate subprograms in libexec/gcc/<target>/<version>/
+    # The prefix should end with a slash
+    env["GCC_EXEC_PREFIX"] = f"{install_dir}/"
 
     # Set COSMOCC environment variable pointing to the Cosmocc installation
     # This helps Cosmocc find its includes and libraries
