@@ -134,10 +134,10 @@ class TestCosmoccExecution(unittest.TestCase):
         return env
 
     def _build_cosmocc_command(self, cosmocc_path: Path, args: list[str]) -> list[str]:
-        """Build command to run cosmocc, handling Windows shell requirement.
+        """Build command to run cosmocc, handling shell requirement.
 
-        Cosmocc tools are POSIX shell scripts, so on Windows we need to run them
-        through bash (from Git for Windows, MSYS2, etc.).
+        Cosmocc tools are POSIX shell scripts that need to be executed through
+        a shell interpreter on all platforms.
         """
         import shutil
 
@@ -163,7 +163,14 @@ class TestCosmoccExecution(unittest.TestCase):
                 return [shell, tool_path_unix] + args
             else:
                 self.skipTest("Cosmocc requires bash on Windows (Git Bash, MSYS2, etc.)")
+        else:
+            # On Unix/Linux, explicitly invoke through shell to handle potential
+            # shebang issues or exec format errors
+            shell = shutil.which("bash") or shutil.which("sh")
+            if shell:
+                return [shell, str(cosmocc_path)] + args
 
+        # Fallback: try direct execution
         return [str(cosmocc_path)] + args
 
     def _check_for_crash(self, result: subprocess.CompletedProcess[str], tool_path: Path, context: str = "") -> None:

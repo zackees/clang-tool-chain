@@ -211,7 +211,9 @@ def execute_cosmocc_tool(tool_name: str, args: list[str] | None = None) -> NoRet
     env["COSMOCC"] = str(install_dir)
 
     # Cosmocc tools (cosmocc, cosmoc++) are POSIX shell scripts.
-    # On Windows, we need to run them through a shell (bash/sh).
+    # They need to be executed through a shell interpreter.
+    # On Unix/Linux, try to find sh or bash
+    # On Windows, we need to find a POSIX shell (bash/sh from Git Bash, MSYS2, etc.)
     if platform_name == "win":
         # Find a shell to execute the script
         # Try common shell locations on Windows (Git Bash, MSYS2, Cygwin, WSL)
@@ -228,7 +230,18 @@ def execute_cosmocc_tool(tool_name: str, args: list[str] | None = None) -> NoRet
             )
             cmd = [str(tool_path)] + args
     else:
-        cmd = [str(tool_path)] + args
+        # On Unix/Linux, explicitly invoke through shell to handle potential
+        # shebang issues or exec format errors
+        import shutil
+
+        shell = shutil.which("bash") or shutil.which("sh")
+        if shell:
+            logger.debug(f"Using shell {shell} to execute Cosmocc tool")
+            cmd = [shell, str(tool_path)] + args
+        else:
+            # Fallback: try direct execution (may fail if script has format issues)
+            logger.debug("No bash/sh found in PATH, trying direct execution")
+            cmd = [str(tool_path)] + args
 
     logger.info(f"Executing Cosmocc tool: {' '.join(cmd)}")
 
