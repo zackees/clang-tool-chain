@@ -275,12 +275,10 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     # On macOS, translate GNU ld flags to ld64.lld equivalents
     if platform_name == "darwin":
         args = _translate_linker_flags_for_macos_lld(args)
-        # macOS requires explicit Mach-O linker variant (ld64.lld)
-        # LLVM 21.x+ on macOS supports both -fuse-ld=lld and -fuse-ld=ld64.lld
-        # Ensure ld64.lld symlink exists (some distributions may not include it)
-        if not _ensure_ld64_lld_symlink():
-            logger.warning("Could not ensure ld64.lld symlink exists, linker may fail")
-        return ["-fuse-ld=ld64.lld"] + args
+        # Use generic -fuse-ld=lld on macOS - lld auto-detects Mach-O format from target
+        # This avoids "invalid linker name" errors that can occur with -fuse-ld=ld64.lld
+        # on some clang versions. LLD uses argv[0] or target triple to select linker flavor.
+        return ["-fuse-ld=lld"] + args
     else:
         # Linux uses standard lld
         return ["-fuse-ld=lld"] + args
