@@ -35,22 +35,10 @@ jobs:
         uname -a
         python --version
 
-    - name: Purge cached toolchain (ensure fresh download)
-      run: |
-        uv run clang-tool-chain purge --yes || true
-
     - name: Download and install toolchain
       run: |
         uv run clang-tool-chain-c --version
       timeout-minutes: 20
-
-    - name: Debug - Check for lld binaries
-      run: |
-        echo "=== Checking for lld binaries ==="
-        ls -la ~/.clang-tool-chain/clang/darwin/arm64/bin/ | grep -E "lld|ld64" || echo "No lld binaries found!"
-        echo ""
-        echo "=== All binaries in clang bin directory ==="
-        ls -la ~/.clang-tool-chain/clang/darwin/arm64/bin/ | head -30
 
     - name: Verify sccache installation
       run: |
