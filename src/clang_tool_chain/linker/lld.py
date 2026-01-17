@@ -14,17 +14,16 @@ import os
 import re
 import subprocess
 import sys
-from typing import Optional
 
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 
 logger = logging.getLogger(__name__)
 
 # Module-level cache for LLVM version (avoids repeated subprocess calls)
-_cached_llvm_version: Optional[tuple[int, int, int]] = None
+_cached_llvm_version: tuple[int, int, int] | None = None
 
 
-def _get_llvm_version() -> Optional[tuple[int, int, int]]:
+def _get_llvm_version() -> tuple[int, int, int] | None:
     """
     Get the LLVM version of the installed clang, with caching.
 
