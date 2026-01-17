@@ -16,16 +16,16 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 
 | Platform | Architecture | Clang/LLVM Version | Linker Used | Additional Components |
 |----------|-------------|-------------------|-------------|----------------------|
-| macOS    | x86_64      | 21.1.6            | ld64.lld    | -                    |
-| macOS    | arm64       | 21.1.6            | ld64.lld    | -                    |
+| macOS    | x86_64      | 21.1.6            | lld         | -                    |
+| macOS    | arm64       | 21.1.6            | lld         | -                    |
 | Windows  | x86_64      | 21.1.5            | lld         | MinGW-w64 (integrated) |
 | Linux    | x86_64      | 21.1.5            | lld         | -                    |
 | Linux    | arm64       | 21.1.5            | lld         | -                    |
 
-*Version information as of January 16, 2026*
+*Version information as of January 17, 2026*
 
 **Linker Notes:**
-- **macOS**: Both ARM64 and x86_64 use LLVM 21.1.6 with ld64.lld (LLVM's Mach-O linker). GNU-style flags like `--no-undefined` are automatically translated to ld64.lld equivalents (`-undefined error`).
+- **macOS**: Both ARM64 and x86_64 use LLVM lld via `-fuse-ld=lld` (lld auto-detects Mach-O personality from target triple). GNU-style flags like `--no-undefined` are automatically translated to ld64 equivalents (`-undefined error`).
 - **Linux/Windows**: Uses LLVM lld for faster linking and cross-platform consistency
 - **Opt-out**: Set `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` to use the system linker instead of bundled LLD
 
