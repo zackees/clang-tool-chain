@@ -6,14 +6,125 @@ This module provides functions for:
 - Translating GNU ld flags to ld64.lld equivalents on macOS
 - Managing linker selection based on platform and user preferences
 - Ensuring ld64.lld symlink exists on macOS (runtime fallback)
+- LLVM version detection with caching for compatibility decisions
 """
 
 import logging
 import os
+import re
+import subprocess
+import sys
+from typing import Optional
 
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 
 logger = logging.getLogger(__name__)
+
+# Module-level cache for LLVM version (avoids repeated subprocess calls)
+_cached_llvm_version: Optional[tuple[int, int, int]] = None
+
+
+def _get_llvm_version() -> Optional[tuple[int, int, int]]:
+    """
+    Get the LLVM version of the installed clang, with caching.
+
+    This runs `clang --version` and parses the version number. The result
+    is cached in memory for the duration of the process, and also cached
+    to a file in the install directory for persistence across invocations.
+
+    Returns:
+        Tuple of (major, minor, patch) version numbers, or None if detection fails.
+    """
+    global _cached_llvm_version
+
+    # Return memory-cached version if available
+    if _cached_llvm_version is not None:
+        return _cached_llvm_version
+
+    # Try to read from file cache
+    try:
+        from ..platform.detection import get_platform_binary_dir
+
+        bin_dir = get_platform_binary_dir()
+        cache_file = bin_dir.parent / ".llvm_version_cache"
+
+        if cache_file.exists():
+            cached = cache_file.read_text().strip()
+            parts = cached.split(".")
+            if len(parts) >= 3:
+                _cached_llvm_version = (int(parts[0]), int(parts[1]), int(parts[2]))
+                logger.debug(f"Loaded LLVM version from cache: {_cached_llvm_version}")
+                return _cached_llvm_version
+    except Exception as e:
+        logger.debug(f"Could not read LLVM version cache: {e}")
+
+    # Detect version by running clang --version
+    try:
+        from ..platform.detection import get_platform_binary_dir
+
+        bin_dir = get_platform_binary_dir()
+        clang_path = bin_dir / "clang"
+
+        if not clang_path.exists():
+            logger.debug(f"Clang binary not found at {clang_path}")
+            return None
+
+        result = subprocess.run(
+            [str(clang_path), "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        if result.returncode != 0:
+            logger.debug(f"clang --version failed: {result.stderr}")
+            return None
+
+        # Parse version from output like "clang version 19.1.7 (...)"
+        version_match = re.search(r"clang version (\d+)\.(\d+)\.(\d+)", result.stdout)
+        if version_match:
+            major, minor, patch = int(version_match.group(1)), int(version_match.group(2)), int(version_match.group(3))
+            _cached_llvm_version = (major, minor, patch)
+            logger.debug(f"Detected LLVM version: {_cached_llvm_version}")
+
+            # Save to file cache for persistence
+            try:
+                cache_file = bin_dir.parent / ".llvm_version_cache"
+                cache_file.write_text(f"{major}.{minor}.{patch}")
+                logger.debug(f"Saved LLVM version to cache: {cache_file}")
+            except Exception as e:
+                logger.debug(f"Could not write LLVM version cache: {e}")
+
+            return _cached_llvm_version
+
+        logger.debug(f"Could not parse LLVM version from: {result.stdout[:200]}")
+        return None
+
+    except Exception as e:
+        logger.debug(f"LLVM version detection failed: {e}")
+        return None
+
+
+def _llvm_supports_ld64_lld_flag() -> bool:
+    """
+    Check if the installed LLVM version supports -fuse-ld=ld64.lld.
+
+    The -fuse-ld=ld64.lld flag is only recognized by LLVM 21.x and later.
+    Earlier versions require -fuse-ld=lld (which auto-detects Mach-O from target).
+
+    Returns:
+        True if LLVM >= 21.x, False otherwise (or if version detection fails).
+    """
+    version = _get_llvm_version()
+    if version is None:
+        # If we can't detect version, assume older LLVM for safety
+        logger.debug("Could not detect LLVM version, assuming < 21.x for ld64.lld compatibility")
+        return False
+
+    major, _, _ = version
+    supports = major >= 21
+    logger.debug(f"LLVM {major}.x {'supports' if supports else 'does not support'} -fuse-ld=ld64.lld")
+    return supports
 
 
 def _ensure_ld64_lld_symlink() -> bool:
@@ -286,10 +397,22 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     # On macOS, translate GNU ld flags to ld64.lld equivalents
     if platform_name == "darwin":
         args = _translate_linker_flags_for_macos_lld(args)
-        # Use -fuse-ld=lld on macOS - lld auto-detects Mach-O personality from target triple
-        # Note: -fuse-ld=ld64.lld is only supported in LLVM 21.x+, but -fuse-ld=lld works
-        # on all LLVM versions and lld will still use the Mach-O linker for darwin targets
-        return ["-fuse-ld=lld"] + args
+
+        # Check LLVM version to determine the correct linker flag
+        if _llvm_supports_ld64_lld_flag():
+            # LLVM 21.x+ supports explicit -fuse-ld=ld64.lld
+            _ensure_ld64_lld_symlink()
+            return ["-fuse-ld=ld64.lld"] + args
+        else:
+            # LLVM < 21.x: rewrite to -fuse-ld=lld with compatibility notice
+            version = _get_llvm_version()
+            version_str = f"{version[0]}.{version[1]}.{version[2]}" if version else "unknown"
+            print(
+                f"[clang-tool-chain] LLVM {version_str} does not support -fuse-ld=ld64.lld, "
+                f"using -fuse-ld=lld instead (lld auto-detects Mach-O from target)",
+                file=sys.stderr,
+            )
+            return ["-fuse-ld=lld"] + args
     else:
         # Linux uses standard lld
         return ["-fuse-ld=lld"] + args

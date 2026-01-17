@@ -15,13 +15,35 @@ from clang_tool_chain.linker.lld import _add_lld_linker_if_needed
 class TestLLDLinkerSelection(unittest.TestCase):
     """Test cases for platform-specific lld linker flag injection."""
 
-    def test_macos_uses_ld64_lld(self):
-        """Test that macOS uses -fuse-ld=lld (generic, auto-detects Mach-O from target)."""
+    def test_macos_uses_ld64_lld_on_llvm21(self):
+        """Test that macOS uses -fuse-ld=ld64.lld when LLVM >= 21.x."""
         args = ["main.cpp", "-o", "main"]
-        result = _add_lld_linker_if_needed("darwin", args)
-        # Should inject lld linker flag (generic variant for compatibility)
-        self.assertEqual(result[0], "-fuse-ld=lld")
-        self.assertEqual(result[1:], args)
+        # Mock LLVM version to 21.1.6 (supports ld64.lld)
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=(21, 1, 6)):
+            result = _add_lld_linker_if_needed("darwin", args)
+            # Should inject ld64.lld linker flag
+            self.assertEqual(result[0], "-fuse-ld=ld64.lld")
+            self.assertEqual(result[1:], args)
+
+    def test_macos_falls_back_to_lld_on_llvm19(self):
+        """Test that macOS falls back to -fuse-ld=lld when LLVM < 21.x."""
+        args = ["main.cpp", "-o", "main"]
+        # Mock LLVM version to 19.1.7 (does not support ld64.lld)
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=(19, 1, 7)):
+            result = _add_lld_linker_if_needed("darwin", args)
+            # Should fall back to generic lld flag
+            self.assertEqual(result[0], "-fuse-ld=lld")
+            self.assertEqual(result[1:], args)
+
+    def test_macos_falls_back_when_version_unknown(self):
+        """Test that macOS falls back to -fuse-ld=lld when LLVM version is unknown."""
+        args = ["main.cpp", "-o", "main"]
+        # Mock LLVM version detection failure
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=None):
+            result = _add_lld_linker_if_needed("darwin", args)
+            # Should fall back to generic lld flag for safety
+            self.assertEqual(result[0], "-fuse-ld=lld")
+            self.assertEqual(result[1:], args)
 
     def test_linux_uses_lld(self):
         """Test that Linux uses -fuse-ld=lld."""
@@ -56,14 +78,27 @@ class TestLLDLinkerSelection(unittest.TestCase):
         result = _add_lld_linker_if_needed("darwin", args)
         self.assertEqual(result, args)
 
-    def test_macos_translates_gnu_flags_when_lld_forced(self):
-        """Test that macOS translates GNU ld flags to ld64.lld equivalents when LLD is forced."""
+    def test_macos_translates_gnu_flags_when_lld_forced_llvm21(self):
+        """Test that macOS translates GNU ld flags to ld64.lld equivalents when LLD is forced (LLVM 21.x)."""
         args = ["-Wl,--no-undefined", "main.cpp", "-o", "main"]
-        result = _add_lld_linker_if_needed("darwin", args)
-        # Should inject lld (generic variant) and translate flags
-        self.assertEqual(result[0], "-fuse-ld=lld")
-        self.assertEqual(result[1], "-Wl,-undefined,error")
-        self.assertEqual(result[2:], ["main.cpp", "-o", "main"])
+        # Mock LLVM version to 21.1.6
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=(21, 1, 6)):
+            result = _add_lld_linker_if_needed("darwin", args)
+            # Should inject ld64.lld and translate flags
+            self.assertEqual(result[0], "-fuse-ld=ld64.lld")
+            self.assertEqual(result[1], "-Wl,-undefined,error")
+            self.assertEqual(result[2:], ["main.cpp", "-o", "main"])
+
+    def test_macos_translates_gnu_flags_when_lld_forced_llvm19(self):
+        """Test that macOS translates GNU ld flags to ld64.lld equivalents when LLD is forced (LLVM 19.x)."""
+        args = ["-Wl,--no-undefined", "main.cpp", "-o", "main"]
+        # Mock LLVM version to 19.1.7
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=(19, 1, 7)):
+            result = _add_lld_linker_if_needed("darwin", args)
+            # Should fall back to lld and translate flags
+            self.assertEqual(result[0], "-fuse-ld=lld")
+            self.assertEqual(result[1], "-Wl,-undefined,error")
+            self.assertEqual(result[2:], ["main.cpp", "-o", "main"])
 
     def test_macos_user_specified_lld_translates_flags(self):
         """Test that macOS translates flags when user explicitly specifies -fuse-ld=lld."""

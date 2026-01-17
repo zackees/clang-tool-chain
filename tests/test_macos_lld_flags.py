@@ -2,7 +2,7 @@
 Tests for macOS ld64.lld linker flag translation.
 
 This module tests the translation of GNU ld flags to ld64.lld equivalents
-when using lld on macOS.
+when using lld on macOS, as well as LLVM version-based linker flag selection.
 """
 
 import os
@@ -99,24 +99,47 @@ class TestMacOSLLDFlagTranslation(unittest.TestCase):
 class TestMacOSLLDIntegration(unittest.TestCase):
     """Integration tests for macOS LLD linker behavior."""
 
-    def test_macos_auto_injects_ld64_lld(self):
-        """Test that macOS automatically injects -fuse-ld=lld (generic variant)."""
+    def test_macos_auto_injects_ld64_lld_on_llvm21(self):
+        """Test that macOS automatically injects -fuse-ld=ld64.lld when LLVM >= 21.x."""
         args = ["main.cpp", "-o", "main"]
-        result = _add_lld_linker_if_needed("darwin", args)
-        self.assertEqual(result[0], "-fuse-ld=lld")
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=(21, 1, 6)):
+            result = _add_lld_linker_if_needed("darwin", args)
+            self.assertEqual(result[0], "-fuse-ld=ld64.lld")
 
-    def test_macos_flag_translation_with_auto_inject(self):
-        """Test that flag translation happens when LLD is auto-injected on macOS."""
+    def test_macos_auto_injects_lld_on_llvm19(self):
+        """Test that macOS automatically injects -fuse-ld=lld when LLVM < 21.x."""
+        args = ["main.cpp", "-o", "main"]
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=(19, 1, 7)):
+            result = _add_lld_linker_if_needed("darwin", args)
+            self.assertEqual(result[0], "-fuse-ld=lld")
+
+    def test_macos_flag_translation_with_auto_inject_llvm21(self):
+        """Test that flag translation happens when LLD is auto-injected on macOS (LLVM 21.x)."""
         args = ["-Wl,--no-undefined", "-Wl,--fatal-warnings", "main.cpp", "-o", "main"]
-        result = _add_lld_linker_if_needed("darwin", args)
-        # Should have lld flag first (generic variant)
-        self.assertEqual(result[0], "-fuse-ld=lld")
-        # Flags should be translated
-        self.assertIn("-Wl,-undefined,error", result)
-        self.assertIn("-Wl,-fatal_warnings", result)
-        # Original GNU flags should not be present
-        self.assertNotIn("-Wl,--no-undefined", result)
-        self.assertNotIn("-Wl,--fatal-warnings", result)
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=(21, 1, 6)):
+            result = _add_lld_linker_if_needed("darwin", args)
+            # Should have ld64.lld flag first
+            self.assertEqual(result[0], "-fuse-ld=ld64.lld")
+            # Flags should be translated
+            self.assertIn("-Wl,-undefined,error", result)
+            self.assertIn("-Wl,-fatal_warnings", result)
+            # Original GNU flags should not be present
+            self.assertNotIn("-Wl,--no-undefined", result)
+            self.assertNotIn("-Wl,--fatal-warnings", result)
+
+    def test_macos_flag_translation_with_auto_inject_llvm19(self):
+        """Test that flag translation happens when LLD is auto-injected on macOS (LLVM 19.x)."""
+        args = ["-Wl,--no-undefined", "-Wl,--fatal-warnings", "main.cpp", "-o", "main"]
+        with patch("clang_tool_chain.linker.lld._get_llvm_version", return_value=(19, 1, 7)):
+            result = _add_lld_linker_if_needed("darwin", args)
+            # Should have generic lld flag first (fallback)
+            self.assertEqual(result[0], "-fuse-ld=lld")
+            # Flags should still be translated
+            self.assertIn("-Wl,-undefined,error", result)
+            self.assertIn("-Wl,-fatal_warnings", result)
+            # Original GNU flags should not be present
+            self.assertNotIn("-Wl,--no-undefined", result)
+            self.assertNotIn("-Wl,--fatal-warnings", result)
 
     def test_macos_user_lld_triggers_flag_translation(self):
         """Test that user-specified -fuse-ld=lld triggers flag translation on macOS."""
