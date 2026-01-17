@@ -297,6 +297,7 @@ class TestSplitArchiveTool:
             from split_archive import split_archive  # type: ignore[import-not-found]
         except ImportError:
             pytest.skip("split_archive module not available")
+            return  # For type checker - pytest.skip() raises an exception
 
         # Create a test archive (100 MB of data)
         test_data = b"x" * (100 * 1024 * 1024)
