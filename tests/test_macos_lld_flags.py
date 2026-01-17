@@ -100,17 +100,17 @@ class TestMacOSLLDIntegration(unittest.TestCase):
     """Integration tests for macOS LLD linker behavior."""
 
     def test_macos_auto_injects_ld64_lld(self):
-        """Test that macOS automatically injects -fuse-ld=ld64.lld."""
+        """Test that macOS automatically injects -fuse-ld=lld (generic variant)."""
         args = ["main.cpp", "-o", "main"]
         result = _add_lld_linker_if_needed("darwin", args)
-        self.assertEqual(result[0], "-fuse-ld=ld64.lld")
+        self.assertEqual(result[0], "-fuse-ld=lld")
 
     def test_macos_flag_translation_with_auto_inject(self):
         """Test that flag translation happens when LLD is auto-injected on macOS."""
         args = ["-Wl,--no-undefined", "-Wl,--fatal-warnings", "main.cpp", "-o", "main"]
         result = _add_lld_linker_if_needed("darwin", args)
-        # Should have ld64.lld flag first
-        self.assertEqual(result[0], "-fuse-ld=ld64.lld")
+        # Should have lld flag first (generic variant)
+        self.assertEqual(result[0], "-fuse-ld=lld")
         # Flags should be translated
         self.assertIn("-Wl,-undefined,error", result)
         self.assertIn("-Wl,-fatal_warnings", result)
@@ -148,6 +148,7 @@ class TestMacOSLLDIntegration(unittest.TestCase):
             result = _add_lld_linker_if_needed("darwin", args)
             # Should not inject lld or translate flags
             self.assertEqual(result, args)
+            self.assertNotIn("-fuse-ld=lld", result)
             self.assertNotIn("-fuse-ld=ld64.lld", result)
             # Original flag should remain untranslated
             self.assertIn("-Wl,--no-undefined", result)

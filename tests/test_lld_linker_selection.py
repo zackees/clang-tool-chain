@@ -16,11 +16,11 @@ class TestLLDLinkerSelection(unittest.TestCase):
     """Test cases for platform-specific lld linker flag injection."""
 
     def test_macos_uses_ld64_lld(self):
-        """Test that macOS uses -fuse-ld=ld64.lld (LLVM 21.1.6 supports -fuse-ld flag)."""
+        """Test that macOS uses -fuse-ld=lld (generic, auto-detects Mach-O from target)."""
         args = ["main.cpp", "-o", "main"]
         result = _add_lld_linker_if_needed("darwin", args)
-        # Should inject ld64.lld linker flag
-        self.assertEqual(result[0], "-fuse-ld=ld64.lld")
+        # Should inject lld linker flag (generic variant for compatibility)
+        self.assertEqual(result[0], "-fuse-ld=lld")
         self.assertEqual(result[1:], args)
 
     def test_linux_uses_lld(self):
@@ -60,8 +60,8 @@ class TestLLDLinkerSelection(unittest.TestCase):
         """Test that macOS translates GNU ld flags to ld64.lld equivalents when LLD is forced."""
         args = ["-Wl,--no-undefined", "main.cpp", "-o", "main"]
         result = _add_lld_linker_if_needed("darwin", args)
-        # Should inject lld and translate flags
-        self.assertEqual(result[0], "-fuse-ld=ld64.lld")
+        # Should inject lld (generic variant) and translate flags
+        self.assertEqual(result[0], "-fuse-ld=lld")
         self.assertEqual(result[1], "-Wl,-undefined,error")
         self.assertEqual(result[2:], ["main.cpp", "-o", "main"])
 
