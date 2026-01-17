@@ -66,6 +66,12 @@ from .installers.nodejs import (
     is_nodejs_installed,
 )
 
+# Re-export manifest functions for backward compatibility
+from .manifest import fetch_nodejs_platform_manifest, fetch_platform_manifest
+
+# Re-export path utility functions for backward compatibility
+from .path_utils import get_install_dir, get_nodejs_install_dir
+
 # Export all public functions
 __all__ = [
     # Clang/LLVM
@@ -100,4 +106,10 @@ __all__ = [
     "_subprocess_install_cosmocc",
     # Helpers
     "get_latest_version_info",
+    # Path utilities (backward compatibility)
+    "get_install_dir",
+    "get_nodejs_install_dir",
+    # Manifest functions (backward compatibility)
+    "fetch_platform_manifest",
+    "fetch_nodejs_platform_manifest",
 ]
