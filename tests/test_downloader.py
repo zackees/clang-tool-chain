@@ -412,7 +412,10 @@ class TestDownloader(unittest.TestCase):
         """Test is_toolchain_installed returns False when not installed."""
         with (
             tempfile.TemporaryDirectory() as tmpdir,
-            patch("clang_tool_chain.installers.clang.get_install_dir", return_value=Path(tmpdir) / "nonexistent"),
+            patch(
+                "clang_tool_chain.installers.clang._installer.get_install_dir",
+                return_value=Path(tmpdir) / "nonexistent",
+            ),
         ):
             result = downloader.is_toolchain_installed("linux", "x86_64")
             self.assertFalse(result)
@@ -436,8 +439,8 @@ class TestDownloader(unittest.TestCase):
             mock_manifest.versions = {"1.0.0": mock_version_info}
 
             with (
-                patch("clang_tool_chain.installers.clang.get_install_dir", return_value=install_dir),
-                patch("clang_tool_chain.installers.clang.fetch_platform_manifest", return_value=mock_manifest),
+                patch("clang_tool_chain.installers.clang._installer.get_install_dir", return_value=install_dir),
+                patch("clang_tool_chain.installers.clang._installer.fetch_manifest", return_value=mock_manifest),
             ):
                 result = downloader.is_toolchain_installed("linux", "x86_64")
                 self.assertTrue(result)
@@ -454,11 +457,11 @@ class TestDownloader(unittest.TestCase):
             clang_path = bin_dir / "clang"
             clang_path.touch()
 
-            with patch("clang_tool_chain.installers.clang.get_install_dir", return_value=install_dir):
+            with patch("clang_tool_chain.installers.clang._installer.get_install_dir", return_value=install_dir):
                 result = downloader.is_toolchain_installed("linux", "x86_64")
                 self.assertFalse(result)
 
-    @patch("clang_tool_chain.installers.base.BaseToolchainInstaller.is_installed")
+    @patch("clang_tool_chain.installers.clang._installer.is_installed")
     def test_ensure_toolchain_already_installed(self, mock_is_installed: Mock) -> None:
         """Test ensure_toolchain when already installed (no lock needed)."""
         mock_is_installed.return_value = True
@@ -469,9 +472,9 @@ class TestDownloader(unittest.TestCase):
         # Verify it only checked once (before lock)
         self.assertEqual(mock_is_installed.call_count, 1)
 
-    @patch("clang_tool_chain.installers.clang.get_install_dir")
+    @patch("clang_tool_chain.installers.clang._installer.get_install_dir")
     @patch("subprocess.run")
-    @patch("clang_tool_chain.installers.clang.is_toolchain_installed")
+    @patch("clang_tool_chain.installer.is_toolchain_installed")
     def test_ensure_toolchain_needs_install(
         self, mock_is_installed: Mock, mock_subprocess: Mock, mock_get_install_dir: Mock
     ) -> None:
@@ -499,9 +502,9 @@ class TestDownloader(unittest.TestCase):
             # Should have called subprocess.run
             mock_subprocess.assert_called_once()
 
-    @patch("clang_tool_chain.installers.clang.get_install_dir")
+    @patch("clang_tool_chain.installers.clang._installer.get_install_dir")
     @patch("subprocess.run")
-    @patch("clang_tool_chain.installers.clang.is_toolchain_installed")
+    @patch("clang_tool_chain.installer.is_toolchain_installed")
     def test_ensure_toolchain_race_condition(
         self, mock_is_installed: Mock, mock_subprocess: Mock, mock_get_install_dir: Mock
     ) -> None:

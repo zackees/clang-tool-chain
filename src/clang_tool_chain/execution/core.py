@@ -24,7 +24,7 @@ from ..abi import (
     _should_use_gnu_abi,
     _should_use_msvc_abi,
 )
-from ..deployment.dll_deployer import post_link_dll_deployment
+from ..deployment.dll_deployer import post_link_dependency_deployment, post_link_dll_deployment
 from ..interrupt_utils import handle_keyboard_interrupt_properly
 from ..linker import _add_lld_linker_if_needed
 from ..logging_config import configure_logging
@@ -34,6 +34,33 @@ from ..sdk import _add_macos_sysroot_if_needed
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)
+
+
+def _extract_deploy_dependencies_flag(args: list[str]) -> tuple[list[str], bool]:
+    """
+    Extract --deploy-dependencies flag from arguments.
+
+    This flag is specific to clang-tool-chain and must be stripped before
+    passing arguments to clang, as clang doesn't recognize it.
+
+    Args:
+        args: Compiler/linker arguments
+
+    Returns:
+        Tuple of (filtered_args, should_deploy)
+        - filtered_args: Arguments with --deploy-dependencies removed
+        - should_deploy: True if the flag was present
+
+    Examples:
+        >>> _extract_deploy_dependencies_flag(["test.cpp", "--deploy-dependencies", "-o", "test.dll"])
+        (['test.cpp', '-o', 'test.dll'], True)
+        >>> _extract_deploy_dependencies_flag(["test.cpp", "-o", "test.dll"])
+        (['test.cpp', '-o', 'test.dll'], False)
+    """
+    if "--deploy-dependencies" in args:
+        filtered = [arg for arg in args if arg != "--deploy-dependencies"]
+        return (filtered, True)
+    return (args, False)
 
 
 def _extract_output_path(args: list[str], tool_name: str) -> Path | None:
@@ -90,6 +117,69 @@ def _extract_output_path(args: list[str], tool_name: str) -> Path | None:
     return None
 
 
+def _extract_shared_library_output_path(args: list[str], tool_name: str) -> Path | None:
+    """
+    Extract the output shared library path from compiler/linker arguments.
+
+    This detects shared library builds (-shared flag) and returns the output path
+    for .dll, .so, or .dylib files.
+
+    Args:
+        args: Compiler/linker arguments
+        tool_name: Name of the tool being executed
+
+    Returns:
+        Path to output shared library, or None if not building a shared library
+
+    Examples:
+        >>> _extract_shared_library_output_path(["-shared", "lib.cpp", "-o", "lib.dll"], "clang++")
+        Path('lib.dll')
+        >>> _extract_shared_library_output_path(["-shared", "lib.cpp", "-o", "lib.so"], "clang++")
+        Path('lib.so')
+        >>> _extract_shared_library_output_path(["lib.cpp", "-o", "lib.dll"], "clang++")
+        None  # No -shared flag
+    """
+    # Skip if compile-only flag present
+    if "-c" in args:
+        return None
+
+    # Only process clang/clang++ commands
+    if tool_name not in ("clang", "clang++"):
+        return None
+
+    # Check for -shared flag (required for shared library)
+    if "-shared" not in args:
+        return None
+
+    # Parse -o flag for output path
+    output_path = None
+    i = 0
+    while i < len(args):
+        arg = args[i]
+
+        # Format: -o output.dll
+        if arg == "-o" and i + 1 < len(args):
+            output_path = Path(args[i + 1]).resolve()
+            break
+
+        # Format: -ooutput.dll
+        if arg.startswith("-o") and len(arg) > 2:
+            output_path = Path(arg[2:]).resolve()
+            break
+
+        i += 1
+
+    if output_path is None:
+        return None
+
+    # Accept shared library extensions
+    suffix = output_path.suffix.lower()
+    if suffix in (".dll", ".so", ".dylib") or ".so." in output_path.name:
+        return output_path
+
+    return None
+
+
 def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = False) -> NoReturn:
     """
     Execute a tool with the given arguments and exit with its return code.
@@ -112,6 +202,9 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
     """
     if args is None:
         args = sys.argv[1:]
+
+    # Extract --deploy-dependencies flag (must be stripped before passing to clang)
+    args, deploy_dependencies_requested = _extract_deploy_dependencies_flag(args)
 
     logger.info(f"Executing tool: {tool_name} with {len(args)} arguments")
     logger.debug(f"Arguments: {args}")
@@ -179,7 +272,7 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
         try:
             result = subprocess.run(cmd)
 
-            # Post-link DLL deployment (Windows GNU ABI only)
+            # Post-link DLL deployment (Windows GNU ABI only for .exe)
             if result.returncode == 0:
                 output_exe = _extract_output_path(args, tool_name)
                 if output_exe is not None:
@@ -190,6 +283,18 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
                         handle_keyboard_interrupt_properly(ke)
                     except Exception as e:
                         logger.warning(f"DLL deployment failed: {e}")
+
+                # Shared library dependency deployment (when --deploy-dependencies flag used)
+                if deploy_dependencies_requested:
+                    shared_lib_path = _extract_shared_library_output_path(args, tool_name)
+                    if shared_lib_path is not None:
+                        use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+                        try:
+                            post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
+                        except KeyboardInterrupt as ke:
+                            handle_keyboard_interrupt_properly(ke)
+                        except Exception as e:
+                            logger.warning(f"Dependency deployment failed: {e}")
 
             sys.exit(result.returncode)
         except FileNotFoundError:
@@ -279,6 +384,9 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
     if args is None:
         args = sys.argv[1:]
 
+    # Extract --deploy-dependencies flag (must be stripped before passing to clang)
+    args, deploy_dependencies_requested = _extract_deploy_dependencies_flag(args)
+
     tool_path = find_tool_binary(tool_name)
 
     # Add macOS SDK path automatically for clang/clang++ if not already specified
@@ -326,7 +434,7 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
     try:
         result = subprocess.run(cmd)
 
-        # Post-link DLL deployment (Windows GNU ABI only)
+        # Post-link DLL deployment (Windows GNU ABI only for .exe)
         if result.returncode == 0 and platform_name == "win":
             output_exe = _extract_output_path(args, tool_name)
             if output_exe is not None:
@@ -337,6 +445,18 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
                     handle_keyboard_interrupt_properly(ke)
                 except Exception as e:
                     logger.warning(f"DLL deployment failed: {e}")
+
+            # Shared library dependency deployment (when --deploy-dependencies flag used)
+            if deploy_dependencies_requested:
+                shared_lib_path = _extract_shared_library_output_path(args, tool_name)
+                if shared_lib_path is not None:
+                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+                    try:
+                        post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
+                    except KeyboardInterrupt as ke:
+                        handle_keyboard_interrupt_properly(ke)
+                    except Exception as e:
+                        logger.warning(f"Dependency deployment failed: {e}")
 
         return result.returncode
     except FileNotFoundError as err:
@@ -369,6 +489,9 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
         os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
 
     args = sys.argv[1:]
+
+    # Extract --deploy-dependencies flag (must be stripped before passing to clang)
+    args, deploy_dependencies_requested = _extract_deploy_dependencies_flag(args)
 
     try:
         sccache_path = find_sccache_binary()
@@ -426,7 +549,7 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
         try:
             result = subprocess.run(cmd)
 
-            # Post-link DLL deployment (Windows GNU ABI only)
+            # Post-link DLL deployment (Windows GNU ABI only for .exe)
             if result.returncode == 0:
                 output_exe = _extract_output_path(args, "clang")
                 if output_exe is not None:
@@ -437,6 +560,18 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
                         handle_keyboard_interrupt_properly(ke)
                     except Exception as e:
                         logger.warning(f"DLL deployment failed: {e}")
+
+                # Shared library dependency deployment (when --deploy-dependencies flag used)
+                if deploy_dependencies_requested:
+                    shared_lib_path = _extract_shared_library_output_path(args, "clang")
+                    if shared_lib_path is not None:
+                        use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+                        try:
+                            post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
+                        except KeyboardInterrupt as ke:
+                            handle_keyboard_interrupt_properly(ke)
+                        except Exception as e:
+                            logger.warning(f"Dependency deployment failed: {e}")
 
             sys.exit(result.returncode)
         except KeyboardInterrupt as ke:
@@ -480,6 +615,9 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
         os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
 
     args = sys.argv[1:]
+
+    # Extract --deploy-dependencies flag (must be stripped before passing to clang)
+    args, deploy_dependencies_requested = _extract_deploy_dependencies_flag(args)
 
     try:
         sccache_path = find_sccache_binary()
@@ -537,7 +675,7 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
         try:
             result = subprocess.run(cmd)
 
-            # Post-link DLL deployment (Windows GNU ABI only)
+            # Post-link DLL deployment (Windows GNU ABI only for .exe)
             if result.returncode == 0:
                 output_exe = _extract_output_path(args, "clang++")
                 if output_exe is not None:
@@ -548,6 +686,18 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
                         handle_keyboard_interrupt_properly(ke)
                     except Exception as e:
                         logger.warning(f"DLL deployment failed: {e}")
+
+                # Shared library dependency deployment (when --deploy-dependencies flag used)
+                if deploy_dependencies_requested:
+                    shared_lib_path = _extract_shared_library_output_path(args, "clang++")
+                    if shared_lib_path is not None:
+                        use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+                        try:
+                            post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
+                        except KeyboardInterrupt as ke:
+                            handle_keyboard_interrupt_properly(ke)
+                        except Exception as e:
+                            logger.warning(f"Dependency deployment failed: {e}")
 
             sys.exit(result.returncode)
         except KeyboardInterrupt as ke:

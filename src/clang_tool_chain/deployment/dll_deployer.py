@@ -583,3 +583,143 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
     except Exception as e:
         # Non-fatal: log warning but don't fail the build
         logger.warning(f"DLL deployment failed: {e}")
+
+
+def post_link_dependency_deployment(output_path: Path, platform_name: str, use_gnu_abi: bool) -> None:
+    """
+    Deploy required runtime dependencies for a shared library.
+
+    Unlike post_link_dll_deployment (automatic for .exe), this is opt-in via --deploy-dependencies.
+
+    Supports:
+    - Windows (.dll): MinGW runtime DLLs via llvm-objdump
+    - Linux (.so): libc++, libunwind via llvm-readelf (future)
+    - macOS (.dylib): libc++, libunwind via otool (future)
+
+    Args:
+        output_path: Path to the output shared library (.dll, .so, or .dylib)
+        platform_name: Platform name from get_platform_info() (e.g., "win", "linux", "darwin")
+        use_gnu_abi: Whether GNU ABI is being used (Windows only)
+
+    Returns:
+        None
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS: Set to "1" to disable deployment
+        CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE: Set to "1" for verbose logging
+
+    Examples:
+        >>> post_link_dependency_deployment(Path("mylib.dll"), "win", True)
+        # Deploys libwinpthread-1.dll, libstdc++-6.dll, etc. to mylib.dll directory
+    """
+    # Check opt-out environment variable
+    if os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS") == "1":
+        logger.debug("Dependency deployment disabled via CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS")
+        return
+
+    # Enable verbose logging if requested
+    if os.environ.get("CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE") == "1":
+        logger.setLevel(logging.DEBUG)
+
+    # Check if output exists
+    if not output_path.exists():
+        logger.debug(f"Dependency deployment skipped: output not found: {output_path}")
+        return
+
+    suffix = output_path.suffix.lower()
+
+    if platform_name == "win" and suffix == ".dll":
+        _deploy_windows_dll_dependencies(output_path, use_gnu_abi)
+    elif platform_name == "linux" and (suffix == ".so" or ".so." in output_path.name):
+        _deploy_linux_so_dependencies(output_path)
+    elif platform_name == "darwin" and suffix == ".dylib":
+        _deploy_macos_dylib_dependencies(output_path)
+    else:
+        logger.debug(f"Dependency deployment not supported for {suffix} on {platform_name}")
+
+
+def _deploy_windows_dll_dependencies(dll_path: Path, use_gnu_abi: bool) -> None:
+    """
+    Deploy MinGW runtime DLLs for a Windows DLL.
+
+    Uses llvm-objdump to detect DLL dependencies and copies MinGW runtime DLLs
+    to the output directory.
+
+    Args:
+        dll_path: Path to the output DLL
+        use_gnu_abi: Whether GNU ABI is being used
+
+    Returns:
+        None
+    """
+    if not use_gnu_abi:
+        logger.debug("Dependency deployment skipped: not using GNU ABI")
+        return
+
+    try:
+        from ..platform.detection import get_platform_info
+
+        _, arch = get_platform_info()
+
+        # Reuse existing detection logic - it already works for DLLs!
+        required_dlls = detect_required_dlls(dll_path, "win", arch)
+
+        if not required_dlls:
+            logger.debug("No deployable dependencies required")
+            return
+
+        dest_dir = dll_path.parent.resolve()
+        deployed_count = 0
+
+        for dll_name in required_dlls:
+            src_dll = find_dll_in_toolchain(dll_name, "win", arch)
+            if src_dll is None:
+                logger.warning(f"Source DLL not found, skipping: {dll_name}")
+                continue
+
+            dest_dll = dest_dir / dll_name
+            try:
+                if _atomic_copy_dll(src_dll, dest_dll):
+                    deployed_count += 1
+            except PermissionError:
+                logger.warning(f"Permission denied copying {dll_name}, skipping")
+            except OSError as e:
+                logger.warning(f"Failed to copy {dll_name}: {e}")
+
+        if deployed_count > 0:
+            logger.info(f"Deployed {deployed_count} runtime DLL(s) for {dll_path.name}")
+
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        logger.warning(f"Dependency deployment failed: {e}")
+
+
+def _deploy_linux_so_dependencies(so_path: Path) -> None:
+    """
+    Deploy libc++/libunwind for a Linux shared library.
+
+    Currently a placeholder for future implementation.
+
+    Args:
+        so_path: Path to the output .so file
+
+    Returns:
+        None
+    """
+    logger.debug(f"Linux .so dependency deployment not yet implemented: {so_path}")
+
+
+def _deploy_macos_dylib_dependencies(dylib_path: Path) -> None:
+    """
+    Deploy libc++/libunwind for a macOS dylib.
+
+    Currently a placeholder for future implementation.
+
+    Args:
+        dylib_path: Path to the output .dylib file
+
+    Returns:
+        None
+    """
+    logger.debug(f"macOS .dylib dependency deployment not yet implemented: {dylib_path}")

@@ -1155,6 +1155,102 @@ clang-tool-chain-cpp main.cpp -o main.exe
 
 ---
 
+## 📦 Shared Library Dependency Deployment
+
+**Deploy Runtime Dependencies for Shared Libraries (.dll, .so, .dylib)**
+
+When building shared libraries (DLLs, shared objects, dylibs), you can opt-in to automatic deployment of runtime dependencies using the `--deploy-dependencies` flag. This is particularly useful for distributing DLLs that need MinGW runtime libraries.
+
+### Key Differences from Executable Deployment
+
+| Feature | Executables (.exe) | Shared Libraries (.dll, .so, .dylib) |
+|---------|-------------------|--------------------------------------|
+| **Deployment** | Automatic | Opt-in (`--deploy-dependencies`) |
+| **Flag Required** | No | Yes |
+| **Windows Support** | ✅ Full | ✅ Full |
+| **Linux Support** | N/A | ⏳ Planned |
+| **macOS Support** | N/A | ⏳ Planned |
+
+### Usage
+
+```bash
+# Build a DLL with dependency deployment (Windows GNU ABI)
+clang-tool-chain-cpp -shared mylib.cpp -o mylib.dll --deploy-dependencies
+# Output: Deployed 3 runtime DLL(s) for mylib.dll
+
+# Build without deployment (default behavior for shared libs)
+clang-tool-chain-cpp -shared mylib.cpp -o mylib.dll
+# No DLLs deployed
+
+# Linux shared library (placeholder - future implementation)
+clang-tool-chain-cpp -shared mylib.cpp -o libmylib.so --deploy-dependencies
+
+# macOS dylib (placeholder - future implementation)
+clang-tool-chain-cpp -shared mylib.cpp -o libmylib.dylib --deploy-dependencies
+```
+
+### How It Works
+
+1. **Flag Detection**: The `--deploy-dependencies` flag is extracted and stripped before passing args to clang
+2. **Output Detection**: Detects shared library output by checking for `-shared` flag and `.dll`/`.so`/`.dylib` extension
+3. **Dependency Analysis**: Uses `llvm-objdump` to detect required runtime DLLs (Windows)
+4. **Smart Copying**: Copies MinGW runtime DLLs to the output directory
+
+### Example: Building a Redistributable DLL
+
+```cpp
+// mylib.cpp
+#include <string>
+
+extern "C" __declspec(dllexport)
+const char* get_greeting() {
+    static std::string greeting = "Hello from mylib!";
+    return greeting.c_str();
+}
+```
+
+```bash
+# Compile the DLL with dependencies
+clang-tool-chain-cpp -shared mylib.cpp -o mylib.dll --deploy-dependencies
+
+# Result: mylib.dll directory contains:
+# mylib.dll
+# libwinpthread-1.dll
+# libgcc_s_seh-1.dll
+# libstdc++-6.dll
+
+# The DLL can now be distributed and used without PATH setup
+```
+
+### Environment Variables
+
+The same environment variables apply as for executable deployment:
+
+| Variable | Effect |
+|----------|--------|
+| `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` | Disable dependency deployment |
+| `CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1` | Enable verbose logging |
+
+### When Deployment is Skipped
+
+- ❌ **Flag not specified** (`--deploy-dependencies` absent)
+- ❌ **Non-Windows platforms** (Linux/macOS - future implementation)
+- ❌ **MSVC ABI builds** (`clang-tool-chain-cpp-msvc`)
+- ❌ **Compile-only operations** (`-c` flag present)
+- ❌ **No `-shared` flag** (not building a shared library)
+- ❌ **Non-library outputs** (`.exe`, `.o`, `.a` files)
+- ❌ **Environment variable set** (`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1`)
+
+### Platform Status
+
+| Platform | Extension | Status | Notes |
+|----------|-----------|--------|-------|
+| Windows | `.dll` | ✅ Full Support | MinGW runtime DLLs via llvm-objdump |
+| Linux | `.so` | ⏳ Planned | Future: libc++, libunwind deployment |
+| macOS | `.dylib` | ⏳ Planned | Future: libc++, libunwind deployment |
+
+---
+
 ## 🔧 How It Works
 
 ### Architecture Overview
