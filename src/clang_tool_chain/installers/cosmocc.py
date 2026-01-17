@@ -17,16 +17,17 @@ logger = configure_logging(__name__)
 
 def _fix_cosmocc_symlinks_on_windows(install_dir: Path) -> None:
     """
-    Fix cosmoc++ and other symlink-like files on Windows.
+    Fix cosmoc++ and other symlink-like files on Windows and Linux.
 
     The Cosmocc distribution uses a Unix-style symlink workaround where files like
     `cosmoc++` contain just the text "cosmocc" (7 bytes). This is meant to work like
     a symlink on Unix systems where the shell script checks $0 (argv[0]) to determine
     the invocation mode.
 
-    On Windows, this doesn't work because:
-    1. Git Bash treats the file as a shell script that runs "cosmocc" with no args
+    However, when invoked through bash explicitly (bash cosmoc++), this doesn't work because:
+    1. Bash treats the file as a shell script that runs "cosmocc" with no args
     2. This causes "no input files" or "precompiled headers" errors
+    3. The $0 variable becomes "cosmocc" instead of "cosmoc++"
 
     The fix is to replace these placeholder files with actual copies of the main script.
     When the copied script is run, $0 will be "cosmoc++" which triggers C++ mode.
@@ -34,10 +35,8 @@ def _fix_cosmocc_symlinks_on_windows(install_dir: Path) -> None:
     Args:
         install_dir: Path to the Cosmocc installation directory
     """
-    # Only needed on Windows
-    if sys.platform != "win32":
-        logger.debug("Skipping cosmoc++ fix on non-Windows platform")
-        return
+    # NOTE: Originally only applied on Windows, but needed on Linux too when invoking through bash explicitly
+    # (which we do to fix exec format errors on Linux)
 
     bin_dir = install_dir / "bin"
     if not bin_dir.exists():
@@ -114,8 +113,8 @@ class CosmoccInstaller(BaseToolchainInstaller):
         return install_dir / "bin" / "cosmocc"
 
     def post_extract_hook(self, install_dir: Path, platform: str, arch: str) -> None:
-        """Fix cosmoc++ symlink placeholder on Windows."""
-        _fix_cosmocc_symlinks_on_windows(install_dir)
+        """Fix cosmoc++ symlink placeholders on all platforms."""
+        _fix_cosmocc_symlinks_on_windows(install_dir)  # Function name is historical, now runs on all platforms
 
     def download_and_install(self, platform: str, arch: str, verbose: bool = False) -> None:
         """
