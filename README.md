@@ -8,37 +8,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Linting](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml)
 
-## 📑 Table of Contents
-
-- [Quick Start](#-quick-start) - Get compiling in 30 seconds
-- [Command Quick Reference](#-command-quick-reference) - Common commands at a glance
-- [Installation](#-installation) - Installation options
-- [Why clang-tool-chain?](#-why-clang-tool-chain) - Features and comparisons
-- [Features](#-features) - Capabilities overview
-- [Usage](#-usage) - Detailed usage examples
-- [All Available Commands](#all-available-commands) - Complete command reference
-- [Examples](#-examples) - Code examples
-- [CI/CD Integration](#-cicd-integration) - GitHub Actions, GitLab CI, Docker
-- [Platform Support Matrix](#-platform-support-matrix) - Supported platforms
-- [Configuration](#️-configuration) - Environment variables
-- [Performance](#-performance) - Compilation and download speed
-- [Windows Target Selection](#-windows-target-selection) - GNU vs MSVC ABI
-- [Windows DLL Deployment](#-windows-dll-deployment) - Automatic DLL handling
-- [How It Works](#-how-it-works) - Architecture overview
-- [Additional Utilities](#-additional-utilities) - Diagnostic tools (test, fetch, paths)
-- [Advanced Topics](#-advanced-topics) - Offline mode, version pinning
-- [Troubleshooting](#-troubleshooting) - Common issues
-- [FAQ](#-faq) - Frequently asked questions
-- [Security](#-security) - Checksum verification and trust model
-- [Development](#-development) - Dev setup and testing
-- [Contributing](#-contributing) - How to add new tools
-- [Maintainer Tools](#️-maintainer-tools) - Archive creation and binary packaging
-- [Detailed Documentation](#-detailed-documentation) - Links to all docs
-
----
-
-<details>
-<summary><strong>📊 Test Matrix</strong> (click to expand)</summary>
+## Test Matrix
 
 Comprehensive test coverage across all platforms and tool categories:
 
@@ -64,8 +34,6 @@ Comprehensive test coverage across all platforms and tool categories:
 - **binary-utils** - LLVM binary utilities (ar, nm, objdump, strip, readelf, etc.)
 - **lldb** - LLDB debugger for crash analysis and debugging
 - **cosmocc** - Cosmopolitan Libc for Actually Portable Executables (APE)
-
-</details>
 
 ---
 
