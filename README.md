@@ -11,7 +11,7 @@
 ## 📑 Table of Contents
 
 - [Quick Start](#-quick-start) - Get compiling in 30 seconds
-- [Executable C++ Scripts](#-executable-c-scripts-shebang-support) - Run .cpp files like shell scripts!
+- [Script C/C++ Like Python](#-script-your-cc-like-python-unixlinuxmacos) - Shebang support for executable source files
 - [Command Quick Reference](#-command-quick-reference) - Common commands at a glance
 - [Installation](#-installation) - Installation options
 - [Why clang-tool-chain?](#-why-clang-tool-chain) - Features and comparisons
@@ -86,6 +86,32 @@ clang-tool-chain-test  # Runs 7 diagnostic tests
 ```
 
 **That's it!** The LLVM toolchain (~71-91 MB) downloads automatically on first use. No manual setup required.
+
+### 🔥 Script Your C/C++ Like Python (Unix/Linux/macOS)
+
+Make C/C++ files directly executable with a shebang:
+
+```cpp
+#!/usr/bin/env -S clang-tool-chain-build-run
+#include <iostream>
+int main() {
+    std::cout << "Hello, scripted C++!" << std::endl;
+    return 0;
+}
+```
+
+```bash
+chmod +x hello.cpp
+./hello.cpp  # Compiles and runs in one step!
+```
+
+Use `--cached` for faster iterations (skips recompilation if source unchanged):
+
+```cpp
+#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#include <stdio.h>
+int main() { printf("Cached execution!\n"); return 0; }
+```
 
 > **Note:** This package currently uses:
 > - **LLVM 21.1.5** for Windows, Linux (x86_64/ARM64)
