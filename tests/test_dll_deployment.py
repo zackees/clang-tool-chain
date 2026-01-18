@@ -576,8 +576,7 @@ class TestIntegrationDllDeployment:
 
             # Create a simple C++ program with threading
             test_cpp = tmpdir_path / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 #include <thread>
 
@@ -591,8 +590,7 @@ int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build the executable
             from clang_tool_chain.execution.core import run_tool
@@ -623,15 +621,13 @@ int main() {
 
             # Create a simple C++ program
             test_cpp = tmpdir_path / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build with DLL deployment disabled
             from clang_tool_chain.execution.core import run_tool
@@ -665,15 +661,13 @@ int main() {
 
             # Create a simple C++ program
             test_cpp = tmpdir_path / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Compile only (no linking)
             from clang_tool_chain.execution.core import run_tool
@@ -697,15 +691,13 @@ int main() {
 
             # Create a simple C++ program
             test_cpp = tmpdir_path / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build the executable (first time)
             from clang_tool_chain.execution.core import run_tool
@@ -745,15 +737,13 @@ class TestOutputPathParsing:
 
             # Create a simple C++ program
             test_cpp = tmpdir_path / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build with output path containing spaces
             from clang_tool_chain.execution.core import run_tool
@@ -772,15 +762,13 @@ int main() {
 
             # Create a simple C++ program
             test_cpp = tmpdir_path / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Test absolute path
             from clang_tool_chain.execution.core import run_tool
@@ -810,15 +798,13 @@ int main() {
 
             # Create a simple C++ program
             test_cpp = tmpdir_path / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build with -ooutput.exe format
             from clang_tool_chain.execution.core import run_tool
@@ -842,15 +828,13 @@ class TestMsvcAbiNoOp:
 
             # Create a simple C++ program
             test_cpp = tmpdir_path / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build with explicit MSVC target (if available)
             from clang_tool_chain.execution.core import run_tool
@@ -877,15 +861,13 @@ int main() {
 
             # Create a simple C++ program
             test_cpp = tmpdir_path / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build with default ABI (no explicit target)
             from clang_tool_chain.execution.core import run_tool
@@ -1002,15 +984,13 @@ class TestReadOnlyDestination:
 
             # Create a simple C++ program
             test_cpp = tmpdir_path / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build the executable
             from clang_tool_chain.execution.core import run_tool
@@ -1037,26 +1017,22 @@ class TestDllDeploymentIntegrationEdgeCases:
 
             # Create two simple C++ programs
             test_cpp1 = tmpdir_path / "test1.cpp"
-            test_cpp1.write_text(
-                """
+            test_cpp1.write_text("""
 #include <iostream>
 int main() {
     std::cout << "Test 1 OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             test_cpp2 = tmpdir_path / "test2.cpp"
-            test_cpp2.write_text(
-                """
+            test_cpp2.write_text("""
 #include <iostream>
 int main() {
     std::cout << "Test 2 OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build both executables
             from clang_tool_chain.execution.core import run_tool
@@ -1090,15 +1066,13 @@ int main() {
 
             # Create a simple C++ program
             test_cpp = deep_dir / "test.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "OK" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build the executable
             from clang_tool_chain.execution.core import run_tool
@@ -1419,15 +1393,13 @@ class TestSanitizerExecutables:
 
             # Create a simple C++ program
             test_cpp = tmpdir_path / "test_asan.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 int main() {
     std::cout << "AddressSanitizer test" << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Build with AddressSanitizer
             from clang_tool_chain.execution.core import run_tool
@@ -1483,9 +1455,7 @@ int main() {
             # Mock llvm-objdump to return a complex dependency tree
             # Simulates: test.exe → libclang_rt.asan_dynamic-x86_64.dll → libc++.dll → libunwind.dll
             mock_objdump_responses = {
-                str(
-                    exe_path
-                ): """
+                str(exe_path): """
                     DLL Name: libclang_rt.asan_dynamic-x86_64.dll
                     DLL Name: libwinpthread-1.dll
                     DLL Name: kernel32.dll
@@ -1688,15 +1658,13 @@ class TestDllDeploymentForDllOutputs:
 
             # Create a simple C++ library source
             lib_cpp = tmpdir_path / "mylib.cpp"
-            lib_cpp.write_text(
-                """
+            lib_cpp.write_text("""
 #include <iostream>
 
 extern "C" __declspec(dllexport) void hello() {
     std::cout << "Hello from DLL!" << std::endl;
 }
-"""
-            )
+""")
 
             # Build the shared library
             from clang_tool_chain.execution.core import run_tool
@@ -1722,13 +1690,11 @@ extern "C" __declspec(dllexport) void hello() {
 
             # Create a simple C++ library source
             lib_cpp = tmpdir_path / "mylib.cpp"
-            lib_cpp.write_text(
-                """
+            lib_cpp.write_text("""
 extern "C" __declspec(dllexport) int add(int a, int b) {
     return a + b;
 }
-"""
-            )
+""")
 
             # Build with DLL deployment disabled for .dll outputs
             from clang_tool_chain.execution.core import run_tool
