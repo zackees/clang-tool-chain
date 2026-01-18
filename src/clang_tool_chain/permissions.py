@@ -177,10 +177,7 @@ def fix_file_permissions(install_dir: Path) -> None:
             old_mode = file_path.stat().st_mode
             file_path.chmod(0o755)
             new_mode = file_path.stat().st_mode
-            logger.debug(
-                f"Set permissions on {file_path.name}: "
-                f"{oct(old_mode)[-3:]} -> {oct(new_mode)[-3:]}"
-            )
+            logger.debug(f"Set permissions on {file_path.name}: " f"{oct(old_mode)[-3:]} -> {oct(new_mode)[-3:]}")
 
     # Force filesystem sync to ensure all permission changes are committed
     # This prevents "Text file busy" errors when another thread tries to execute
