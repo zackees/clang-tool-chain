@@ -328,13 +328,16 @@ class BaseToolchainInstaller(ABC):
                 f"import sys; "
                 f"sys.exit(_subprocess_install_{self.tool_name}('{platform}', '{arch}'))",
             ],
-            capture_output=False,
+            capture_output=True,
             text=True,
         )
 
         if result.returncode != 0:
+            # Include stderr in the error message so callers can detect specific errors (e.g., 404)
+            error_details = result.stderr.strip() if result.stderr else ""
             raise RuntimeError(
-                f"Failed to install {self.tool_name} for {platform}/{arch} (subprocess exited with code {result.returncode})"
+                f"Failed to install {self.tool_name} for {platform}/{arch} "
+                f"(subprocess exited with code {result.returncode}): {error_details}"
             )
 
 
