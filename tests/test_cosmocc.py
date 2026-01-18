@@ -138,8 +138,8 @@ class TestCosmoccExecution(unittest.TestCase):
     ) -> subprocess.CompletedProcess[str]:
         """Run an APE (Actually Portable Executable) with proper platform handling.
 
-        On macOS ARM64, APE executables may fail with "Exec format error" when run
-        directly. This method uses sh -c to run them, which works around the issue.
+        On macOS and Linux, APE executables may fail with "Exec format error" when run
+        directly. This method uses sh to run them, which works around the issue.
         See: https://justine.lol/cosmopolitan/
 
         Args:
@@ -150,31 +150,15 @@ class TestCosmoccExecution(unittest.TestCase):
         Returns:
             CompletedProcess with the execution result
         """
-        import shutil
-
-        platform_name, arch = get_platform_info()
-
-        # On macOS ARM64, we need to run APE files through sh -c
-        # This is because the APE shell script stub may not be recognized
-        # by the kernel directly on Apple Silicon
-        if platform_name == "darwin" and arch == "arm64":
-            shell = shutil.which("sh") or "/bin/sh"
-            return subprocess.run(
-                [shell, "-c", str(executable_path)],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=str(cwd),
-            )
-        else:
-            # On other platforms, run directly
-            return subprocess.run(
-                [str(executable_path)],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=str(cwd),
-            )
+        # Delegate to _build_ape_run_command for consistent behavior
+        run_cmd = self._build_ape_run_command(executable_path)
+        return subprocess.run(
+            run_cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(cwd),
+        )
 
     def _build_cosmocc_command(self, cosmocc_path: Path, args: list[str]) -> list[str]:
         """Build command to run cosmocc, handling shell requirement.
@@ -220,26 +204,23 @@ class TestCosmoccExecution(unittest.TestCase):
         """Build command to run an APE (Actually Portable Executable).
 
         APE files use a polyglot format that includes a shell script header.
-        On Linux and macOS ARM64, they may need to be executed through sh/bash
+        On Linux and macOS, they may need to be executed through sh/bash
         if binfmt_misc isn't configured or the kernel doesn't recognize the format.
         This causes "Exec format error" on these platforms.
         See: https://justine.lol/cosmopolitan/
         """
         import shutil
 
-        platform_name, arch = get_platform_info()
+        platform_name, _ = get_platform_info()
 
         if platform_name == "win":
             # On Windows, .com files run directly
             return [str(executable_path)]
-        elif platform_name == "darwin" and arch == "arm64":
-            # On macOS ARM64 (Apple Silicon), APE files may fail with "Exec format error"
-            # when run directly. Using sh -c works around this issue.
-            shell = shutil.which("sh") or "/bin/sh"
-            return [shell, "-c", str(executable_path)]
         elif platform_name == "darwin":
-            # On macOS x86_64, APE files usually run directly
-            return [str(executable_path)]
+            # On macOS (both x86_64 and ARM64), APE files may fail with "Exec format error"
+            # when run directly. Using sh works around this issue.
+            shell = shutil.which("sh") or "/bin/sh"
+            return [shell, str(executable_path)]
         else:
             # On Linux, APE files need to be run through sh due to their polyglot format
             # This avoids "Exec format error" when binfmt_misc isn't configured

@@ -683,13 +683,15 @@ class TestMSVCABI(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a simple C++ file
             test_file = Path(temp_dir) / "test.cpp"
-            test_file.write_text("""
+            test_file.write_text(
+                """
 #include <iostream>
 int main() {
     std::cout << "Hello MSVC" << std::endl;
     return 0;
 }
-""")
+"""
+            )
 
             # Try to compile with MSVC variant
             result = subprocess.run(
@@ -729,13 +731,15 @@ int main() {
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a simple C++ file
             test_file = Path(temp_dir) / "test.cpp"
-            test_file.write_text("""
+            test_file.write_text(
+                """
 #include <iostream>
 int main() {
     std::cout << "Hello MSVC" << std::endl;
     return 0;
 }
-""")
+"""
+            )
 
             exe_file = Path(temp_dir) / "test.exe"
 
@@ -788,7 +792,8 @@ int main() {
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a C++ file with minimal class (single method for faster compilation)
             test_file = Path(temp_dir) / "test.cpp"
-            test_file.write_text("""
+            test_file.write_text(
+                """
 class C {
 public:
     void m(int x);
@@ -797,7 +802,8 @@ public:
 void C::m(int x) {}
 
 extern "C" int f() { return 0; }
-""")
+"""
+            )
 
             # Compile with GNU variant
             gnu_obj = Path(temp_dir) / "test_gnu.o"
