@@ -950,13 +950,15 @@ def cmd_test(args: argparse.Namespace) -> int:
             test_out = test_out.with_suffix(".exe")
 
         # Write simple C program
-        test_c.write_text("""
+        test_c.write_text(
+            """
 #include <stdio.h>
 int main() {
     printf("Hello from clang-tool-chain!\\n");
     return 0;
 }
-""")
+"""
+        )
 
         try:
             # Compile
@@ -993,13 +995,15 @@ int main() {
             test_out = test_out.with_suffix(".exe")
 
         # Write simple C++ program
-        test_cpp.write_text("""
+        test_cpp.write_text(
+            """
 #include <iostream>
 int main() {
     std::cout << "Hello from clang-tool-chain C++!" << std::endl;
     return 0;
 }
-""")
+"""
+        )
 
         try:
             # Compile

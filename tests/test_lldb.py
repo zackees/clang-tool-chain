@@ -128,7 +128,8 @@ class TestLLDBExecution(unittest.TestCase):
 
         # Create a test C file that will crash with null pointer dereference
         self.test_c = self.temp_path / "crash_test.c"
-        self.test_c.write_text("""
+        self.test_c.write_text(
+            """
 #include <stdio.h>
 
 void trigger_crash(int *ptr) {
@@ -145,7 +146,8 @@ int main() {
     intermediate_function();
     return 0;
 }
-""")
+"""
+        )
 
         # Output executable name
         if sys.platform == "win32":
@@ -310,7 +312,8 @@ int main() {
         # If this test fails, run: clang-tool-chain purge --yes && clang-tool-chain install clang
         # Create a test C file with deep call stack (7 levels)
         deep_stack_c = self.temp_path / "deep_stack.c"
-        deep_stack_c.write_text("""
+        deep_stack_c.write_text(
+            """
 #include <stdio.h>
 
 void level7_crash(int *ptr) {
@@ -353,7 +356,8 @@ int main() {
     level1();
     return 0;
 }
-""")
+"""
+        )
 
         # Output executable name
         if sys.platform == "win32":

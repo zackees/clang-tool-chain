@@ -79,13 +79,15 @@ class TestSccacheThinArchiveWindows(unittest.TestCase):
         """
         # Create a simple test program
         test_cpp = self.temp_path / "test_linker.cpp"
-        test_cpp.write_text("""
+        test_cpp.write_text(
+            """
 #include <iostream>
 int main() {
     std::cout << "Testing linker selection" << std::endl;
     return 0;
 }
-""")
+"""
+        )
 
         # Compile with verbose output to see which linker is used
         result = subprocess.run(
@@ -127,15 +129,18 @@ int main() {
         """
         # Create library source
         lib_cpp = self.temp_path / "mathlib.cpp"
-        lib_cpp.write_text("""
+        lib_cpp.write_text(
+            """
 int add(int a, int b) { return a + b; }
 int multiply(int a, int b) { return a * b; }
 int subtract(int a, int b) { return a - b; }
-""")
+"""
+        )
 
         # Create main program
         main_cpp = self.temp_path / "main.cpp"
-        main_cpp.write_text("""
+        main_cpp.write_text(
+            """
 #include <iostream>
 extern int add(int, int);
 extern int multiply(int, int);
@@ -149,7 +154,8 @@ int main() {
     std::cout << "Result: " << result << std::endl;
     return result;
 }
-""")
+"""
+        )
 
         # Step 1: Compile library with sccache
         compile_result = subprocess.run(
@@ -230,10 +236,12 @@ int main() {
 
         # Create main program
         main_cpp = self.temp_path / "main.cpp"
-        main_cpp.write_text("""
+        main_cpp.write_text(
+            """
 extern int get_value();
 int main() { return get_value(); }
-""")
+"""
+        )
 
         # Compile library
         subprocess.run(
