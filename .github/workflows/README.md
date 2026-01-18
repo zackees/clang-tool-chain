@@ -58,7 +58,7 @@ Release automation workflow.
 | Windows | `windows-latest` | x86_64 | Windows Server 2022 |
 | Linux x64 | `ubuntu-latest` | x86_64 | Ubuntu 22.04 LTS |
 | Linux ARM64 | `ubuntu-24.04-arm` | ARM64 | Ubuntu 24.04 on ARM |
-| macOS Intel | `macos-13` | x86_64 | macOS 13 (Ventura) |
+| macOS Intel | `macos-15-intel` | x86_64 | macOS 15 (Sequoia) Intel |
 | macOS Apple Silicon | `macos-14` | ARM64 | macOS 14 (Sonoma) M1/M2 |
 
 ## Test Strategy
