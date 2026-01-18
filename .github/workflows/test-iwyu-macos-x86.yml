@@ -35,6 +35,11 @@ jobs:
         uname -a
         python --version
 
+    - name: Install z3 dependency
+      run: |
+        brew install z3
+        echo "z3 installed for libLLVM.dylib dependency"
+
     - name: Download and install toolchain
       run: |
         uv run clang-tool-chain-c --version
