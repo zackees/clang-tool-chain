@@ -162,6 +162,26 @@ def fix_file_permissions(install_dir: Path) -> None:
             ):
                 file_path.chmod(0o755)
 
+    # Fix permissions for files in libexec/ directory
+    # This is important for GCC internal executables like cc1, cc1plus, ld, etc.
+    # which are used by cosmocc and other GCC-based toolchains
+    libexec_dir = install_dir / "libexec"
+    if libexec_dir.exists() and libexec_dir.is_dir():
+        logger.info(f"Fixing permissions in libexec/ directory: {libexec_dir}")
+        for file_path in libexec_dir.rglob("*"):
+            if not file_path.is_file():
+                continue
+
+            # Most files in libexec are executables (cc1, cc1plus, collect2, lto-wrapper, etc.)
+            # Set executable permissions on all files in libexec
+            old_mode = file_path.stat().st_mode
+            file_path.chmod(0o755)
+            new_mode = file_path.stat().st_mode
+            logger.debug(
+                f"Set permissions on {file_path.name}: "
+                f"{oct(old_mode)[-3:]} -> {oct(new_mode)[-3:]}"
+            )
+
     # Force filesystem sync to ensure all permission changes are committed
     # This prevents "Text file busy" errors when another thread tries to execute
     # binaries immediately after this function returns
