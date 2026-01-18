@@ -209,17 +209,48 @@ def execute_cosmocc_tool(tool_name: str, args: list[str] | None = None) -> NoRet
     libexec_gcc_dir = libexec_dir / "gcc"
 
     path_dirs = [str(bin_dir)]
+
+    # Add libexec/gcc to PATH (contains target-specific subdirectories)
     if libexec_gcc_dir.exists():
         path_dirs.append(str(libexec_gcc_dir))
+        # On Windows, GCC_EXEC_PREFIX may not work correctly, so we also add the
+        # target/version subdirectories directly to PATH for cc1 lookup.
+        # This ensures cc1, cc1plus, ld, etc. can be found on all platforms.
+        # Sort to ensure consistent ordering across runs.
+        for target_dir in sorted(libexec_gcc_dir.iterdir()):
+            if target_dir.is_dir():
+                for version_dir in sorted(target_dir.iterdir()):
+                    if version_dir.is_dir():
+                        path_dirs.append(str(version_dir))
+                        logger.debug(f"Added GCC internal dir to PATH: {version_dir}")
     elif libexec_dir.exists():
         path_dirs.append(str(libexec_dir))
 
-    env["PATH"] = f"{os.pathsep.join(path_dirs)}{os.pathsep}{env.get('PATH', '')}"
+    # On Windows, convert paths to Unix-style for bash/POSIX shell compatibility
+    # The cosmocc script runs under bash, and the GCC APE binaries expect Unix-style paths
+    if platform_name == "win":
+        # Convert Windows paths to Unix-style (C:\foo\bar -> /c/foo/bar)
+        def to_unix_path(path: str) -> str:
+            """Convert Windows path to Unix-style path for MSYS/Git Bash."""
+            path = path.replace("\\", "/")
+            # Convert drive letter: C:/foo -> /c/foo
+            if len(path) >= 2 and path[1] == ":":
+                drive = path[0].lower()
+                path = f"/{drive}{path[2:]}"
+            return path
 
-    # Set GCC_EXEC_PREFIX to help GCC find internal executables (cc1, cc1plus, etc.)
-    # GCC uses this prefix to locate subprograms in libexec/gcc/<target>/<version>/
-    # The prefix should end with a slash
-    env["GCC_EXEC_PREFIX"] = f"{install_dir}/"
+        unix_path_dirs = [to_unix_path(p) for p in path_dirs]
+        # Also convert existing PATH entries
+        existing_path = env.get("PATH", "")
+        # Use colon separator for Unix-style PATH
+        env["PATH"] = ":".join(unix_path_dirs) + ":" + existing_path
+    else:
+        env["PATH"] = f"{os.pathsep.join(path_dirs)}{os.pathsep}{env.get('PATH', '')}"
+
+    # Note: We intentionally do NOT set GCC_EXEC_PREFIX here.
+    # On Windows, setting GCC_EXEC_PREFIX can interfere with PATH-based cc1 lookup
+    # and cause the wrong architecture's cc1 to be found. The PATH additions above
+    # are sufficient for correct cc1 resolution on all platforms.
 
     # Set COSMOCC environment variable pointing to the Cosmocc installation
     # This helps Cosmocc find its includes and libraries
