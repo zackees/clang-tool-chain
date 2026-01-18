@@ -133,6 +133,49 @@ class TestCosmoccExecution(unittest.TestCase):
 
         return env
 
+    def _run_ape_executable(
+        self, executable_path: Path, cwd: Path, timeout: int = 30
+    ) -> subprocess.CompletedProcess[str]:
+        """Run an APE (Actually Portable Executable) with proper platform handling.
+
+        On macOS ARM64, APE executables may fail with "Exec format error" when run
+        directly. This method uses sh -c to run them, which works around the issue.
+        See: https://justine.lol/cosmopolitan/
+
+        Args:
+            executable_path: Path to the .com executable
+            cwd: Working directory for execution
+            timeout: Timeout in seconds
+
+        Returns:
+            CompletedProcess with the execution result
+        """
+        import shutil
+
+        platform_name, arch = get_platform_info()
+
+        # On macOS ARM64, we need to run APE files through sh -c
+        # This is because the APE shell script stub may not be recognized
+        # by the kernel directly on Apple Silicon
+        if platform_name == "darwin" and arch == "arm64":
+            shell = shutil.which("sh") or "/bin/sh"
+            return subprocess.run(
+                [shell, "-c", str(executable_path)],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=str(cwd),
+            )
+        else:
+            # On other platforms, run directly
+            return subprocess.run(
+                [str(executable_path)],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=str(cwd),
+            )
+
     def _build_cosmocc_command(self, cosmocc_path: Path, args: list[str]) -> list[str]:
         """Build command to run cosmocc, handling shell requirement.
 
@@ -392,14 +435,8 @@ class TestCosmoccExecution(unittest.TestCase):
             if compile_result.returncode != 0:
                 self.skipTest(f"Compilation failed: {compile_result.stderr[:200]}")
 
-            # Run the executable
-            run_result = subprocess.run(
-                [str(output_file)],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                cwd=str(self.temp_path),
-            )
+            # Run the executable (using helper for macOS ARM64 compatibility)
+            run_result = self._run_ape_executable(output_file, self.temp_path, timeout=30)
 
             # The executable should run and print the expected message
             self.assertEqual(
@@ -534,14 +571,8 @@ class TestCosmoccExecution(unittest.TestCase):
                 f"stdout: {compile_result.stdout[:300]}, stderr: {compile_result.stderr[:300]}",
             )
 
-            # Run the executable
-            run_result = subprocess.run(
-                [str(output_file)],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                cwd=str(self.temp_path),
-            )
+            # Run the executable (using helper for macOS ARM64 compatibility)
+            run_result = self._run_ape_executable(output_file, self.temp_path, timeout=30)
 
             # The executable should run successfully
             # Note: dlopen may fail on some platforms but the test should still pass
@@ -643,14 +674,8 @@ class TestCosmoccExecution(unittest.TestCase):
                 f"stderr: {compile_result.stderr[:300]}",
             )
 
-            # Run the executable
-            run_result = subprocess.run(
-                [str(output_file)],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                cwd=str(self.temp_path),
-            )
+            # Run the executable (using helper for macOS ARM64 compatibility)
+            run_result = self._run_ape_executable(output_file, self.temp_path, timeout=30)
 
             self.assertEqual(
                 run_result.returncode,
