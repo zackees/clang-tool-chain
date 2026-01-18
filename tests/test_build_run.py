@@ -67,8 +67,7 @@ class TestBuildRunCommand(unittest.TestCase):
         """Test building and running a program that takes arguments."""
         # Create a C++ file that echoes arguments
         cpp_file = self.temp_path / "echo_args.cpp"
-        cpp_file.write_text(
-            """
+        cpp_file.write_text("""
 #include <iostream>
 int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
@@ -76,8 +75,7 @@ int main(int argc, char* argv[]) {
     }
     return 0;
 }
-"""
-        )
+""")
 
         # Run with arguments
         result = subprocess.run(
@@ -95,8 +93,7 @@ int main(int argc, char* argv[]) {
         """Test building with C++11 flag."""
         # Create a C++ file that uses C++11 features
         cpp_file = self.temp_path / "cpp11.cpp"
-        cpp_file.write_text(
-            """
+        cpp_file.write_text("""
 #include <iostream>
 #include <vector>
 int main() {
@@ -107,8 +104,7 @@ int main() {
     std::cout << "CPP11_WORKS" << std::endl;
     return 0;
 }
-"""
-        )
+""")
 
         # Run with C++11 flag
         result = subprocess.run(
@@ -125,8 +121,7 @@ int main() {
         """Test building with compiler flags."""
         # Create a C++ file that uses C++17 features
         cpp_file = self.temp_path / "cpp17.cpp"
-        cpp_file.write_text(
-            """
+        cpp_file.write_text("""
 #include <iostream>
 #include <optional>
 int main() {
@@ -134,8 +129,7 @@ int main() {
     if (opt) std::cout << "HAS_VALUE" << std::endl;
     return 0;
 }
-"""
-        )
+""")
 
         # Run with C++17 flag
         result = subprocess.run(

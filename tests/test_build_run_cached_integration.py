@@ -45,15 +45,13 @@ class TestBuildRunCachedIntegration(unittest.TestCase):
         exe_file = cpp_file.with_suffix(".exe" if sys.platform.startswith("win") else "")
 
         # Step 1: Create initial source file
-        cpp_file.write_text(
-            """
+        cpp_file.write_text("""
 #include <iostream>
 int main() {
     std::cout << "VERSION_1" << std::endl;
     return 0;
 }
-"""
-        )
+""")
 
         # Step 2: First run with --cached (should compile)
         print("\n=== Step 1: First run (cache miss) ===")
@@ -106,15 +104,13 @@ int main() {
 
         # Step 4: Modify source file
         print("\n=== Step 3: Modify source (cache invalidation) ===")
-        cpp_file.write_text(
-            """
+        cpp_file.write_text("""
 #include <iostream>
 int main() {
     std::cout << "VERSION_2_MODIFIED" << std::endl;
     return 42;
 }
-"""
-        )
+""")
 
         # Step 5: Third run after modification (should recompile)
         result3 = subprocess.run(
@@ -175,8 +171,7 @@ int main() {
         cpp_file = self.temp_path / "cached_cpp11.cpp"
         hash_file = cpp_file.with_suffix(".hash")
 
-        cpp_file.write_text(
-            """
+        cpp_file.write_text("""
 #include <iostream>
 #include <vector>
 int main() {
@@ -187,8 +182,7 @@ int main() {
     std::cout << "CPP11_CACHED" << std::endl;
     return 0;
 }
-"""
-        )
+""")
 
         # First run with --cached and C++11 flag
         result1 = subprocess.run(
@@ -219,8 +213,7 @@ int main() {
         cpp_file = self.temp_path / "cached_flags.cpp"
         hash_file = cpp_file.with_suffix(".hash")
 
-        cpp_file.write_text(
-            """
+        cpp_file.write_text("""
 #include <iostream>
 #include <optional>
 int main() {
@@ -228,8 +221,7 @@ int main() {
     std::cout << "CPP17_WORKS: " << value.value() << std::endl;
     return 0;
 }
-"""
-        )
+""")
 
         # First run with --cached and compiler flags
         result1 = subprocess.run(
@@ -259,8 +251,7 @@ int main() {
         """Test that --cached works correctly when passing arguments to the program."""
         cpp_file = self.temp_path / "cached_args.cpp"
 
-        cpp_file.write_text(
-            """
+        cpp_file.write_text("""
 #include <iostream>
 int main(int argc, char* argv[]) {
     std::cout << "ARGC: " << argc << std::endl;
@@ -269,8 +260,7 @@ int main(int argc, char* argv[]) {
     }
     return 0;
 }
-"""
-        )
+""")
 
         # First run with arguments
         result1 = subprocess.run(

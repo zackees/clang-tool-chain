@@ -200,8 +200,7 @@ class TestLLVMBinaryUtilsFunctionality(unittest.TestCase):
 
         # Create a test C file
         self.test_c = self.temp_path / "test.c"
-        self.test_c.write_text(
-            """
+        self.test_c.write_text("""
 #include <stdio.h>
 
 int global_var = 42;
@@ -214,8 +213,7 @@ int main() {
     printf("Result: %d\\n", add(5, 7));
     return 0;
 }
-"""
-        )
+""")
 
         # Compile to object file
         result = subprocess.run(
