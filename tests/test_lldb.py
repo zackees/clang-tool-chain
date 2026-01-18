@@ -30,13 +30,15 @@ class TestLLDBInstallation(unittest.TestCase):
             bin_dir = wrapper.get_lldb_binary_dir()
             self.assertTrue(bin_dir.exists(), f"LLDB binary directory should exist at {bin_dir}")
             self.assertTrue(bin_dir.is_dir(), f"LLDB binary location should be a directory: {bin_dir}")
-        except ToolchainInfrastructureError as e:
+        except (ToolchainInfrastructureError, RuntimeError) as e:
             # Skip if LLDB archive is not available (404 error means archive hasn't been built yet)
+            # Note: RuntimeError is raised when subprocess fails with 404, as the subprocess
+            # catches ToolchainInfrastructureError and returns exit code 1
             if "404" in str(e) or "Not Found" in str(e):
                 self.skipTest(
-                    f"LLDB archive not available for this platform. "
-                    f"This is expected if the LLDB archive hasn't been built yet. "
-                    f"Run the build-lldb-archives workflow to generate the archive. Error: {e}"
+                    "LLDB archive not available for this platform. "
+                    "This is expected if the LLDB archive hasn't been built yet. "
+                    "Run the build-lldb-archives workflow to generate the archive."
                 )
             raise
 
@@ -46,13 +48,15 @@ class TestLLDBInstallation(unittest.TestCase):
             lldb_path = wrapper.find_lldb_tool("lldb")
             self.assertTrue(lldb_path.exists(), f"LLDB tool should exist at {lldb_path}")
             self.assertTrue(lldb_path.is_file(), f"LLDB tool should be a file: {lldb_path}")
-        except ToolchainInfrastructureError as e:
+        except (ToolchainInfrastructureError, RuntimeError) as e:
             # Skip if LLDB archive is not available (404 error means archive hasn't been built yet)
+            # Note: RuntimeError is raised when subprocess fails with 404, as the subprocess
+            # catches ToolchainInfrastructureError and returns exit code 1
             if "404" in str(e) or "Not Found" in str(e):
                 self.skipTest(
-                    f"LLDB archive not available for this platform. "
-                    f"This is expected if the LLDB archive hasn't been built yet. "
-                    f"Run the build-lldb-archives workflow to generate the archive. Error: {e}"
+                    "LLDB archive not available for this platform. "
+                    "This is expected if the LLDB archive hasn't been built yet. "
+                    "Run the build-lldb-archives workflow to generate the archive."
                 )
             raise
 
