@@ -73,8 +73,7 @@ class TestCompilerVerification:
         """
         # Write a simple test file that includes standard headers
         test_file = tmp_path / "test_headers.cpp"
-        test_file.write_text(
-            """
+        test_file.write_text("""
             #include <iostream>
             #include <cstddef>
             #include <cstdarg>
@@ -85,8 +84,7 @@ class TestCompilerVerification:
                 std::size_t size = 42;
                 return size == 42 ? 0 : 1;
             }
-            """
-        )
+            """)
 
         # Compile with verbose output to see include paths
         result = subprocess.run(
@@ -120,8 +118,7 @@ class TestCompilerVerification:
         """
         # Write a test file that uses Windows headers
         test_file = tmp_path / "test_windows.cpp"
-        test_file.write_text(
-            """
+        test_file.write_text("""
             #include <windows.h>
             #include <iostream>
 
@@ -131,8 +128,7 @@ class TestCompilerVerification:
                 std::cout << "Windows headers accessible: " << value << std::endl;
                 return 0;
             }
-            """
-        )
+            """)
 
         # Compile
         result = subprocess.run(

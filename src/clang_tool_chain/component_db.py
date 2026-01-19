@@ -51,8 +51,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     cursor = conn.cursor()
 
     # Create components table
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS components (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
@@ -64,8 +63,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             path_installed_at TIMESTAMP,
             version TEXT DEFAULT '1.0'
         )
-        """
-    )
+        """)
 
     # Create indexes
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_component_name ON components(name)")
@@ -258,14 +256,12 @@ def get_all_path_components() -> list[tuple[str, str]]:
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT name, path_bin_dir
         FROM components
         WHERE in_path = 1 AND path_bin_dir IS NOT NULL
         ORDER BY name
-        """
-    )
+        """)
     rows = cursor.fetchall()
     conn.close()
 

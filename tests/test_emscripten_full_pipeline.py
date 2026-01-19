@@ -28,8 +28,7 @@ class TestEmscriptenCompilationPipeline:
         """Test that header files are correctly included in compilation."""
         # Create world.h header
         world_h = tmp_path / "world.h"
-        world_h.write_text(
-            """
+        world_h.write_text("""
 #ifndef WORLD_H
 #define WORLD_H
 
@@ -38,13 +37,11 @@ class TestEmscriptenCompilationPipeline:
 std::string get_world_message();
 
 #endif // WORLD_H
-"""
-        )
+""")
 
         # Create hello.h header
         hello_h = tmp_path / "hello.h"
-        hello_h.write_text(
-            """
+        hello_h.write_text("""
 #ifndef HELLO_H
 #define HELLO_H
 
@@ -53,13 +50,11 @@ std::string get_world_message();
 std::string get_hello_message();
 
 #endif // HELLO_H
-"""
-        )
+""")
 
         # Create main.cpp that uses both headers
         main_cpp = tmp_path / "main.cpp"
-        main_cpp.write_text(
-            """
+        main_cpp.write_text("""
 #include <iostream>
 #include "hello.h"
 #include "world.h"
@@ -76,8 +71,7 @@ int main() {
     std::cout << get_hello_message() << " " << get_world_message() << "!" << std::endl;
     return 0;
 }
-"""
-        )
+""")
 
         # Compile with header includes
         output_js = tmp_path / "main.js"
@@ -117,32 +111,27 @@ int main() {
         """Test compilation of multiple separate source files."""
         # Create hello.cpp
         hello_cpp = tmp_path / "hello.cpp"
-        hello_cpp.write_text(
-            """
+        hello_cpp.write_text("""
 #include <string>
 
 std::string get_hello() {
     return "Hello";
 }
-"""
-        )
+""")
 
         # Create world.cpp
         world_cpp = tmp_path / "world.cpp"
-        world_cpp.write_text(
-            """
+        world_cpp.write_text("""
 #include <string>
 
 std::string get_world() {
     return "World";
 }
-"""
-        )
+""")
 
         # Create main.cpp
         main_cpp = tmp_path / "main.cpp"
-        main_cpp.write_text(
-            """
+        main_cpp.write_text("""
 #include <iostream>
 #include <string>
 
@@ -153,8 +142,7 @@ int main() {
     std::cout << get_hello() << " " << get_world() << "!" << std::endl;
     return 0;
 }
-"""
-        )
+""")
 
         # Compile all files together
         output_js = tmp_path / "program.js"
@@ -193,15 +181,13 @@ int main() {
         """Test generation of object files (.o) using -c flag."""
         # Create source file
         hello_cpp = tmp_path / "hello.cpp"
-        hello_cpp.write_text(
-            """
+        hello_cpp.write_text("""
 #include <string>
 
 std::string get_message() {
     return "Hello from object file!";
 }
-"""
-        )
+""")
 
         # Compile to object file
         hello_o = tmp_path / "hello.o"
@@ -228,22 +214,18 @@ std::string get_message() {
         """Test creation of thin archives (.a) using emar."""
         # Create multiple source files
         file1_cpp = tmp_path / "file1.cpp"
-        file1_cpp.write_text(
-            """
+        file1_cpp.write_text("""
 int add(int a, int b) {
     return a + b;
 }
-"""
-        )
+""")
 
         file2_cpp = tmp_path / "file2.cpp"
-        file2_cpp.write_text(
-            """
+        file2_cpp.write_text("""
 int multiply(int a, int b) {
     return a * b;
 }
-"""
-        )
+""")
 
         # Compile to object files
         file1_o = tmp_path / "file1.o"
@@ -290,8 +272,7 @@ int multiply(int a, int b) {
         """Test linking against static library (.a file)."""
         # Create library source files
         math_ops_cpp = tmp_path / "math_ops.cpp"
-        math_ops_cpp.write_text(
-            """
+        math_ops_cpp.write_text("""
 int add(int a, int b) {
     return a + b;
 }
@@ -299,19 +280,16 @@ int add(int a, int b) {
 int subtract(int a, int b) {
     return a - b;
 }
-"""
-        )
+""")
 
         string_ops_cpp = tmp_path / "string_ops.cpp"
-        string_ops_cpp.write_text(
-            """
+        string_ops_cpp.write_text("""
 #include <string>
 
 std::string concat(const std::string& a, const std::string& b) {
     return a + b;
 }
-"""
-        )
+""")
 
         # Compile to object files
         math_ops_o = tmp_path / "math_ops.o"
@@ -345,8 +323,7 @@ std::string concat(const std::string& a, const std::string& b) {
 
         # Create main program that uses the library
         main_cpp = tmp_path / "main.cpp"
-        main_cpp.write_text(
-            """
+        main_cpp.write_text("""
 #include <iostream>
 #include <string>
 
@@ -365,8 +342,7 @@ int main() {
 
     return 0;
 }
-"""
-        )
+""")
 
         # Link against static library
         output_js = tmp_path / "program.js"
@@ -404,8 +380,7 @@ int main() {
         """Test PCH generation and usage."""
         # Create a header file with common includes
         common_h = tmp_path / "common.h"
-        common_h.write_text(
-            """
+        common_h.write_text("""
 #ifndef COMMON_H
 #define COMMON_H
 
@@ -424,8 +399,7 @@ inline std::string get_greeting() {
 }
 
 #endif // COMMON_H
-"""
-        )
+""")
 
         # Generate precompiled header
         common_pch = tmp_path / "common.h.pch"
@@ -451,8 +425,7 @@ inline std::string get_greeting() {
 
         # Create source file that uses the PCH
         main_cpp = tmp_path / "main.cpp"
-        main_cpp.write_text(
-            """
+        main_cpp.write_text("""
 #include "common.h"
 
 int main() {
@@ -466,8 +439,7 @@ int main() {
 
     return 0;
 }
-"""
-        )
+""")
 
         # Compile using the PCH
         output_js = tmp_path / "program.js"
@@ -507,20 +479,17 @@ int main() {
         """Test complete pipeline: headers -> objects -> archives -> linking -> execution."""
         # Step 1: Create minimal header files (no standard library includes)
         world_h = tmp_path / "world.h"
-        world_h.write_text(
-            """
+        world_h.write_text("""
 #ifndef WORLD_H
 #define WORLD_H
 
 int get_world_value();
 
 #endif
-"""
-        )
+""")
 
         hello_h = tmp_path / "hello.h"
-        hello_h.write_text(
-            """
+        hello_h.write_text("""
 #ifndef HELLO_H
 #define HELLO_H
 #include "world.h"
@@ -529,8 +498,7 @@ int get_hello_value();
 int compute_total();
 
 #endif
-"""
-        )
+""")
 
         # Step 2: Generate PCH from world.h (minimal, no standard library)
         world_pch = tmp_path / "world.h.pch"
@@ -552,19 +520,16 @@ int compute_total();
 
         # Step 3: Create minimal implementation files (no iostream)
         world_cpp = tmp_path / "world.cpp"
-        world_cpp.write_text(
-            """
+        world_cpp.write_text("""
 #include "world.h"
 
 int get_world_value() {
     return 42;
 }
-"""
-        )
+""")
 
         hello_cpp = tmp_path / "hello.cpp"
-        hello_cpp.write_text(
-            """
+        hello_cpp.write_text("""
 #include "hello.h"
 
 int get_hello_value() {
@@ -574,8 +539,7 @@ int get_hello_value() {
 int compute_total() {
     return get_hello_value() + get_world_value();
 }
-"""
-        )
+""")
 
         # Step 4: Compile to object files
         world_o = tmp_path / "world.o"
@@ -641,8 +605,7 @@ int compute_total() {
 
         # Step 6: Create minimal main program (no iostream, use extern C printf)
         main_cpp = tmp_path / "main.cpp"
-        main_cpp.write_text(
-            """
+        main_cpp.write_text("""
 #include "hello.h"
 #include "world.h"
 
@@ -653,8 +616,7 @@ int main() {
     printf("Total: %d\\n", total);
     return (total == 142) ? 0 : 1;
 }
-"""
-        )
+""")
 
         # Step 7: Link everything together (standalone WASM, no JS glue code)
         output_wasm = tmp_path / "program.wasm"

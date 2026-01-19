@@ -45,6 +45,7 @@ int main() { printf("Cached execution!\n"); return 0; }
 
 - [Quick Start](#-quick-start) - Get compiling in 30 seconds
 - [Script C/C++ Like Python](#-script-your-cc-like-python-unixlinuxmacos) - Shebang support for executable source files
+- [Inlined Build Directives](#-inlined-build-directives) - Self-contained source files with embedded build config
 - [Command Quick Reference](#-command-quick-reference) - Common commands at a glance
 - [Installation](#-installation) - Installation options
 - [Why clang-tool-chain?](#-why-clang-tool-chain) - Features and comparisons
@@ -236,6 +237,95 @@ This works when run from a project directory with `clang-tool-chain` as a depend
 | **macOS** | `chmod +x script.cpp && ./script.cpp` |
 | **Windows (Git Bash)** | `./script.cpp` (Git Bash handles shebang) |
 | **Windows (cmd/PowerShell)** | `clang-tool-chain-build-run --cached script.cpp` |
+
+---
+
+## 📝 Inlined Build Directives
+
+**Make your source files self-contained!** Embed build configuration directly in your C/C++ source files.
+
+### The Problem
+
+```bash
+# Remembering flags is tedious
+clang++ -std=c++17 -lpthread -lm -O2 pthread_math.cpp -o program
+```
+
+### The Solution
+
+```cpp
+// pthread_math.cpp
+// @link: [pthread, m]
+// @std: c++17
+// @cflags: -O2
+
+#include <pthread.h>
+#include <cmath>
+
+int main() {
+    // Your pthread + math code
+    return 0;
+}
+```
+
+```bash
+# Just compile - directives are parsed automatically!
+clang-tool-chain-cpp pthread_math.cpp -o program
+```
+
+### Supported Directives
+
+| Directive | Description | Example |
+|-----------|-------------|---------|
+| `@link` | Link libraries | `// @link: pthread` or `// @link: [pthread, m, dl]` |
+| `@std` | C/C++ standard | `// @std: c++17` or `// @std: c11` |
+| `@cflags` | Compiler flags | `// @cflags: -O2 -Wall -Wextra` |
+| `@ldflags` | Linker flags | `// @ldflags: -rpath /opt/lib` |
+| `@include` | Include paths | `// @include: /usr/local/include` |
+| `@platform` | Platform-specific | See below |
+
+### Cross-Platform Example
+
+```cpp
+// @std: c++17
+
+// @platform: linux
+//   @link: pthread
+// @platform: windows
+//   @link: ws2_32
+// @platform: darwin
+//   @link: pthread
+
+#include <iostream>
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <pthread.h>
+#endif
+
+int main() {
+    std::cout << "Works on all platforms!" << std::endl;
+    return 0;
+}
+```
+
+### Which Commands Support Directives?
+
+| Command | Support |
+|---------|---------|
+| `clang-tool-chain-cpp` / `clang-tool-chain-c` | ✅ Yes |
+| `clang-tool-chain-cpp-msvc` / `clang-tool-chain-c-msvc` | ✅ Yes |
+| `clang-tool-chain-build` / `clang-tool-chain-build-run` | ✅ Yes |
+
+### Debug Mode
+
+```bash
+# See what directives are being applied
+CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE=1 clang-tool-chain-cpp myfile.cpp -o myfile
+# Output: Directive args from source files: ['-std=c++17', '-lpthread']
+```
+
+For full documentation, see **[Inlined Build Directives](docs/DIRECTIVES.md)**.
 
 ---
 
@@ -1542,6 +1632,7 @@ For in-depth information on specific topics, see the documentation in the `docs/
 | Document | Description |
 |----------|-------------|
 | **[Clang/LLVM Toolchain](docs/CLANG_LLVM.md)** | Compiler wrappers, macOS SDK detection, Windows GNU/MSVC ABI, sccache integration |
+| **[Inlined Build Directives](docs/DIRECTIVES.md)** | Self-contained source files with embedded build configuration |
 | **[DLL Deployment](docs/DLL_DEPLOYMENT.md)** | Windows MinGW DLL automatic deployment (detailed guide) |
 | **[Emscripten](docs/EMSCRIPTEN.md)** | WebAssembly compilation with Emscripten |
 | **[LLDB Debugger](docs/LLDB.md)** | LLVM debugger for interactive debugging and crash analysis |

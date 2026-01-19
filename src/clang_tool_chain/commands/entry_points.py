@@ -14,31 +14,127 @@ from typing import NoReturn
 
 
 def clang_main() -> NoReturn:
-    """Entry point for clang wrapper (GNU ABI on Windows by default)."""
+    """
+    Entry point for clang wrapper (GNU ABI on Windows by default).
+
+    Supports inlined build directives in source files:
+        // @link: pthread
+        // @std: c11
+        // @cflags: -O2 -Wall
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
+        CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE: Set to '1' to show parsed directives
+    """
+    import sys
+
+    from ..execution.build import get_directive_args_from_compiler_args
     from ..execution.core import execute_tool
 
-    execute_tool("clang")
+    # Get original arguments
+    args = sys.argv[1:]
+
+    # Parse directives from source files in arguments
+    directive_args = get_directive_args_from_compiler_args(args)
+
+    # Prepend directive args so they can be overridden by explicit flags
+    if directive_args:
+        args = directive_args + args
+
+    execute_tool("clang", args)
 
 
 def clang_cpp_main() -> NoReturn:
-    """Entry point for clang++ wrapper (GNU ABI on Windows by default)."""
+    """
+    Entry point for clang++ wrapper (GNU ABI on Windows by default).
+
+    Supports inlined build directives in source files:
+        // @link: pthread
+        // @std: c++17
+        // @cflags: -O2 -Wall
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
+        CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE: Set to '1' to show parsed directives
+    """
+    import sys
+
+    from ..execution.build import get_directive_args_from_compiler_args
     from ..execution.core import execute_tool
 
-    execute_tool("clang++")
+    # Get original arguments
+    args = sys.argv[1:]
+
+    # Parse directives from source files in arguments
+    directive_args = get_directive_args_from_compiler_args(args)
+
+    # Prepend directive args so they can be overridden by explicit flags
+    if directive_args:
+        args = directive_args + args
+
+    execute_tool("clang++", args)
 
 
 def clang_msvc_main() -> NoReturn:
-    """Entry point for clang-tool-chain-c-msvc (MSVC ABI on Windows)."""
+    """
+    Entry point for clang-tool-chain-c-msvc (MSVC ABI on Windows).
+
+    Supports inlined build directives in source files:
+        // @link: pthread
+        // @std: c11
+        // @cflags: -O2 -Wall
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
+        CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE: Set to '1' to show parsed directives
+    """
+    import sys
+
+    from ..execution.build import get_directive_args_from_compiler_args
     from ..execution.core import execute_tool
 
-    execute_tool("clang", use_msvc=True)
+    # Get original arguments
+    args = sys.argv[1:]
+
+    # Parse directives from source files in arguments
+    directive_args = get_directive_args_from_compiler_args(args)
+
+    # Prepend directive args so they can be overridden by explicit flags
+    if directive_args:
+        args = directive_args + args
+
+    execute_tool("clang", args, use_msvc=True)
 
 
 def clang_cpp_msvc_main() -> NoReturn:
-    """Entry point for clang-tool-chain-cpp-msvc (MSVC ABI on Windows)."""
+    """
+    Entry point for clang-tool-chain-cpp-msvc (MSVC ABI on Windows).
+
+    Supports inlined build directives in source files:
+        // @link: pthread
+        // @std: c++17
+        // @cflags: -O2 -Wall
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
+        CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE: Set to '1' to show parsed directives
+    """
+    import sys
+
+    from ..execution.build import get_directive_args_from_compiler_args
     from ..execution.core import execute_tool
 
-    execute_tool("clang++", use_msvc=True)
+    # Get original arguments
+    args = sys.argv[1:]
+
+    # Parse directives from source files in arguments
+    directive_args = get_directive_args_from_compiler_args(args)
+
+    # Prepend directive args so they can be overridden by explicit flags
+    if directive_args:
+        args = directive_args + args
+
+    execute_tool("clang++", args, use_msvc=True)
 
 
 # ============================================================================

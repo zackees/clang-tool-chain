@@ -170,8 +170,7 @@ class TestClangTidy(unittest.TestCase):
         try:
             # Create C++ file with potential issues
             test_cpp = temp_path / "test_tidy.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 #include <iostream>
 
 int main() {
@@ -180,8 +179,7 @@ int main() {
     std::cout << y << std::endl;
     return 0;
 }
-"""
-            )
+""")
 
             # Run clang-tidy (may not find issues, just verify it runs)
             result = subprocess.run(
@@ -219,14 +217,12 @@ int main() {
         try:
             # Create C++ file
             test_cpp = temp_path / "test_checks.cpp"
-            test_cpp.write_text(
-                """
+            test_cpp.write_text("""
 int main() {
     int unused_variable = 42;
     return 0;
 }
-"""
-            )
+""")
 
             # Run clang-tidy with specific checks
             result = subprocess.run(

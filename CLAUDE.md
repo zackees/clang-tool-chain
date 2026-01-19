@@ -120,12 +120,76 @@ For more information: https://github.com/jart/cosmopolitan
 - Emscripten WebAssembly compilation
 - Bundled Node.js runtime
 - **Cosmopolitan Libc support for Actually Portable Executables (APE)**
+- **Inlined Build Directives for self-contained source files** (NEW)
+
+## Inlined Build Directives
+
+clang-tool-chain supports embedding build configuration directly in source files using directive comments. This makes source files self-contained - they know how to build themselves.
+
+### Quick Example
+
+```cpp
+// @link: pthread
+// @std: c++17
+
+#include <pthread.h>
+#include <iostream>
+
+int main() {
+    // pthread code here
+    return 0;
+}
+```
+
+Compile without any extra flags:
+```bash
+clang-tool-chain-cpp pthread_hello.cpp -o pthread_hello
+# Automatically adds -std=c++17 -lpthread
+```
+
+### Supported Directives
+
+| Directive | Description | Example |
+|-----------|-------------|---------|
+| `@link` | Link libraries | `// @link: pthread` or `// @link: [pthread, m]` |
+| `@std` | C/C++ standard | `// @std: c++17` |
+| `@cflags` | Compiler flags | `// @cflags: -O2 -Wall` |
+| `@ldflags` | Linker flags | `// @ldflags: -rpath /opt/lib` |
+| `@include` | Include paths | `// @include: /usr/local/include` |
+| `@platform` | Platform-specific | `// @platform: linux` (followed by indented directives) |
+
+### Platform-Specific Example
+
+```cpp
+// @std: c++17
+
+// @platform: linux
+//   @link: pthread
+// @platform: windows
+//   @link: ws2_32
+// @platform: darwin
+//   @link: pthread
+```
+
+### Commands with Directive Support
+
+- `clang-tool-chain-cpp` / `clang-tool-chain-c`
+- `clang-tool-chain-cpp-msvc` / `clang-tool-chain-c-msvc`
+- `clang-tool-chain-build` / `clang-tool-chain-build-run`
+
+### Environment Variables
+
+- `CLANG_TOOL_CHAIN_NO_DIRECTIVES=1` - Disable directive parsing
+- `CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE=1` - Show parsed directives (debug)
+
+See [Inlined Build Directives Documentation](docs/DIRECTIVES.md) for full details.
 
 ## Documentation
 
 Detailed documentation is organized into focused sub-documents:
 
 - **[Clang/LLVM Toolchain](docs/CLANG_LLVM.md)** - Clang/LLVM compiler wrappers, macOS SDK detection, Windows GNU/MSVC ABI, sccache integration
+- **[Inlined Build Directives](docs/DIRECTIVES.md)** - Self-contained source files with embedded build configuration
 - **[DLL Deployment](docs/DLL_DEPLOYMENT.md)** - Windows MinGW DLL automatic deployment (detailed guide)
 - **[Emscripten](docs/EMSCRIPTEN.md)** - WebAssembly compilation with Emscripten
 - **[LLDB Debugger](docs/LLDB.md)** - LLVM debugger for interactive debugging and crash analysis
