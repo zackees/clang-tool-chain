@@ -8,6 +8,39 @@
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Linting](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml)
 
+## 🔥 Script Your C/C++ Like Python (Unix/Linux/macOS)
+
+Make C/C++ files directly executable with a shebang:
+
+```cpp
+#!/usr/bin/env -S clang-tool-chain-build-run
+#include <iostream>
+int main() {
+    std::cout << "Hello, scripted C++!" << std::endl;
+    return 0;
+}
+```
+
+```bash
+chmod +x hello.cpp
+./hello.cpp  # Compiles and runs in one step!
+```
+
+Use `--cached` for faster iterations (skips recompilation if source unchanged):
+
+```cpp
+#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#include <stdio.h>
+int main() { printf("Cached execution!\n"); return 0; }
+```
+
+> **Note:** This package currently uses:
+> - **LLVM 21.1.5** for Windows, Linux (x86_64/ARM64)
+> - **LLVM 21.1.6** for macOS ARM64
+> - **LLVM 19.1.7** for macOS x86_64
+>
+> See [Platform Support Matrix](#platform-support-matrix) for details.
+
 ## 📑 Table of Contents
 
 - [Quick Start](#-quick-start) - Get compiling in 30 seconds
@@ -87,38 +120,6 @@ clang-tool-chain-test  # Runs 7 diagnostic tests
 
 **That's it!** The LLVM toolchain (~71-91 MB) downloads automatically on first use. No manual setup required.
 
-### 🔥 Script Your C/C++ Like Python (Unix/Linux/macOS)
-
-Make C/C++ files directly executable with a shebang:
-
-```cpp
-#!/usr/bin/env -S clang-tool-chain-build-run
-#include <iostream>
-int main() {
-    std::cout << "Hello, scripted C++!" << std::endl;
-    return 0;
-}
-```
-
-```bash
-chmod +x hello.cpp
-./hello.cpp  # Compiles and runs in one step!
-```
-
-Use `--cached` for faster iterations (skips recompilation if source unchanged):
-
-```cpp
-#!/usr/bin/env -S clang-tool-chain-build-run --cached
-#include <stdio.h>
-int main() { printf("Cached execution!\n"); return 0; }
-```
-
-> **Note:** This package currently uses:
-> - **LLVM 21.1.5** for Windows, Linux (x86_64/ARM64)
-> - **LLVM 21.1.6** for macOS ARM64
-> - **LLVM 19.1.7** for macOS x86_64
->
-> See [Platform Support Matrix](#platform-support-matrix) for details.
 
 ### ⚠️ Windows Users: GNU ABI by Default
 
