@@ -54,6 +54,8 @@ def _get_llvm_version() -> tuple[int, int, int] | None:
                 _cached_llvm_version = (int(parts[0]), int(parts[1]), int(parts[2]))
                 logger.debug(f"Loaded LLVM version from cache: {_cached_llvm_version}")
                 return _cached_llvm_version
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.debug(f"Could not read LLVM version cache: {e}")
 
@@ -91,6 +93,8 @@ def _get_llvm_version() -> tuple[int, int, int] | None:
                 cache_file = bin_dir.parent / ".llvm_version_cache"
                 cache_file.write_text(f"{major}.{minor}.{patch}")
                 logger.debug(f"Saved LLVM version to cache: {cache_file}")
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
             except Exception as e:
                 logger.debug(f"Could not write LLVM version cache: {e}")
 
@@ -99,6 +103,8 @@ def _get_llvm_version() -> tuple[int, int, int] | None:
         logger.debug(f"Could not parse LLVM version from: {result.stdout[:200]}")
         return None
 
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.debug(f"LLVM version detection failed: {e}")
         return None

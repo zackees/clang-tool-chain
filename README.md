@@ -8,7 +8,38 @@
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Linting](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml)
 
-## Test Matrix
+## 📑 Table of Contents
+
+- [Quick Start](#-quick-start) - Get compiling in 30 seconds
+- [Executable C++ Scripts](#-executable-c-scripts-shebang-support) - Run .cpp files like shell scripts!
+- [Command Quick Reference](#-command-quick-reference) - Common commands at a glance
+- [Installation](#-installation) - Installation options
+- [Why clang-tool-chain?](#-why-clang-tool-chain) - Features and comparisons
+- [Features](#-features) - Capabilities overview
+- [Usage](#-usage) - Detailed usage examples
+- [All Available Commands](#all-available-commands) - Complete command reference
+- [Examples](#-examples) - Code examples
+- [CI/CD Integration](#-cicd-integration) - GitHub Actions, GitLab CI, Docker
+- [Platform Support Matrix](#-platform-support-matrix) - Supported platforms
+- [Configuration](#️-configuration) - Environment variables
+- [Performance](#-performance) - Compilation and download speed
+- [Windows Target Selection](#-windows-target-selection) - GNU vs MSVC ABI
+- [Windows DLL Deployment](#-windows-dll-deployment) - Automatic DLL handling
+- [How It Works](#-how-it-works) - Architecture overview
+- [Additional Utilities](#-additional-utilities) - Diagnostic tools (test, fetch, paths)
+- [Advanced Topics](#-advanced-topics) - Offline mode, version pinning
+- [Troubleshooting](#-troubleshooting) - Common issues
+- [FAQ](#-faq) - Frequently asked questions
+- [Security](#-security) - Checksum verification and trust model
+- [Development](#-development) - Dev setup and testing
+- [Contributing](#-contributing) - How to add new tools
+- [Maintainer Tools](#️-maintainer-tools) - Archive creation and binary packaging
+- [Detailed Documentation](#-detailed-documentation) - Links to all docs
+
+---
+
+<details>
+<summary><strong>📊 Test Matrix</strong> (click to expand)</summary>
 
 Comprehensive test coverage across all platforms and tool categories:
 
@@ -82,6 +113,104 @@ clang-tool-chain-cpp-msvc main.cpp -o program.exe # Downloads ~71 MB on first us
 **✨ Automatic DLL Deployment:** GNU ABI executables automatically include required MinGW runtime DLLs in the executable directory. Your programs run immediately in `cmd.exe` without PATH setup! See [Windows DLL Deployment](#windows-dll-deployment) for details.
 
 **Which to use?** See [Windows Target Selection](#windows-target-selection) for detailed comparison and requirements.
+
+---
+
+## 🚀 Executable C++ Scripts (Shebang Support)
+
+**Run C++ files directly like shell scripts!** With clang-tool-chain, you can make C++ files executable and run them without a separate compile step.
+
+### How It Works
+
+Add a shebang line to your C++ file:
+
+```cpp
+#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#include <iostream>
+
+int main() {
+    std::cout << "Hello from executable C++!" << std::endl;
+    return 0;
+}
+```
+
+Then make it executable and run:
+
+```bash
+# Linux/macOS
+chmod +x script.cpp
+./script.cpp
+
+# Windows (Git Bash)
+./script.cpp
+```
+
+**That's it!** The first run compiles the code, subsequent runs use the cached binary (thanks to `--cached`).
+
+### Why This Is Incredible
+
+- **Scripting with C++ performance** - Write quick scripts that run at native speed
+- **No build system needed** - Single-file programs just work
+- **Instant iteration** - `--cached` flag skips recompilation when source hasn't changed
+- **TDD in C++** - Write inline tests with assertions, run with `./test.cpp`
+
+### Example: Inline Tests
+
+```cpp
+#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#include <iostream>
+#include <cassert>
+#include <vector>
+
+template<typename T>
+T sum(const std::vector<T>& v) {
+    T result = T{};
+    for (const auto& x : v) result += x;
+    return result;
+}
+
+int main() {
+    // Inline tests - will abort if any assertion fails
+    assert(sum(std::vector<int>{1, 2, 3, 4, 5}) == 15);
+    assert(sum(std::vector<double>{1.5, 2.5}) == 4.0);
+    assert(sum(std::vector<int>{}) == 0);
+
+    std::cout << "All tests passed!" << std::endl;
+    return 0;
+}
+```
+
+```bash
+chmod +x test.cpp && ./test.cpp
+# Output: All tests passed!
+```
+
+### Alternative: Using `uv run`
+
+If clang-tool-chain isn't globally installed, use `uv run`:
+
+```cpp
+#!/usr/bin/env -S uv run clang-tool-chain-build-run --cached
+#include <iostream>
+
+int main() {
+    std::cout << "Running via uv!" << std::endl;
+    return 0;
+}
+```
+
+This works when run from a project directory with `clang-tool-chain` as a dependency.
+
+### Platform Notes
+
+| Platform | How to Run |
+|----------|------------|
+| **Linux** | `chmod +x script.cpp && ./script.cpp` |
+| **macOS** | `chmod +x script.cpp && ./script.cpp` |
+| **Windows (Git Bash)** | `./script.cpp` (Git Bash handles shebang) |
+| **Windows (cmd/PowerShell)** | `clang-tool-chain-build-run --cached script.cpp` |
+
+---
 
 ### 📋 Command Quick Reference
 

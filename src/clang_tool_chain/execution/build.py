@@ -3,11 +3,17 @@ Build utility functions for compiling and running C/C++ programs.
 
 This module provides simple build utilities that wrap the Clang compiler
 for quick compilation and execution of C/C++ source files.
+
+Shebang Support:
+    C++ files can include a shebang line for direct execution:
+        #!/usr/bin/env -S clang-tool-chain-build-run --cached
+    This line is automatically stripped before compilation.
 """
 
 import hashlib
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import NoReturn
 
@@ -16,6 +22,53 @@ from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 from ..cli_parsers import parse_build_args, parse_build_run_args
 from ..platform import get_platform_info
 from .core import execute_tool, run_tool
+
+
+def _strip_shebang(source_path: Path) -> tuple[Path, bool]:
+    """
+    Check if source file has a shebang and create a temporary file without it.
+
+    Args:
+        source_path: Path to the source file
+
+    Returns:
+        Tuple of (path to use for compilation, whether a temp file was created)
+        If no shebang, returns (original path, False)
+        If shebang found, returns (temp file path, True)
+    """
+    with open(source_path, encoding="utf-8", errors="replace") as f:
+        first_line = f.readline()
+        if not first_line.startswith("#!"):
+            # No shebang, use original file
+            return source_path, False
+
+        # Has shebang - read rest of file and create temp file
+        rest_of_file = f.read()
+
+    # Create temp file with same extension in same directory
+    # (same directory ensures relative includes work)
+    temp_dir = source_path.parent
+    suffix = source_path.suffix
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=suffix,
+        dir=temp_dir,
+        delete=False,
+        encoding="utf-8",
+    ) as temp_file:
+        temp_path = Path(temp_file.name)
+        try:
+            # Write file without the shebang line
+            temp_file.write(rest_of_file)
+        except KeyboardInterrupt as ke:
+            # Clean up on interrupt
+            temp_path.unlink(missing_ok=True)
+            handle_keyboard_interrupt_properly(ke)
+        except Exception:
+            # Clean up on error
+            temp_path.unlink(missing_ok=True)
+            raise
+    return temp_path, True
 
 
 def build_main() -> NoReturn:
@@ -160,13 +213,21 @@ def build_run_main() -> NoReturn:
 
     # Compile if needed
     if should_compile:
-        # Build the compiler command
-        compiler_args = [source_file, "-o", output_file] + compiler_flags
+        # Check for shebang and strip if present
+        compile_source, temp_created = _strip_shebang(source_path)
 
-        print(f"Compiling: {source_file} -> {output_file}", file=sys.stderr)
+        try:
+            # Build the compiler command
+            compiler_args = [str(compile_source), "-o", output_file] + compiler_flags
 
-        # Run the compiler (returns exit code instead of calling sys.exit)
-        exit_code = run_tool(compiler, compiler_args)
+            print(f"Compiling: {source_file} -> {output_file}", file=sys.stderr)
+
+            # Run the compiler (returns exit code instead of calling sys.exit)
+            exit_code = run_tool(compiler, compiler_args)
+        finally:
+            # Clean up temp file if created
+            if temp_created:
+                compile_source.unlink(missing_ok=True)
 
         if exit_code != 0:
             print(f"\n{'='*60}", file=sys.stderr)
