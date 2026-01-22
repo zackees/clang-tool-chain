@@ -1,5 +1,7 @@
 # Clang Tool Chain
 
+**Motivation**: *make it as easy to run a cpp program as it does to run a python file.*
+
 **A zero-configuration Python package that distributes pre-built Clang/LLVM binaries with automatic downloading and installation.**
 
 [![PyPI version](https://img.shields.io/pypi/v/clang-tool-chain.svg)](https://pypi.org/project/clang-tool-chain/)
