@@ -401,8 +401,7 @@ See the "Test Matrix" section in README.md for live status badges.
 
 # Individual tools:
 uv run ruff check --fix src tests  # Lint with auto-fix
-uv run black src tests             # Format code
-uv run isort --profile black src tests  # Sort imports
+uv run ruff format src tests       # Format code and sort imports
 uv run pyright src tests           # Type checking
 uv run mypy src tests              # Alternative type checking
 ```
@@ -432,7 +431,7 @@ uv run python -m build
 ## Code Quality Standards
 
 ### Line Length
-Maximum line length is 120 characters (configured in ruff, black, and isort).
+Maximum line length is 120 characters (configured in ruff).
 
 ### Python Version
 - Minimum Python version: 3.10
@@ -449,10 +448,10 @@ Maximum line length is 120 characters (configured in ruff, black, and isort).
 - Missing imports are ignored
 - Pyright uses "basic" type checking mode
 
-### Import Handling
+### Formatting and Linting
+- Ruff handles all linting, formatting, and import sorting
 - F401 (unused imports) ignored in `__init__.py` files
 - S101 (assert usage) ignored in test files
-- Use isort with black profile for import organization
 
 ### Pre-commit Integration
 Pre-commit hooks enforce:
@@ -462,9 +461,8 @@ Pre-commit hooks enforce:
 - Large file detection
 - Debug statement detection
 - Mixed line ending checks
-- Black formatting
-- isort import sorting
 - Ruff linting with auto-fix
+- Ruff formatting (code formatting and import sorting)
 - MyPy type checking
 
 Hooks run automatically on `git commit` and will block commits if checks fail.

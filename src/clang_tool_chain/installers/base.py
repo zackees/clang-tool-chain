@@ -251,9 +251,7 @@ class BaseToolchainInstaller(ABC):
             install_dir.mkdir(parents=True, exist_ok=True)
             done_file = install_dir / "done.txt"
             with open(done_file, "w") as f:
-                f.write(
-                    f"{self.tool_name} {manifest.latest} installed successfully\n" f"SHA256: {version_info.sha256}\n"
-                )
+                f.write(f"{self.tool_name} {manifest.latest} installed successfully\nSHA256: {version_info.sha256}\n")
 
             logger.info(f"{self.tool_name} installation complete for {platform}/{arch}")
 

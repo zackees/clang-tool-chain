@@ -35,15 +35,13 @@ Each workflow:
   - Tests automatic download, installation, and basic compilation
 
 - **lint**: Code quality checks (runs on Ubuntu only)
-  - ruff, black, isort, mypy, pyright
+  - ruff (linter and formatter), mypy, pyright
 
 ### 2. `lint.yml` - Code Quality
 **Triggers:** Push to main/develop, pull requests, manual dispatch
 
 Runs all code quality tools:
-- ruff (linter)
-- black (formatter)
-- isort (import sorting)
+- ruff (linter and formatter)
 - mypy (type checking)
 
 ### 3. `release.yml` (if exists)

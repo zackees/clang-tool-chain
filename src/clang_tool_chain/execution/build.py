@@ -444,9 +444,9 @@ def run_main() -> NoReturn:
                 compile_source.unlink(missing_ok=True)
 
         if exit_code != 0:
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("Compilation failed", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(exit_code)
 
         # Update hash file if caching is enabled
@@ -472,21 +472,21 @@ def run_main() -> NoReturn:
         result = subprocess.run([str(abs_output)] + program_args)
         sys.exit(result.returncode)
     except FileNotFoundError:
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("Execution Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Compiled executable not found: {output_file}", file=sys.stderr)
         print("\nThe compilation appeared to succeed, but the output file cannot be found.", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("Execution Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Error running {output_file}: {e}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
 
@@ -609,9 +609,9 @@ def build_run_main() -> NoReturn:
                 compile_source.unlink(missing_ok=True)
 
         if exit_code != 0:
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("Compilation failed", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(exit_code)
 
         # Update hash file if caching is enabled
@@ -637,19 +637,19 @@ def build_run_main() -> NoReturn:
         result = subprocess.run([str(abs_output)] + program_args)
         sys.exit(result.returncode)
     except FileNotFoundError:
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("Execution Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Compiled executable not found: {output_file}", file=sys.stderr)
         print("\nThe compilation appeared to succeed, but the output file cannot be found.", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("Execution Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Error running {output_file}: {e}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)

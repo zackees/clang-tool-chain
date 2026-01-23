@@ -71,11 +71,11 @@ int main() { printf("Cached execution!\n"); return 0; }
 - [Contributing](#-contributing) - How to add new tools
 - [Maintainer Tools](#️-maintainer-tools) - Archive creation and binary packaging
 - [Detailed Documentation](#-detailed-documentation) - Links to all docs
+- [Test Matrix](#-test-matrix) - Comprehensive test coverage across all platforms
 
 ---
 
-<details>
-<summary><strong>📊 Test Matrix</strong> (click to expand)</summary>
+## 📊 Test Matrix
 
 Comprehensive test coverage across all platforms and tool categories:
 
@@ -101,8 +101,6 @@ Comprehensive test coverage across all platforms and tool categories:
 - **binary-utils** - LLVM binary utilities (ar, nm, objdump, strip, readelf, etc.)
 - **lldb** - LLDB debugger for crash analysis and debugging
 - **cosmocc** - Cosmopolitan Libc for Actually Portable Executables (APE)
-
----
 
 ## ⚡ Quick Start
 

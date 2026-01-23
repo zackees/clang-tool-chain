@@ -412,7 +412,7 @@ def meson_main() -> int:
     from mesonbuild.mesonmain import main as meson_main_impl
 
     # Pass all arguments to meson
-    return meson_main_impl()
+    return meson_main_impl()  # type: ignore[no-any-return]
 
 
 # ============================================================================

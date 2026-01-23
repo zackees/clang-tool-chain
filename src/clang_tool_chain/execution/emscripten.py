@@ -286,11 +286,11 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
         tool_script = find_emscripten_tool(tool_name)
     except RuntimeError as e:
         logger.error(f"Failed to find Emscripten tool: {e}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Emscripten Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"{e}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     # Ensure Node.js is available (bundled or system)
@@ -319,24 +319,24 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
 
     if not config_path.exists():
         logger.error(f"Emscripten config file not found: {config_path}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Emscripten Configuration Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Emscripten config file not found: {config_path}", file=sys.stderr)
         print("This may indicate installation is incomplete or filesystem sync delay.", file=sys.stderr)
         print(f"Try removing {install_dir} and reinstalling.", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     if not clang_binary.exists():
         logger.error(f"Clang binary not found: {clang_binary}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Emscripten Installation Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Clang binary not found: {clang_binary}", file=sys.stderr)
         print("This may indicate installation is incomplete or filesystem sync delay.", file=sys.stderr)
         print(f"Try removing {install_dir} and reinstalling.", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     # Wait for config file and clang binary to be readable (handles filesystem sync delays on Windows)
@@ -355,7 +355,7 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
 
             # Check clang binary (if config is readable)
             if config_readable:
-                with open(clang_binary, "rb") as f:
+                with open(clang_binary, "rb") as f:  # type: ignore[assignment]
                     f.read(1)  # Just verify we can read from it
                 clang_readable = True
 
@@ -373,24 +373,24 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
 
     if not config_readable:
         logger.error(f"Emscripten config file exists but is not readable: {config_path}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Emscripten Configuration Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Emscripten config file exists but is not readable: {config_path}", file=sys.stderr)
         print("This may indicate a filesystem permissions issue or sync delay.", file=sys.stderr)
         print(f"Try removing {install_dir} and reinstalling.", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     if not clang_readable:
         logger.error(f"Clang binary exists but is not readable: {clang_binary}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Emscripten Installation Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Clang binary exists but is not readable: {clang_binary}", file=sys.stderr)
         print("This may indicate a filesystem permissions issue or sync delay.", file=sys.stderr)
         print(f"Try removing {install_dir} and reinstalling.", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     # Set up Emscripten environment variables
@@ -480,9 +480,9 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
                 [str(sccache_path), "--version"], capture_output=True, text=True, timeout=10
             )
             sccache_version = version_result.stdout.strip() if version_result.returncode == 0 else "unknown"
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("DEBUG: sccache verification", file=sys.stderr)
-            print(f"{'='*60}", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
             print(f"sccache path: {sccache_path}", file=sys.stderr)
             print(f"sccache version: {sccache_version}", file=sys.stderr)
 
@@ -517,7 +517,7 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
             except Exception as e:
                 print(f"Warning: Could not start sccache server: {e}", file=sys.stderr)
                 print("Continuing anyway - sccache will use standalone mode if needed", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
@@ -525,14 +525,14 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
 
     except RuntimeError as e:
         logger.error(f"Failed to find sccache: {e}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain sccache Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"{e}", file=sys.stderr)
         print("\nTo install sccache:", file=sys.stderr)
         print("  - cargo install sccache", file=sys.stderr)
         print("  - Or download from: https://github.com/mozilla/sccache/releases", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     # Find tool script
@@ -540,11 +540,11 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
         tool_script = find_emscripten_tool(tool_name)
     except RuntimeError as e:
         logger.error(f"Failed to find Emscripten tool: {e}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Emscripten Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"{e}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     # Ensure Node.js is available (bundled or system)
@@ -572,24 +572,24 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
 
     if not config_path.exists():
         logger.error(f"Emscripten config file not found: {config_path}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Emscripten Configuration Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Emscripten config file not found: {config_path}", file=sys.stderr)
         print("This may indicate installation is incomplete or filesystem sync delay.", file=sys.stderr)
         print(f"Try removing {install_dir} and reinstalling.", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     if not clang_binary.exists():
         logger.error(f"Clang binary not found: {clang_binary}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Emscripten Installation Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Clang binary not found: {clang_binary}", file=sys.stderr)
         print("This may indicate installation is incomplete or filesystem sync delay.", file=sys.stderr)
         print(f"Try removing {install_dir} and reinstalling.", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     # Wait for config file and clang binary to be readable (handles filesystem sync delays on Windows)
@@ -608,7 +608,7 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
 
             # Check clang binary (if config is readable)
             if config_readable:
-                with open(clang_binary, "rb") as f:
+                with open(clang_binary, "rb") as f:  # type: ignore[assignment]
                     f.read(1)  # Just verify we can read from it
                 clang_readable = True
 
@@ -626,24 +626,24 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
 
     if not config_readable:
         logger.error(f"Emscripten config file exists but is not readable: {config_path}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Emscripten Configuration Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Emscripten config file exists but is not readable: {config_path}", file=sys.stderr)
         print("This may indicate a filesystem permissions issue or sync delay.", file=sys.stderr)
         print(f"Try removing {install_dir} and reinstalling.", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     if not clang_readable:
         logger.error(f"Clang binary exists but is not readable: {clang_binary}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Emscripten Installation Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Clang binary exists but is not readable: {clang_binary}", file=sys.stderr)
         print("This may indicate a filesystem permissions issue or sync delay.", file=sys.stderr)
         print(f"Try removing {install_dir} and reinstalling.", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     # Set up Emscripten environment variables
@@ -665,11 +665,11 @@ def execute_emscripten_tool_with_sccache(tool_name: str, args: list[str] | None 
         # Create temporary directory for trampoline (Unix-like systems only)
         trampoline_dir = Path(tempfile.mkdtemp(prefix="emscripten-sccache-"))
 
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("DEBUG: Creating clang++ trampoline", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"Trampoline dir: {trampoline_dir}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
 
         # Find the real clang++ that Emscripten uses
         real_clangpp_original = install_dir / "bin" / "clang++"
@@ -756,13 +756,13 @@ exec "{real_clangpp}" "$@"
     # Configure sccache integration via Emscripten's compiler wrapper mechanism
     # Enabled for ALL platforms (Linux, macOS, Windows)
     # Uses EM_COMPILER_WRAPPER to wrap compiler calls with sccache for caching
-    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"\n{'=' * 60}", file=sys.stderr)
     print(f"DEBUG: Configuring sccache on {platform_name}/{arch}", file=sys.stderr)
-    print(f"{'='*60}", file=sys.stderr)
+    print(f"{'=' * 60}", file=sys.stderr)
     print(f"sccache path: {sccache_path}", file=sys.stderr)
     print(f"Platform: {platform_name}/{arch}", file=sys.stderr)
     print(f"Emscripten dir: {install_dir}", file=sys.stderr)
-    print(f"{'='*60}\n", file=sys.stderr)
+    print(f"{'=' * 60}\n", file=sys.stderr)
 
     logger.info(f"Enabling sccache integration on {platform_name}/{arch}")
     env["EM_COMPILER_WRAPPER"] = str(sccache_path)
@@ -796,13 +796,13 @@ exec "{real_clangpp}" "$@"
             f"{trampoline_dir}{os.pathsep}{emscripten_bin_dir}{os.pathsep}{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
         )
         logger.debug(f"Added to PATH (priority order): {trampoline_dir}, {emscripten_bin_dir}, {node_bin_dir}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("DEBUG: PATH configuration", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"1. Trampoline dir: {trampoline_dir}", file=sys.stderr)
         print(f"2. Emscripten bin: {emscripten_bin_dir}", file=sys.stderr)
         print(f"3. Node.js bin: {node_bin_dir}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
     else:
         env["PATH"] = f"{emscripten_bin_dir}{os.pathsep}{node_bin_dir}{os.pathsep}{env.get('PATH', '')}"
         logger.debug(f"Added to PATH (priority order): {emscripten_bin_dir}, {node_bin_dir}")
@@ -814,9 +814,9 @@ exec "{real_clangpp}" "$@"
     sccache_enabled = True  # sccache now enabled for all platforms
     sccache_status = "enabled" if sccache_enabled else "disabled"
 
-    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"\n{'=' * 60}", file=sys.stderr)
     print("DEBUG: About to execute Emscripten with sccache", file=sys.stderr)
-    print(f"{'='*60}", file=sys.stderr)
+    print(f"{'=' * 60}", file=sys.stderr)
     print(f"Python: {python_exe}", file=sys.stderr)
     print(f"Tool script: {tool_script}", file=sys.stderr)
     print(f"Args: {args}", file=sys.stderr)
@@ -825,7 +825,7 @@ exec "{real_clangpp}" "$@"
     print(f"EMCC_SKIP_SANITY_CHECK: {env.get('EMCC_SKIP_SANITY_CHECK', 'NOT SET')}", file=sys.stderr)
     print(f"SCCACHE_DIRECT: {env.get('SCCACHE_DIRECT', 'NOT SET')}", file=sys.stderr)
     print(f"SCCACHE_LOG: {env.get('SCCACHE_LOG', 'NOT SET')}", file=sys.stderr)
-    print(f"{'='*60}\n", file=sys.stderr)
+    print(f"{'=' * 60}\n", file=sys.stderr)
 
     logger.info(f"Executing command: {python_exe} {tool_script} (with {len(args)} args, sccache {sccache_status})")
     logger.debug(f"Environment: EMSCRIPTEN={env.get('EMSCRIPTEN')}")

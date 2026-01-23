@@ -216,7 +216,7 @@ class CosmoccInstaller(BaseToolchainInstaller):
             install_dir.mkdir(parents=True, exist_ok=True)
             done_file = install_dir / "done.txt"
             with open(done_file, "w") as f:
-                f.write(f"Cosmocc {manifest.latest} installed successfully\n" f"SHA256: {version_info.sha256}\n")
+                f.write(f"Cosmocc {manifest.latest} installed successfully\nSHA256: {version_info.sha256}\n")
 
             print("Cosmocc toolchain installation complete!", file=sys.stderr, flush=True)
             logger.info("Cosmocc installation complete (universal)")

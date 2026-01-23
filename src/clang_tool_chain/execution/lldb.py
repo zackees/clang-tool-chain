@@ -235,7 +235,7 @@ def check_lldb_python_environment() -> dict[str, bool | str | None]:
         # On Windows, python310.dll is required for LLDB to run
         has_python_runtime = True
         if platform_name == "win":
-            has_python_runtime = result["python_dll"]
+            has_python_runtime = result["python_dll"]  # type: ignore[assignment]
 
         if result["lldb_module"] and has_stdlib and has_python_runtime:
             result["status"] = "ready"

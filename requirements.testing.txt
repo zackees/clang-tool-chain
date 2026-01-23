@@ -1,5 +1,3 @@
-black
-isort
 mypy
 pytest
 tox

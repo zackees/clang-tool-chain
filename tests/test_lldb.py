@@ -179,7 +179,6 @@ int main() {
         """
         # Check if python310.dll is present on Windows (required for LLDB to run)
         if sys.platform == "win32":
-
             bin_dir = wrapper.get_lldb_binary_dir()
             python_dll = bin_dir / "python310.dll"
             if not python_dll.exists():
@@ -284,7 +283,7 @@ int main() {
 
         # Print timing summary on success
         print(
-            f"\n✓ test_lldb_print_crash_stack: compile={compile_time:.2f}s, lldb={lldb_time:.2f}s, total={compile_time+lldb_time:.2f}s"
+            f"\n✓ test_lldb_print_crash_stack: compile={compile_time:.2f}s, lldb={lldb_time:.2f}s, total={compile_time + lldb_time:.2f}s"
         )
 
     def test_lldb_full_backtraces_with_python(self) -> None:

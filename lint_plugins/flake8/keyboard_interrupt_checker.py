@@ -9,7 +9,8 @@ Error Codes:
 """
 
 import ast
-from typing import Any, Generator, Tuple, Type
+from collections.abc import Generator
+from typing import Any
 
 
 class KeyboardInterruptChecker:
@@ -26,7 +27,7 @@ class KeyboardInterruptChecker:
         """
         self._tree = tree
 
-    def run(self) -> Generator[Tuple[int, int, str, Type[Any]], None, None]:
+    def run(self) -> Generator[tuple[int, int, str, type[Any]], None, None]:
         """Run the checker on the AST tree.
 
         Yields:
@@ -44,9 +45,9 @@ class TryExceptVisitor(ast.NodeVisitor):
 
     def __init__(self) -> None:
         """Initialize the visitor."""
-        self.errors: list[Tuple[int, int, str]] = []
+        self.errors: list[tuple[int, int, str]] = []
 
-    def visit_Try(self, node: ast.Try) -> None:
+    def visit_Try(self, node: ast.Try) -> None:  # noqa: N802
         """Visit a Try node and check exception handlers.
 
         Args:
@@ -121,17 +122,15 @@ class TryExceptVisitor(ast.NodeVisitor):
         for node in ast.walk(handler):
             if isinstance(node, ast.Call):
                 # Check for _thread.interrupt_main()
-                if isinstance(node.func, ast.Attribute):
-                    if (
-                        isinstance(node.func.value, ast.Name)
-                        and node.func.value.id == "_thread"
-                        and node.func.attr == "interrupt_main"
-                    ):
-                        return True
+                if isinstance(node.func, ast.Attribute) and (
+                    isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "_thread"
+                    and node.func.attr == "interrupt_main"
+                ):
+                    return True
 
                 # Check for handle_keyboard_interrupt_properly()
-                if isinstance(node.func, ast.Name):
-                    if node.func.id == "handle_keyboard_interrupt_properly":
-                        return True
+                if isinstance(node.func, ast.Name) and node.func.id == "handle_keyboard_interrupt_properly":
+                    return True
 
         return False

@@ -359,7 +359,7 @@ def _atomic_copy_dll(src_dll: Path, dest_dll: Path) -> bool:
                     if temp_stat.st_size == dest_stat.st_size:
                         # Files are same size, likely identical - clean up and succeed
                         logger.debug(
-                            f"Skipped (file in use but same size): {dest_dll.name} - " f"assuming identical, error: {e}"
+                            f"Skipped (file in use but same size): {dest_dll.name} - assuming identical, error: {e}"
                         )
                         temp_dll.unlink(missing_ok=True)
                         return False

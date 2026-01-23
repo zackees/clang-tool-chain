@@ -16,9 +16,13 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from types import TracebackType
+from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 
 import pytest
+
+if TYPE_CHECKING:
+    from typing import Literal
 
 from clang_tool_chain.deployment.dll_deployer import (
     HEURISTIC_MINGW_DLLS,
@@ -81,7 +85,7 @@ class WindowsSafeTemporaryDirectory:
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
-    ) -> bool:
+    ) -> "Literal[False]":
         if self._tmpdir:
             # Use ignore_errors to handle locked DLLs on Windows
             shutil.rmtree(self._tmpdir, ignore_errors=True)
@@ -89,7 +93,7 @@ class WindowsSafeTemporaryDirectory:
 
 
 # Apply monkey-patch for all tests in this module
-tempfile.TemporaryDirectory = WindowsSafeTemporaryDirectory
+tempfile.TemporaryDirectory = WindowsSafeTemporaryDirectory  # type: ignore[assignment,misc]
 
 
 class TestMingwDllPatternMatching:
@@ -1483,9 +1487,7 @@ int main() {
             # Mock llvm-objdump to return a complex dependency tree
             # Simulates: test.exe → libclang_rt.asan_dynamic-x86_64.dll → libc++.dll → libunwind.dll
             mock_objdump_responses = {
-                str(
-                    exe_path
-                ): """
+                str(exe_path): """
                     DLL Name: libclang_rt.asan_dynamic-x86_64.dll
                     DLL Name: libwinpthread-1.dll
                     DLL Name: kernel32.dll
@@ -1532,7 +1534,7 @@ int main() {
                     if dll_name.lower() in ["kernel32.dll", "ntdll.dll", "msvcrt.dll"]:
                         return None  # System DLLs
                     # Return a mock path for MinGW/LLVM DLLs
-                    return tmpdir_path / "sysroot" / dll_name
+                    return tmpdir_path / "sysroot" / dll_name  # type: ignore[no-any-return]
 
                 mock_find_dll.side_effect = mock_find_dll_impl
 
@@ -1553,7 +1555,7 @@ int main() {
                 def mock_exists(self: Path) -> bool:
                     if "llvm-objdump" in str(self):
                         return True
-                    return original_exists(self)
+                    return original_exists(self)  # type: ignore[no-any-return]
 
                 with patch.object(Path, "exists", mock_exists):
                     # Run detection

@@ -11,17 +11,21 @@ from pathlib import Path
 # Set up detailed logging
 logging.basicConfig(
     level=logging.DEBUG,  # Use DEBUG to see everything
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-from clang_tool_chain.parallel_download import DownloadConfig, check_server_capabilities, download_file_parallel
+from clang_tool_chain.parallel_download import (  # noqa: E402
+    DownloadConfig,
+    check_server_capabilities,
+    download_file_parallel,
+)
 
 
 def test_server_capabilities():
     """Test server capability detection for various URLs."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("SERVER CAPABILITY DETECTION TEST")
-    print("="*80)
+    print("=" * 80)
 
     test_urls = [
         ("GitHub Release", "https://github.com/python/cpython/archive/refs/tags/v3.11.0.tar.gz"),
@@ -35,7 +39,11 @@ def test_server_capabilities():
         try:
             caps = check_server_capabilities(url, timeout=10)
             print(f"  ✓ Supports ranges: {caps.supports_ranges}")
-            print(f"  ✓ Content length: {caps.content_length / (1024*1024):.2f} MB" if caps.content_length else "  ✓ Content length: Unknown")
+            print(
+                f"  ✓ Content length: {caps.content_length / (1024*1024):.2f} MB"
+                if caps.content_length
+                else "  ✓ Content length: Unknown"
+            )
             print(f"  ✓ Accepts partial: {caps.accepts_partial}")
 
             # Determine strategy
@@ -50,11 +58,12 @@ def test_server_capabilities():
         except Exception as e:
             print(f"  ✗ Error: {e}")
 
+
 def test_download_with_logging():
     """Test download with detailed logging."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("DETAILED DOWNLOAD TEST")
-    print("="*80)
+    print("=" * 80)
 
     url = "https://github.com/python/cpython/archive/refs/tags/v3.11.0.tar.gz"
 
@@ -68,7 +77,7 @@ def test_download_with_logging():
         config = DownloadConfig(
             chunk_size=4 * 1024 * 1024,  # 4 MB chunks for faster test
             max_workers=4,  # Use 4 workers
-            min_size_for_parallel=5 * 1024 * 1024  # 5 MB minimum
+            min_size_for_parallel=5 * 1024 * 1024,  # 5 MB minimum
         )
 
         start = time.time()
@@ -88,11 +97,13 @@ def test_download_with_logging():
         except Exception as e:
             print(f"\n❌ Download failed: {e}")
             import traceback
+
             traceback.print_exc()
+
 
 if __name__ == "__main__":
     test_server_capabilities()
     test_download_with_logging()
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TESTS COMPLETE")
-    print("="*80)
+    print("=" * 80)

@@ -92,9 +92,7 @@ class TestIWYUExecution(unittest.TestCase):
         # Create a test file with proper includes
         # Optimization: Use C stdio.h instead of C++ iostream for faster parsing
         self.good_cpp = self.temp_path / "good.c"
-        self.good_cpp.write_text(
-            "#include <stdio.h>\n" "\n" "int main() {\n" '    printf("Hello!\\n");\n' "    return 0;\n" "}\n"
-        )
+        self.good_cpp.write_text('#include <stdio.h>\n\nint main() {\n    printf("Hello!\\n");\n    return 0;\n}\n')
 
         # Create a test file that uses vector
         self.vector_cpp = self.temp_path / "vector_test.cpp"
@@ -270,7 +268,7 @@ class TestIWYUExecution(unittest.TestCase):
             self.assertIn(
                 result.returncode,
                 [0, 1, 2],
-                f"IWYU should complete analysis. Return code: {result.returncode}, " f"stderr: {result.stderr[:200]}",
+                f"IWYU should complete analysis. Return code: {result.returncode}, stderr: {result.stderr[:200]}",
             )
 
             # IWYU produces output (usually to stderr)
@@ -329,13 +327,7 @@ class TestIWYUExecution(unittest.TestCase):
             # Create a simpler C test file for faster parsing
             simple_c = self.temp_path / "simple_db_test.c"
             simple_c.write_text(
-                "#include <stdio.h>\n"
-                "#include <stdlib.h>\n"
-                "\n"
-                "int main() {\n"
-                '    printf("Test\\n");\n'
-                "    return 0;\n"
-                "}\n"
+                '#include <stdio.h>\n#include <stdlib.h>\n\nint main() {\n    printf("Test\\n");\n    return 0;\n}\n'
             )
 
             # Create a simple compile_commands.json

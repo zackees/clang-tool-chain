@@ -215,11 +215,11 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
         tool_path = find_tool_binary(tool_name)
     except RuntimeError as e:
         logger.error(f"Failed to find tool binary: {e}")
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"{e}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     # Add macOS SDK path automatically for clang/clang++ if not already specified
@@ -300,9 +300,9 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
 
             sys.exit(result.returncode)
         except FileNotFoundError:
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'='*60}", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
             print(f"Tool not found: {tool_path}", file=sys.stderr)
             print("\nThe binary exists in the package but cannot be executed.", file=sys.stderr)
             print("This may be a permission or compatibility issue.", file=sys.stderr)
@@ -310,20 +310,20 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
             print("  - Verify the binary is compatible with your Windows version", file=sys.stderr)
             print("  - Check Windows Defender or antivirus isn't blocking it", file=sys.stderr)
             print("  - Report issue: https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'='*60}", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
             print(f"Error executing tool: {e}", file=sys.stderr)
             print(f"\nUnexpected error while running: {tool_path}", file=sys.stderr)
             print(f"Arguments: {args}", file=sys.stderr)
             print("\nPlease report this issue at:", file=sys.stderr)
             print("https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)
     else:
         logger.debug("Using Unix exec replacement")
@@ -332,9 +332,9 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
             logger.info(f"Replacing process with: {tool_path}")
             os.execv(str(tool_path), cmd)
         except FileNotFoundError:
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'='*60}", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
             print(f"Tool not found: {tool_path}", file=sys.stderr)
             print("\nThe binary exists in the package but cannot be executed.", file=sys.stderr)
             print("This may be a permission or compatibility issue.", file=sys.stderr)
@@ -343,20 +343,20 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
             print("  - Verify the binary is compatible with your system", file=sys.stderr)
             print("  - On macOS: Right-click > Open, then allow in Security settings", file=sys.stderr)
             print("  - Report issue: https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'='*60}", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
             print(f"Error executing tool: {e}", file=sys.stderr)
             print(f"\nUnexpected error while running: {tool_path}", file=sys.stderr)
             print(f"Arguments: {args}", file=sys.stderr)
             print("\nPlease report this issue at:", file=sys.stderr)
             print("https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)
 
 
@@ -499,11 +499,11 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
         sccache_path = find_sccache_binary()
         clang_path = find_tool_binary("clang")
     except RuntimeError as e:
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"{e}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     # Add macOS SDK path automatically if needed
@@ -579,11 +579,11 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'='*60}", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
             print(f"Error executing sccache: {e}", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)
     else:
         # Unix: use exec to replace current process
@@ -592,11 +592,11 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'='*60}", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
             print(f"Error executing sccache: {e}", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)
 
 
@@ -625,11 +625,11 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
         sccache_path = find_sccache_binary()
         clang_cpp_path = find_tool_binary("clang++")
     except RuntimeError as e:
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print("clang-tool-chain Error", file=sys.stderr)
-        print(f"{'='*60}", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
         print(f"{e}", file=sys.stderr)
-        print(f"{'='*60}\n", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
     # Add macOS SDK path automatically if needed
@@ -705,11 +705,11 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'='*60}", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
             print(f"Error executing sccache: {e}", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)
     else:
         # Unix: use exec to replace current process
@@ -718,9 +718,9 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
-            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"\n{'=' * 60}", file=sys.stderr)
             print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'='*60}", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
             print(f"Error executing sccache: {e}", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)

@@ -88,12 +88,7 @@ class TestCosmoccExecution(unittest.TestCase):
         # Create a simple C test file
         self.test_c = self.temp_path / "hello.c"
         self.test_c.write_text(
-            "#include <stdio.h>\n"
-            "\n"
-            "int main() {\n"
-            '    printf("Hello from Cosmopolitan!\\n");\n'
-            "    return 0;\n"
-            "}\n"
+            '#include <stdio.h>\n\nint main() {\n    printf("Hello from Cosmopolitan!\\n");\n    return 0;\n}\n'
         )
 
         # Create a simple C++ test file
@@ -634,13 +629,7 @@ class TestCosmoccExecution(unittest.TestCase):
             # Create a simple library source
             lib_c = self.temp_path / "mylib.c"
             lib_c.write_text(
-                "int add(int a, int b) {\n"
-                "    return a + b;\n"
-                "}\n"
-                "\n"
-                "int multiply(int a, int b) {\n"
-                "    return a * b;\n"
-                "}\n"
+                "int add(int a, int b) {\n    return a + b;\n}\n\nint multiply(int a, int b) {\n    return a * b;\n}\n"
             )
 
             # Create main program that uses the library (statically linked)

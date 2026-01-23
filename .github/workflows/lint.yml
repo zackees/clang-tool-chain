@@ -30,11 +30,8 @@ jobs:
     - name: Run ruff (linter)
       run: uv run ruff check src tests
 
-    - name: Run black (formatter check)
-      run: uv run black --check src tests
-
-    - name: Run isort (import sorting check)
-      run: uv run isort --check-only --profile black src tests
+    - name: Run ruff format (formatter check)
+      run: uv run ruff format --check src tests
 
     - name: Run mypy (type checker)
       run: uv run mypy src tests

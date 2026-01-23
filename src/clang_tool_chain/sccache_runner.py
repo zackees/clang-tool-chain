@@ -97,7 +97,7 @@ def run_sccache_via_isoenv(args: list[str]) -> int:
         # Run sccache with the provided arguments
         result = env.run(["sccache"] + args)
 
-        return result.returncode if result.returncode is not None else 0
+        return result.returncode if result.returncode is not None else 0  # type: ignore[no-any-return]
 
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
@@ -193,7 +193,6 @@ def run_sccache_with_compiler(compiler_path: str, args: list[str]) -> int:
 
             # Post-link DLL deployment (Windows GNU ABI only)
             if exit_code == 0:
-
                 from .abi import _should_use_gnu_abi
                 from .deployment.dll_deployer import post_link_dll_deployment
                 from .execution.core import _extract_output_path

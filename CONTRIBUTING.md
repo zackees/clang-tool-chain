@@ -176,9 +176,8 @@ We use several tools to maintain code quality. Run all at once:
 Or individually:
 
 ```bash
-# Format code
-uv run black src tests
-uv run isort --profile black src tests
+# Format code and sort imports
+uv run ruff format src tests
 
 # Check linting
 uv run ruff check --fix src tests
@@ -206,7 +205,7 @@ git commit --no-verify
 ### Code Style
 
 - **Line length**: Maximum 120 characters
-- **Imports**: Organize with isort (black profile)
+- **Formatting**: Use ruff format (handles code formatting and import sorting)
 - **Type hints**: Use type hints where possible
 - **Docstrings**: Use for public functions and classes
 - **Comments**: Explain why, not what

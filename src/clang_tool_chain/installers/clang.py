@@ -147,9 +147,7 @@ class ClangInstaller(BaseToolchainInstaller):
             install_dir.mkdir(parents=True, exist_ok=True)
             done_file = install_dir / "done.txt"
             done_file.write_text(
-                f"Installation completed successfully\n"
-                f"Version: {latest_version}\n"
-                f"SHA256: {version_info.sha256}\n"
+                f"Installation completed successfully\nVersion: {latest_version}\nSHA256: {version_info.sha256}\n"
             )
 
             print("Clang/LLVM toolchain installation complete!", file=sys.stderr, flush=True)

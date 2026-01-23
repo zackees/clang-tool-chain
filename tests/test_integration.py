@@ -28,27 +28,21 @@ class TestHelloWorldCompilation(unittest.TestCase):
 
         # Create test source files
         self.hello_c = self.temp_path / "hello.c"
-        self.hello_c.write_text(
-            "#include <stdio.h>\n" "int main() {\n" '    printf("Hello from C!\\n");\n' "    return 0;\n" "}\n"
-        )
+        self.hello_c.write_text('#include <stdio.h>\nint main() {\n    printf("Hello from C!\\n");\n    return 0;\n}\n')
 
         self.hello_cpp = self.temp_path / "hello.cpp"
         self.hello_cpp.write_text(
-            "#include <iostream>\n"
-            "int main() {\n"
-            '    std::cout << "Hello from C++!" << std::endl;\n'
-            "    return 0;\n"
-            "}\n"
+            '#include <iostream>\nint main() {\n    std::cout << "Hello from C++!" << std::endl;\n    return 0;\n}\n'
         )
 
         # Create a helper function source for library tests
         self.helper_c = self.temp_path / "helper.c"
         self.helper_c.write_text(
-            "#include <stdio.h>\n" "void print_helper() {\n" '    printf("Helper function called!\\n");\n' "}\n"
+            '#include <stdio.h>\nvoid print_helper() {\n    printf("Helper function called!\\n");\n}\n'
         )
 
         self.helper_h = self.temp_path / "helper.h"
-        self.helper_h.write_text("#ifndef HELPER_H\n" "#define HELPER_H\n" "void print_helper(void);\n" "#endif\n")
+        self.helper_h.write_text("#ifndef HELPER_H\n#define HELPER_H\nvoid print_helper(void);\n#endif\n")
 
         self.main_with_helper_c = self.temp_path / "main_with_helper.c"
         self.main_with_helper_c.write_text(
@@ -225,7 +219,7 @@ class TestBinaryUtilities(unittest.TestCase):
             if result != 0:
                 raise RuntimeError("Could not compile test object file")
         except RuntimeError:
-            self.obj_file = None
+            self.obj_file = None  # type: ignore[assignment]
 
     def tearDown(self) -> None:
         """Clean up temporary directory."""
@@ -555,18 +549,13 @@ class TestStaticAnalysis(unittest.TestCase):
         # Create a test file with a division by zero warning
         self.div_zero_cpp = self.temp_path / "div_zero.cpp"
         self.div_zero_cpp.write_text(
-            "int main() {\n"
-            "    int x = 10;\n"
-            "    int y = 0;\n"
-            "    int z = x / y;  // Division by zero\n"
-            "    return z;\n"
-            "}\n"
+            "int main() {\n    int x = 10;\n    int y = 0;\n    int z = x / y;  // Division by zero\n    return z;\n}\n"
         )
 
         # Create a test file with a null dereference
         self.null_deref_cpp = self.temp_path / "null_deref.cpp"
         self.null_deref_cpp.write_text(
-            "int main() {\n" "    int *ptr = nullptr;\n" "    return *ptr;  // Null dereference\n" "}\n"
+            "int main() {\n    int *ptr = nullptr;\n    return *ptr;  // Null dereference\n}\n"
         )
 
     def tearDown(self) -> None:
@@ -690,7 +679,7 @@ class TestStaticAnalysis(unittest.TestCase):
         try:
             # Create another test file
             good_file = self.temp_path / "good.cpp"
-            good_file.write_text("int add(int a, int b) {\n" "    return a + b;\n" "}\n")
+            good_file.write_text("int add(int a, int b) {\n    return a + b;\n}\n")
 
             # Run analyzer on multiple files
             for test_file in [good_file, self.buggy_cpp]:

@@ -98,10 +98,8 @@ def check_server_capabilities(url: str, timeout: int = 30) -> ServerCapabilities
                 supports_ranges=supports_ranges, content_length=size, accepts_partial=accepts_partial
             )
 
-            size_str = f"{size / (1024*1024):.2f} MB" if size else "unknown"
-            logger.info(
-                f"Server capabilities: ranges={supports_ranges}, " f"size={size_str}, " f"partial={accepts_partial}"
-            )
+            size_str = f"{size / (1024 * 1024):.2f} MB" if size else "unknown"
+            logger.info(f"Server capabilities: ranges={supports_ranges}, size={size_str}, partial={accepts_partial}")
 
             return capabilities
 
@@ -142,7 +140,7 @@ def download_chunk(
             # Verify we got a partial content response
             if response.status not in (200, 206):
                 logger.warning(
-                    f"Chunk {chunk.index + 1}: unexpected status {response.status}, " f"expected 206 (Partial Content)"
+                    f"Chunk {chunk.index + 1}: unexpected status {response.status}, expected 206 (Partial Content)"
                 )
 
             chunk_data = response.read()
@@ -154,7 +152,7 @@ def download_chunk(
                 f.write(chunk_data)
 
             logger.debug(
-                f"Chunk {chunk.index + 1}/{chunk.total_chunks} complete: " f"{bytes_downloaded / (1024*1024):.2f} MB"
+                f"Chunk {chunk.index + 1}/{chunk.total_chunks} complete: {bytes_downloaded / (1024 * 1024):.2f} MB"
             )
 
             return (chunk.index, bytes_downloaded, True)
@@ -213,8 +211,8 @@ def download_file_parallel(
             logger.info("Unknown file size, using single-threaded download")
         else:
             logger.info(
-                f"File size ({capabilities.content_length / (1024*1024):.2f} MB) "
-                f"below threshold ({config.min_size_for_parallel / (1024*1024):.2f} MB), "
+                f"File size ({capabilities.content_length / (1024 * 1024):.2f} MB) "
+                f"below threshold ({config.min_size_for_parallel / (1024 * 1024):.2f} MB), "
                 f"using single-threaded download"
             )
 
@@ -225,7 +223,7 @@ def download_file_parallel(
     # Parallel download
     file_size = capabilities.content_length
     assert file_size is not None, "content_length must be set for parallel download"
-    logger.info(f"File size: {file_size / (1024*1024):.2f} MB")
+    logger.info(f"File size: {file_size / (1024 * 1024):.2f} MB")
 
     # Calculate chunks
     chunks = _calculate_chunks(file_size, config.chunk_size)
@@ -276,7 +274,7 @@ def download_file_parallel(
             if failed_chunks:
                 raise ToolchainInfrastructureError(f"Failed to download {len(failed_chunks)} chunks: {failed_chunks}")
 
-            logger.info(f"Download complete: {total_downloaded / (1024*1024):.2f} MB")
+            logger.info(f"Download complete: {total_downloaded / (1024 * 1024):.2f} MB")
 
             # Verify checksum if provided
             if expected_sha256:
@@ -357,7 +355,7 @@ def _download_file_single_threaded(
             total_size = int(content_length) if content_length else None
 
             if total_size:
-                logger.info(f"Download size: {total_size / (1024*1024):.2f} MB")
+                logger.info(f"Download size: {total_size / (1024 * 1024):.2f} MB")
 
             # Create parent directory if it doesn't exist
             dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -381,7 +379,7 @@ def _download_file_single_threaded(
                     if progress_callback and total_size:
                         progress_callback(downloaded, total_size)
 
-                logger.info(f"Download complete: {tmp_path.stat().st_size / (1024*1024):.2f} MB")
+                logger.info(f"Download complete: {tmp_path.stat().st_size / (1024 * 1024):.2f} MB")
 
             # Verify checksum if provided
             if expected_sha256 and not _verify_checksum(tmp_path, expected_sha256):

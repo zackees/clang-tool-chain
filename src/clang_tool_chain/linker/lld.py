@@ -193,7 +193,7 @@ def _ensure_ld64_lld_symlink() -> bool:
                 return False
 
     logger.warning(
-        f"No suitable linker binary found for ld64.lld symlink. " f"Tried: {', '.join(source_candidates)} in {bin_dir}"
+        f"No suitable linker binary found for ld64.lld symlink. Tried: {', '.join(source_candidates)} in {bin_dir}"
     )
     return False
 

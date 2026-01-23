@@ -13,12 +13,9 @@ import time
 from pathlib import Path
 
 # Set up logging to see what's happening
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-from clang_tool_chain.parallel_download import DownloadConfig, download_file_parallel
+from clang_tool_chain.parallel_download import DownloadConfig, download_file_parallel  # noqa: E402
 
 # Test URLs - these are publicly available files of various sizes
 TEST_FILES = [
@@ -47,17 +44,17 @@ LARGE_TEST_FILE = {
 
 def test_parallel_download():
     """Test parallel download with a real file."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("PARALLEL DOWNLOAD REAL-WORLD TEST")
-    print("="*80)
+    print("=" * 80)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
 
         # Test 1: Small file (should fall back to single-threaded)
-        print("\n" + "-"*80)
+        print("\n" + "-" * 80)
         print("TEST 1: Small file (should use single-threaded)")
-        print("-"*80)
+        print("-" * 80)
 
         dest_path = tmpdir / "small_file.zip"
         url = TEST_FILES[0]["url"]
@@ -70,7 +67,7 @@ def test_parallel_download():
             config = DownloadConfig(
                 chunk_size=4 * 1024 * 1024,  # 4 MB chunks
                 max_workers=6,
-                min_size_for_parallel=10 * 1024 * 1024  # 10 MB minimum
+                min_size_for_parallel=10 * 1024 * 1024,  # 10 MB minimum
             )
             download_file_parallel(url, dest_path, expected_sha256=None, config=config)
             elapsed = time.time() - start_time
@@ -85,9 +82,9 @@ def test_parallel_download():
             print(f"❌ FAILED: {e}")
 
         # Test 2: Large file (should use parallel if server supports it)
-        print("\n" + "-"*80)
+        print("\n" + "-" * 80)
         print("TEST 2: Large file (should use parallel if server supports range requests)")
-        print("-"*80)
+        print("-" * 80)
 
         dest_path = tmpdir / "large_file.tar.gz"
         url = LARGE_TEST_FILE["url"]
@@ -100,7 +97,7 @@ def test_parallel_download():
             config = DownloadConfig(
                 chunk_size=8 * 1024 * 1024,  # 8 MB chunks
                 max_workers=6,
-                min_size_for_parallel=10 * 1024 * 1024  # 10 MB minimum
+                min_size_for_parallel=10 * 1024 * 1024,  # 10 MB minimum
             )
             download_file_parallel(url, dest_path, expected_sha256=None, config=config)
             elapsed = time.time() - start_time
@@ -115,9 +112,9 @@ def test_parallel_download():
             print(f"❌ FAILED: {e}")
 
         # Test 3: Test with parallel disabled
-        print("\n" + "-"*80)
+        print("\n" + "-" * 80)
         print("TEST 3: Same file with parallel disabled (for comparison)")
-        print("-"*80)
+        print("-" * 80)
 
         dest_path2 = tmpdir / "large_file_single.tar.gz"
 
@@ -128,6 +125,7 @@ def test_parallel_download():
         import importlib
 
         import clang_tool_chain.archive
+
         importlib.reload(clang_tool_chain.archive)
 
         from clang_tool_chain.archive import download_file
@@ -153,9 +151,9 @@ def test_parallel_download():
             del os.environ["CLANG_TOOL_CHAIN_DISABLE_PARALLEL"]
             importlib.reload(clang_tool_chain.archive)
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST COMPLETE")
-    print("="*80)
+    print("=" * 80)
 
 
 if __name__ == "__main__":

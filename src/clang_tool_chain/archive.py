@@ -157,7 +157,7 @@ def _download_file_legacy(url: str, dest_path: Path, expected_sha256: str | None
         with urlopen(req, timeout=300) as response:
             content_length = response.getheader("Content-Length")
             if content_length:
-                logger.info(f"Download size: {int(content_length) / (1024*1024):.2f} MB")
+                logger.info(f"Download size: {int(content_length) / (1024 * 1024):.2f} MB")
 
             # Create parent directory if it doesn't exist
             dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -167,7 +167,7 @@ def _download_file_legacy(url: str, dest_path: Path, expected_sha256: str | None
                 tmp_path = Path(tmp_file.name)
                 logger.debug(f"Downloading to temporary file: {tmp_path}")
                 shutil.copyfileobj(response, tmp_file)
-                logger.info(f"Download complete: {tmp_path.stat().st_size / (1024*1024):.2f} MB")
+                logger.info(f"Download complete: {tmp_path.stat().st_size / (1024 * 1024):.2f} MB")
 
             # Verify checksum if provided
             if expected_sha256 and not verify_checksum(tmp_path, expected_sha256):
@@ -253,10 +253,10 @@ def download_archive_parts(version_info: VersionInfo, temp_dir: Path) -> Path:
                     with urlopen(req, timeout=300) as response:
                         content_length = response.getheader("Content-Length")
                         if content_length:
-                            logger.info(f"Part {i} size: {int(content_length) / (1024*1024):.2f} MB")
+                            logger.info(f"Part {i} size: {int(content_length) / (1024 * 1024):.2f} MB")
 
                         part_data = response.read()
-                        logger.info(f"Part {i} downloaded: {len(part_data) / (1024*1024):.2f} MB")
+                        logger.info(f"Part {i} downloaded: {len(part_data) / (1024 * 1024):.2f} MB")
 
                 except KeyboardInterrupt as ke:
                     handle_keyboard_interrupt_properly(ke)
@@ -283,7 +283,7 @@ def download_archive_parts(version_info: VersionInfo, temp_dir: Path) -> Path:
                 f"got {hashlib.sha256(output_path.read_bytes()).hexdigest()}"
             )
 
-        logger.info(f"Multi-part archive assembled successfully: {output_path.stat().st_size / (1024*1024):.2f} MB")
+        logger.info(f"Multi-part archive assembled successfully: {output_path.stat().st_size / (1024 * 1024):.2f} MB")
         return output_path
 
     except ToolchainInfrastructureError:
@@ -399,9 +399,9 @@ def extract_tarball(archive_path: Path, dest_dir: Path) -> None:
         # Decompress with pyzstd
         with open(archive_path, "rb") as compressed, open(temp_tar, "wb") as decompressed:
             compressed_data = compressed.read()
-            logger.info(f"Decompressing {len(compressed_data) / (1024*1024):.2f} MB")
+            logger.info(f"Decompressing {len(compressed_data) / (1024 * 1024):.2f} MB")
             decompressed.write(pyzstd.decompress(compressed_data))
-            logger.info(f"Decompression complete: {temp_tar.stat().st_size / (1024*1024):.2f} MB")
+            logger.info(f"Decompression complete: {temp_tar.stat().st_size / (1024 * 1024):.2f} MB")
 
         # DEBUG: Verify tar file immediately after decompression
         logger.debug(f"Verifying decompressed tar file: {temp_tar}")

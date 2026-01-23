@@ -18,4 +18,3 @@ rm -rf .coverage
 find . -name "*.pyc" -exec rm -rf {} \;
 # remove all *.egg files
 find . -name "*.egg" -exec rm -rf {} \;
-
