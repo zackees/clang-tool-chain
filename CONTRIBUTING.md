@@ -62,9 +62,6 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 uv pip install -e ".[dev]"
-
-# Install pre-commit hooks
-pre-commit install
 ```
 
 ### Verify Installation
@@ -185,21 +182,6 @@ uv run ruff check --fix src tests
 # Type checking
 uv run mypy src tests
 uv run pyright src tests
-```
-
-### Pre-commit Hooks
-
-Pre-commit hooks run automatically on `git commit`:
-
-```bash
-# Install hooks
-pre-commit install
-
-# Run manually
-pre-commit run --all-files
-
-# Skip hooks (not recommended)
-git commit --no-verify
 ```
 
 ### Code Style

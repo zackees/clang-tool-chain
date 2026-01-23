@@ -285,7 +285,6 @@ clang-tool-chain-cpp main.cpp -o program.exe
 uv venv --python 3.11
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 uv pip install -e ".[dev]"
-pre-commit install
 
 # Optional: Install with sccache support for compilation caching
 uv pip install -e ".[sccache]"
@@ -406,12 +405,6 @@ uv run pyright src tests           # Type checking
 uv run mypy src tests              # Alternative type checking
 ```
 
-### Pre-commit Hooks
-
-```bash
-pre-commit run --all-files  # Run all pre-commit checks manually
-```
-
 ### Cleaning
 
 ```bash
@@ -452,20 +445,6 @@ Maximum line length is 120 characters (configured in ruff).
 - Ruff handles all linting, formatting, and import sorting
 - F401 (unused imports) ignored in `__init__.py` files
 - S101 (assert usage) ignored in test files
-
-### Pre-commit Integration
-Pre-commit hooks enforce:
-- Trailing whitespace removal
-- End-of-file fixing
-- YAML/JSON/TOML validation
-- Large file detection
-- Debug statement detection
-- Mixed line ending checks
-- Ruff linting with auto-fix
-- Ruff formatting (code formatting and import sorting)
-- MyPy type checking
-
-Hooks run automatically on `git commit` and will block commits if checks fail.
 
 ## Development Workflow
 

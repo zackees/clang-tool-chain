@@ -45,7 +45,6 @@ dev = [
     "pytest-xdist>=3.5.0",
     "ruff>=0.3.0",
     "pyright>=1.1.350",
-    "pre-commit>=3.6.0",
     "sccache>=0.7.0",
     "flake8>=7.0.0",
 ]

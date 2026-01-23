@@ -1549,7 +1549,6 @@ For security vulnerabilities, please see our [Security Policy](SECURITY.md) for 
 git clone https://github.com/zackees/clang-tool-chain.git
 cd clang-tool-chain
 ./install              # Install dependencies (uses uv)
-pre-commit install     # Enable pre-commit hooks
 ```
 
 ### Essential Commands
