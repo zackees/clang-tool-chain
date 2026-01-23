@@ -119,14 +119,16 @@ class TestEmscripten:
         """Test executing compiled WebAssembly with Node.js."""
         # Create test source file
         source_file = tmp_path / "test.cpp"
-        source_file.write_text("""
+        source_file.write_text(
+            """
 #include <stdio.h>
 
 int main() {
     printf("WebAssembly execution test\\n");
     return 42;
 }
-""")
+"""
+        )
 
         # Compile to WebAssembly
         output_file = tmp_path / "test.js"
@@ -189,7 +191,8 @@ int main() {
     def test_compile_to_html(self, tmp_path: Path):
         """Test compilation with HTML output."""
         source_file = tmp_path / "webapp.cpp"
-        source_file.write_text("""
+        source_file.write_text(
+            """
 #include <emscripten.h>
 #include <stdio.h>
 
@@ -197,7 +200,8 @@ int main() {
     printf("Hello from WebAssembly!\\n");
     return 0;
 }
-""")
+"""
+        )
 
         output_file = tmp_path / "webapp.html"
         result = subprocess.run(
@@ -261,14 +265,16 @@ class TestEmscriptenNodeJS:
         # This test verifies the automatic download behavior
         # Even without system Node.js, compilation should work
         source_file = tmp_path / "auto_download_test.cpp"
-        source_file.write_text("""
+        source_file.write_text(
+            """
 #include <stdio.h>
 
 int main() {
     printf("Bundled Node.js test\\n");
     return 0;
 }
-""")
+"""
+        )
 
         output_file = tmp_path / "auto_download_test.js"
         result = subprocess.run(
@@ -286,7 +292,8 @@ int main() {
         """Test that Emscripten compilation actually uses Node.js."""
         # Create a simple test that exercises Node.js during compilation
         source_file = tmp_path / "nodejs_test.cpp"
-        source_file.write_text("""
+        source_file.write_text(
+            """
 #include <emscripten.h>
 #include <stdio.h>
 
@@ -299,7 +306,8 @@ int main() {
     call_js();
     return 0;
 }
-""")
+"""
+        )
 
         output_file = tmp_path / "nodejs_test.js"
         result = subprocess.run(
@@ -355,14 +363,16 @@ class TestEmscriptenSccache:
         """Test compiling C++ to WebAssembly with sccache caching."""
         # Create test source file
         source_file = tmp_path / "hello_sccache.cpp"
-        source_file.write_text("""
+        source_file.write_text(
+            """
 #include <iostream>
 
 int main() {
     std::cout << "Hello from sccache + Emscripten!" << std::endl;
     return 0;
 }
-""")
+"""
+        )
 
         # Compile to WebAssembly with sccache
         output_file = tmp_path / "hello_sccache.js"

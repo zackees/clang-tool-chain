@@ -89,7 +89,8 @@ class TestRunCommand(unittest.TestCase):
         """Test running a program that takes arguments."""
         # Create a C++ file that echoes arguments
         cpp_file = self.temp_path / "echo_args.cpp"
-        cpp_file.write_text("""
+        cpp_file.write_text(
+            """
 #include <iostream>
 int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
@@ -97,7 +98,8 @@ int main(int argc, char* argv[]) {
     }
     return 0;
 }
-""")
+"""
+        )
 
         # Run with arguments
         result = subprocess.run(
@@ -115,7 +117,8 @@ int main(int argc, char* argv[]) {
         """Test running with compiler flags."""
         # Create a C++ file that uses C++17 features
         cpp_file = self.temp_path / "cpp17.cpp"
-        cpp_file.write_text("""
+        cpp_file.write_text(
+            """
 #include <iostream>
 #include <optional>
 int main() {
@@ -123,7 +126,8 @@ int main() {
     if (opt) std::cout << "HAS_VALUE" << std::endl;
     return 0;
 }
-""")
+"""
+        )
 
         # Run with C++17 flag
         result = subprocess.run(
@@ -290,13 +294,15 @@ int main() {
         # Cosmopolitan APE binaries detect platform at runtime, not compile-time
         # So we test a simple program that works cross-platform
         cpp_file = self.temp_path / "platform_test.cpp"
-        cpp_file.write_text("""
+        cpp_file.write_text(
+            """
 #include <iostream>
 int main() {
     std::cout << "APE_CROSS_PLATFORM_SUCCESS" << std::endl;
     return 0;
 }
-""")
+"""
+        )
 
         result = subprocess.run(
             ["clang-tool-chain-run", str(cpp_file)],
@@ -311,7 +317,8 @@ int main() {
     def test_with_inlined_directives(self):
         """Test that inlined build directives work with clang-tool-chain-run."""
         cpp_file = self.temp_path / "directives_test.cpp"
-        cpp_file.write_text("""
+        cpp_file.write_text(
+            """
 // @std: c++17
 #include <iostream>
 #include <optional>
@@ -320,7 +327,8 @@ int main() {
     if (opt) std::cout << "DIRECTIVES_WORK" << std::endl;
     return 0;
 }
-""")
+"""
+        )
 
         result = subprocess.run(
             ["clang-tool-chain-run", str(cpp_file)],

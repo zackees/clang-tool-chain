@@ -420,15 +420,19 @@ int main() { return 0; }
 
         # First source with pthread
         source1 = tmp_path / "main.cpp"
-        source1.write_text("""// @link: pthread
+        source1.write_text(
+            """// @link: pthread
 int main() { return 0; }
-""")
+"""
+        )
 
         # Second source with math lib
         source2 = tmp_path / "math_utils.cpp"
-        source2.write_text("""// @link: m
+        source2.write_text(
+            """// @link: m
 void compute() {}
-""")
+"""
+        )
 
         args = [str(source1), str(source2), "-o", "test.exe"]
         directive_args = get_directive_args_from_compiler_args(args)
@@ -441,8 +445,10 @@ void compute() {}
         from clang_tool_chain.execution.build import get_directive_args_from_compiler_args
 
         source_file = tmp_path / "simple.c"
-        source_file.write_text("""int main() { return 0; }
-""")
+        source_file.write_text(
+            """int main() { return 0; }
+"""
+        )
 
         args = [str(source_file), "-o", "simple"]
         directive_args = get_directive_args_from_compiler_args(args)
@@ -454,9 +460,11 @@ void compute() {}
         from clang_tool_chain.execution.build import get_directive_args_from_compiler_args
 
         source_file = tmp_path / "test.cpp"
-        source_file.write_text("""// @std: c++17
+        source_file.write_text(
+            """// @std: c++17
 int main() { return 0; }
-""")
+"""
+        )
 
         # Flags like -O2, -Wall should be skipped
         args = ["-O2", "-Wall", str(source_file), "-o", "test"]
@@ -482,9 +490,11 @@ int main() { return 0; }
         from clang_tool_chain.execution.build import get_directive_args_from_compiler_args
 
         source_file = tmp_path / "test.cpp"
-        source_file.write_text("""// @link: pthread
+        source_file.write_text(
+            """// @link: pthread
 int main() { return 0; }
-""")
+"""
+        )
 
         # Disable directives
         monkeypatch.setenv("CLANG_TOOL_CHAIN_NO_DIRECTIVES", "1")
@@ -499,10 +509,12 @@ int main() { return 0; }
         from clang_tool_chain.execution.build import get_directive_args_from_compiler_args
 
         source_file = tmp_path / "test.c"
-        source_file.write_text("""// @link: m
+        source_file.write_text(
+            """// @link: m
 // @std: c11
 int main() { return 0; }
-""")
+"""
+        )
 
         args = [str(source_file), "-o", "test"]
         directive_args = get_directive_args_from_compiler_args(args)
@@ -517,9 +529,11 @@ int main() { return 0; }
         extensions = [".c", ".cpp", ".cc", ".cxx", ".c++"]
         for ext in extensions:
             source_file = tmp_path / f"test{ext}"
-            source_file.write_text(f"""// @link: test_{ext[1:]}
+            source_file.write_text(
+                f"""// @link: test_{ext[1:]}
 int main() {{ return 0; }}
-""")
+"""
+            )
 
             args = [str(source_file), "-o", "test"]
             directive_args = get_directive_args_from_compiler_args(args)
@@ -532,14 +546,18 @@ int main() {{ return 0; }}
 
         # Both files link to pthread
         source1 = tmp_path / "a.cpp"
-        source1.write_text("""// @link: pthread
+        source1.write_text(
+            """// @link: pthread
 void a() {}
-""")
+"""
+        )
 
         source2 = tmp_path / "b.cpp"
-        source2.write_text("""// @link: pthread
+        source2.write_text(
+            """// @link: pthread
 void b() {}
-""")
+"""
+        )
 
         args = [str(source1), str(source2), "-o", "test"]
         directive_args = get_directive_args_from_compiler_args(args)

@@ -157,8 +157,12 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
         logger.debug("User already specified --target, skipping auto-injection")
 
     # Always add sysroot and stdlib (needed for both compilation and linking)
-    # Add -D_LIBCPP_HAS_THREAD_API_PTHREAD to ensure libc++ uses pthread threading
-    # This is required for MinGW-w64 where winpthreads provides pthread compatibility
+    #
+    # NOTE: We do NOT set -D_LIBCPP_HAS_THREAD_API_PTHREAD here.
+    # The Windows LLVM's libc++ __config_site already defines this macro (as 0),
+    # indicating it uses Windows native threading rather than pthread.
+    # Overriding this causes macro redefinition warnings and conflicts with
+    # the upstream LLVM configuration.
     #
     # INCLUDE PATH ORDERING RATIONALE:
     # We carefully order include paths to ensure Clang's headers take precedence over MinGW headers.
@@ -195,7 +199,6 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
         [
             f"--sysroot={sysroot_path}",
             "-stdlib=libc++",
-            "-D_LIBCPP_HAS_THREAD_API_PTHREAD",
             f"-I{cxx_include_path}",  # 1. libc++ headers (HIGH priority)
         ]
     )
