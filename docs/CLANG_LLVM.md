@@ -360,6 +360,177 @@ These functions are called by:
 - `execute_tool()` and `run_tool()` for direct compilation
 - `sccache_clang_main()` and `sccache_clang_cpp_main()` for sccache variants
 
+## Build Utilities
+
+clang-tool-chain provides convenient build utilities that simplify compilation and development workflows.
+
+### clang-tool-chain-build
+
+Simple build command for compiling single-file C/C++ programs.
+
+**Usage:**
+
+```bash
+# Build C file
+clang-tool-chain-build hello.c hello
+
+# Build C++ file
+clang-tool-chain-build hello.cpp myprogram
+
+# Build with optimization
+clang-tool-chain-build hello.cpp myprogram -O2
+
+# Build with additional flags
+clang-tool-chain-build main.cpp program -std=c++17 -Wall
+```
+
+**How it works:**
+- Automatically detects file extension (`.c` or `.cpp`)
+- Chooses appropriate compiler (C or C++)
+- Compiles to specified output name
+- Passes additional arguments to compiler
+
+### clang-tool-chain-build-run
+
+Compile and immediately execute your program in one step.
+
+**Usage:**
+
+```bash
+# Compile and run C++ program
+clang-tool-chain-build-run hello.cpp
+
+# With compiler flags
+clang-tool-chain-build-run hello.cpp -O2 -std=c++17
+
+# Pass arguments to the program
+clang-tool-chain-build-run hello.cpp -- arg1 arg2
+
+# Use caching for faster development iterations
+clang-tool-chain-build-run --cached hello.cpp
+
+# Combined: caching + compiler flags + program arguments
+clang-tool-chain-build-run --cached hello.cpp -O2 -- input.txt
+```
+
+**How it works:**
+- Takes a source file (e.g., `hello.cpp`)
+- Compiles to executable (e.g., `hello.exe` on Windows, `hello` on Unix)
+- Runs the executable immediately
+- With `--cached`: Skips compilation if source hasn't changed (SHA256 hash-based)
+
+**Caching Behavior:**
+
+The `--cached` flag enables compilation caching based on source file content:
+
+1. **First run:** Compiles source, stores SHA256 hash of file
+2. **Subsequent runs:** Checks if file hash changed
+3. **If unchanged:** Skips compilation, runs cached binary immediately
+4. **If changed:** Recompiles and updates cache
+
+**Cache location:** `.build_cache/` directory in current working directory
+
+**Example - TDD Workflow:**
+
+```bash
+# Edit test.cpp
+nano test.cpp
+
+# Run tests (compiles on first run)
+clang-tool-chain-build-run --cached test.cpp
+# Output: All tests passed!
+
+# Edit test.cpp again
+nano test.cpp
+
+# Run tests (recompiles because file changed)
+clang-tool-chain-build-run --cached test.cpp
+# Output: Compiling... All tests passed!
+
+# Run again without editing (uses cache)
+clang-tool-chain-build-run --cached test.cpp
+# Output: All tests passed! (instant - no compilation)
+```
+
+### Shebang Support (Unix/Linux/macOS)
+
+Make C++ files directly executable like shell scripts!
+
+**Using installed clang-tool-chain:**
+
+```cpp
+#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#include <iostream>
+
+int main() {
+    std::cout << "Hello from executable C++!" << std::endl;
+    return 0;
+}
+```
+
+```bash
+chmod +x script.cpp
+./script.cpp
+# Output: Hello from executable C++!
+```
+
+**Using uvx (recommended - zero installation):**
+
+```cpp
+#!/usr/bin/env -S uvx clang-tool-chain-build-run --cached
+#include <iostream>
+
+int main() {
+    std::cout << "Hello, World!" << std::endl;
+    return 0;
+}
+```
+
+```bash
+chmod +x hello.cpp
+./hello.cpp  # Auto-installs clang-tool-chain via uvx on first run!
+```
+
+**Why uvx is better:**
+- ✅ **Zero manual installation** - `uvx` automatically installs `clang-tool-chain` if not cached
+- ✅ **Works anywhere** - No need to be in a project directory
+- ✅ **Only dependency** - Just needs `uvx` in PATH (from `pip install uv`)
+- ✅ **Fast subsequent runs** - Package cached after first use
+- ✅ **Truly portable** - Share scripts with anyone who has `uvx`
+
+**Install uvx once:**
+```bash
+pip install uv  # Installs both uv and uvx
+```
+
+**Platform Support:**
+
+| Platform | How to Run |
+|----------|------------|
+| **Linux** | `chmod +x script.cpp && ./script.cpp` |
+| **macOS** | `chmod +x script.cpp && ./script.cpp` |
+| **Windows (Git Bash)** | `./script.cpp` (Git Bash handles shebang) |
+| **Windows (cmd/PowerShell)** | `clang-tool-chain-build-run --cached script.cpp` |
+
+### clang-tool-chain-run
+
+Run a compiled executable (primarily for internal use by build-run command).
+
+**Usage:**
+
+```bash
+# Run executable
+clang-tool-chain-run ./program
+
+# Run with arguments
+clang-tool-chain-run ./program arg1 arg2
+
+# Run executable in specific directory
+clang-tool-chain-run /path/to/program
+```
+
+**Note:** This command is mainly used internally by `clang-tool-chain-build-run`. For general use, just execute your program directly (`./program`).
+
 ## Entry Points and Wrapper Commands
 
 The package provides these entry points (defined in `pyproject.toml`):
@@ -371,8 +542,10 @@ The package provides these entry points (defined in `pyproject.toml`):
 - `clang-tool-chain-paths` → `paths:main` - Path utility
 - `clang-tool-chain-fetch-archive` → `downloads.fetch_and_archive:main` - Archive creation
 
-**Build Utility:**
+**Build Utilities:**
 - `clang-tool-chain-build` → `wrapper:build_main` - Simple C/C++ build tool
+- `clang-tool-chain-build-run` → `wrapper:build_run_main` - Build and run in one step (with caching)
+- `clang-tool-chain-run` → `wrapper:run_main` - Run compiled executable
 
 **Compiler Wrappers:**
 - `clang-tool-chain-c` → `wrapper:clang_main` - C compiler (GNU ABI on Windows)

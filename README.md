@@ -3,13 +3,14 @@
 **Run C++ like a shell script. Build once, run everywhere. The entire C/C++/WASM toolchain in one `pip install`.**
 
 ```cpp
-#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#!/usr/bin/env -S uvx clang-tool-chain-build-run --cached
 #include <iostream>
 int main() { std::cout << "Hello, World!\n"; }
 ```
 
 ```bash
 chmod +x hello.cpp && ./hello.cpp  # That's it. No makefiles, no build steps.
+# First run auto-installs clang-tool-chain via uvx (only needs: pip install uv)
 ```
 
 **Build Actually Portable Executables with Cosmopolitan:**
@@ -82,13 +83,14 @@ clang-tool-chain-cosmocpp hello.cpp -o hello.com
 ### 🚀 Executable C++ Scripts (Unix/Linux/macOS)
 
 ```cpp
-#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#!/usr/bin/env -S uvx clang-tool-chain-build-run --cached
 #include <iostream>
 int main() { std::cout << "Executable C++!\n"; }
 ```
 
 ```bash
-chmod +x hello.cpp && ./hello.cpp  # Compiles and runs!
+chmod +x hello.cpp && ./hello.cpp  # Compiles and runs! Auto-installs via uvx
+# Only requires: pip install uv (one-time setup)
 ```
 
 ### 🌐 WebAssembly (Complete Emscripten Pipeline)
@@ -121,33 +123,53 @@ node game.js
 
 ## 📑 Table of Contents
 
-- [Quick Start](#-quick-start---basic-compilation) - Compile in 30 seconds, CC/CXX override, Cosmopolitan APE, WebAssembly
-- [Inlined Build Directives](#-inlined-build-directives) - Self-contained source files with embedded build config
-- [Executable C++ Scripts](#-executable-c-scripts-shebang-support) - Shebang support for running C++ like shell scripts
-- [Command Quick Reference](#-command-quick-reference) - Common commands at a glance
-- [Installation](#-installation) - Installation options
-- [Why clang-tool-chain?](#-why-clang-tool-chain) - Features and comparisons
-- [Features](#-features) - Capabilities overview
-- [Usage](#-usage) - Detailed usage examples
-- [All Available Commands](#all-available-commands) - Complete command reference
-- [Examples](#-examples) - Code examples
-- [CI/CD Integration](#-cicd-integration) - GitHub Actions, GitLab CI, Docker
-- [Platform Support Matrix](#-platform-support-matrix) - Supported platforms
-- [Configuration](#️-configuration) - Environment variables
-- [Performance](#-performance) - Compilation and download speed
-- [Windows Target Selection](#-windows-target-selection) - GNU vs MSVC ABI
-- [Windows DLL Deployment](#-windows-dll-deployment) - Automatic DLL handling
-- [How It Works](#-how-it-works) - Architecture overview
-- [Additional Utilities](#-additional-utilities) - Diagnostic tools (test, fetch, paths)
-- [Advanced Topics](#-advanced-topics) - Offline mode, version pinning
-- [Troubleshooting](#-troubleshooting) - Common issues
-- [FAQ](#-faq) - Frequently asked questions
-- [Security](#-security) - Checksum verification and trust model
-- [Development](#-development) - Dev setup and testing
-- [Contributing](#-contributing) - How to add new tools
-- [Maintainer Tools](#️-maintainer-tools) - Archive creation and binary packaging
-- [Detailed Documentation](#-detailed-documentation) - Links to all docs
-- [Test Matrix](#-test-matrix) - Comprehensive test coverage across all platforms
+### Getting Started
+- [Quick Start](#-quick-start---basic-compilation)
+- [Installation](#-installation)
+- [Why clang-tool-chain?](#-why-clang-tool-chain)
+- [Test Matrix](#-test-matrix)
+
+### Tools by Category
+- [Clang/LLVM Toolchain](#️-clangllvm-toolchain) - C/C++ compilation (17 commands)
+- [Build Utilities](#-build-utilities) - build, build-run, run (3 commands)
+- [Binary Utilities](#-binary-utilities) - ar, nm, objdump, strip, readelf (11 commands)
+- [Format & Lint](#-format--lint) - clang-format, clang-tidy (2 commands)
+- [IWYU](#-iwyu-include-what-you-use) - Include analyzer (3 commands)
+- [LLDB](#-lldb-debugger) - Debugger with Python support (2 commands)
+- [Emscripten](#-emscripten-webassembly) - WebAssembly compiler (5 commands)
+- [Cosmopolitan](#-cosmopolitan-actually-portable-executables) - APE compiler (2 commands)
+- [Management CLI](#️-management-cli) - install, purge, info, test (6 commands)
+
+### Cross-Cutting Features
+- [Inlined Build Directives](#-inlined-build-directives)
+- [Executable C++ Scripts](#-executable-c-scripts-shebang-support)
+- [Windows DLL Deployment](#-windows-dll-deployment)
+- [sccache Integration](#-sccache-integration)
+
+### Platform & Configuration
+- [Platform Support Matrix](#-platform-support-matrix)
+- [Windows Target Selection](#-windows-target-selection)
+- [Configuration](#️-configuration)
+- [Performance](#-performance)
+
+### Integration & Examples
+- [CI/CD Integration](#-cicd-integration)
+- [CMake Integration](#cmake-integration)
+- [Examples](#-examples)
+
+### Reference & Help
+- [Troubleshooting](#-troubleshooting)
+- [FAQ](#-faq)
+- [Security](#-security)
+- [Advanced Topics](#-advanced-topics)
+
+### Development
+- [Development](#-development)
+- [Contributing](#-contributing)
+- [Maintainer Tools](#️-maintainer-tools)
+
+### Documentation
+- [Detailed Documentation](#-detailed-documentation)
 
 ---
 
@@ -180,6 +202,899 @@ Comprehensive test coverage across all platforms and tool categories:
 
 ---
 
+## 🛠️ Clang/LLVM Toolchain
+
+> Modern C/C++ compiler with automatic SDK detection and cross-platform consistency
+> 17 commands • Auto SDK detection • GNU/MSVC ABI • sccache support • Directives support
+
+### Quick Examples
+
+```bash
+# Basic C/C++ compilation
+clang-tool-chain-c hello.c -o hello
+clang-tool-chain-cpp hello.cpp -o hello
+
+# Windows MSVC ABI (opt-in)
+clang-tool-chain-cpp-msvc main.cpp -o program.exe
+
+# With sccache compilation caching
+clang-tool-chain-sccache-cpp main.cpp -o main
+
+# Override CC/CXX for build systems
+export CC=clang-tool-chain-c
+export CXX=clang-tool-chain-cpp
+cmake -B build && cmake --build build
+```
+
+### Available Commands
+
+| Command | Description | Platform Notes |
+|---------|-------------|----------------|
+| `clang-tool-chain-c` | C compiler | GNU ABI default on Windows |
+| `clang-tool-chain-cpp` | C++ compiler | GNU ABI default on Windows |
+| `clang-tool-chain-c-msvc` | C compiler (MSVC ABI) | Windows only, requires Windows SDK |
+| `clang-tool-chain-cpp-msvc` | C++ compiler (MSVC ABI) | Windows only, requires Windows SDK |
+| `clang-tool-chain-sccache-c` | C compiler with sccache | Requires sccache in PATH |
+| `clang-tool-chain-sccache-cpp` | C++ compiler with sccache | Requires sccache in PATH |
+| `clang-tool-chain-sccache-c-msvc` | C compiler (MSVC) with sccache | Windows only |
+| `clang-tool-chain-sccache-cpp-msvc` | C++ compiler (MSVC) with sccache | Windows only |
+| `clang-tool-chain-ld` | LLVM linker (lld) | Uses lld-link on Windows |
+| `clang-tool-chain-sccache` | sccache management | --show-stats, --start-server, etc. |
+
+### Platform Support
+
+| Platform | Architecture | LLVM Version | Archive Size | Installed Size | Linker |
+|----------|--------------|--------------|--------------|----------------|--------|
+| Windows  | x86_64       | 21.1.5       | ~71 MB*      | ~350 MB        | lld-link |
+| Linux    | x86_64       | 21.1.5       | ~87 MB       | ~350 MB        | lld (ELF) |
+| Linux    | ARM64        | 21.1.5       | ~91 MB       | ~340 MB        | lld (ELF) |
+| macOS    | x86_64       | 19.1.7       | ~77 MB       | ~300 MB        | ld64 (system) |
+| macOS    | ARM64        | 21.1.6       | ~71 MB       | ~285 MB        | ld64 (system) |
+
+\* Windows downloads ~90 MB total (71 MB LLVM + 19 MB MinGW-w64 sysroot for GNU ABI)
+
+### Key Features
+
+- **Automatic SDK Detection (macOS)** - Finds Xcode Command Line Tools SDK via `xcrun` automatically
+- **GNU ABI by Default (Windows)** - Cross-platform consistency with integrated MinGW headers (no separate download)
+- **MSVC ABI Support (Windows)** - Opt-in MSVC target for Windows-specific development
+- **Inlined Build Directives** - Embed build flags in source files (`@link`, `@std`, `@cflags`, etc.)
+- **sccache Integration** - Compilation caching for faster rebuilds
+- **Automatic lld Linker** - Fast, consistent linker on Linux/Windows (system linker on macOS)
+
+### Environment Variables
+
+- `CLANG_TOOL_CHAIN_NO_SYSROOT=1` - Disable automatic macOS SDK detection
+- `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` - Use system linker instead of lld (Linux only)
+- `CLANG_TOOL_CHAIN_NO_DIRECTIVES=1` - Disable inlined build directives parsing
+- `CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE=1` - Show parsed directives (debug)
+
+### Common Workflows
+
+**CMake Integration:**
+```bash
+export CC=clang-tool-chain-c
+export CXX=clang-tool-chain-cpp
+cmake -B build && cmake --build build
+```
+
+**Make Integration:**
+```bash
+export CC=clang-tool-chain-c
+export CXX=clang-tool-chain-cpp
+make
+```
+
+**Autotools Integration:**
+```bash
+export CC=clang-tool-chain-c
+export CXX=clang-tool-chain-cpp
+./configure && make
+```
+
+**Windows MSVC Development:**
+```bash
+# Requires Visual Studio or Windows SDK
+clang-tool-chain-cpp-msvc main.cpp -o program.exe
+
+# Or set target explicitly
+clang-tool-chain-cpp --target=x86_64-pc-windows-msvc main.cpp -o program.exe
+```
+
+### Documentation
+
+See [Clang/LLVM Toolchain Documentation](docs/CLANG_LLVM.md) for:
+- macOS SDK detection details
+- Windows GNU vs MSVC ABI comparison
+- sccache setup and configuration
+- Platform-specific linker behavior
+- Sanitizer support (ASAN, UBSAN)
+
+---
+
+## 🔨 Build Utilities
+
+> Simple build tools for quick compilation and TDD workflows
+> 3 commands • Caching support • Shebang support • Auto-run
+
+### Quick Examples
+
+```bash
+# Build and run in one step
+clang-tool-chain-build-run hello.cpp
+
+# Build and run with caching (faster iterations)
+clang-tool-chain-build-run --cached hello.cpp
+
+# Executable C++ scripts (Unix/Linux/macOS)
+#!/usr/bin/env -S uvx clang-tool-chain-build-run --cached
+#include <iostream>
+int main() { std::cout << "Hello!\n"; }
+
+chmod +x script.cpp && ./script.cpp
+```
+
+### Available Commands
+
+| Command | Description | Key Feature |
+|---------|-------------|-------------|
+| `clang-tool-chain-build` | Build C/C++ files | Simple compilation wrapper |
+| `clang-tool-chain-build-run` | Build and run executable | SHA256-based caching with `--cached` |
+| `clang-tool-chain-run` | Run executable | Internal use by build-run |
+
+### Key Features
+
+- **SHA256-based Caching** - `--cached` flag skips recompilation if source unchanged
+- **Shebang Support** - Make C++ files directly executable with `#!/usr/bin/env`
+- **Zero-Install with uvx** - Scripts auto-install via `uvx` (only needs `pip install uv`)
+- **Instant Iteration** - Perfect for TDD and quick prototyping
+
+### Common Workflows
+
+**TDD Workflow:**
+```bash
+# Write tests in test.cpp
+clang-tool-chain-build-run --cached test.cpp
+# Output: All tests passed! (compiles on first run)
+
+# Edit test.cpp
+clang-tool-chain-build-run --cached test.cpp
+# Output: Compiling... All tests passed! (recompiles after changes)
+
+# Run again without editing
+clang-tool-chain-build-run --cached test.cpp
+# Output: All tests passed! (instant - cached)
+```
+
+**Executable Scripts (Recommended - Zero Install):**
+```cpp
+#!/usr/bin/env -S uvx clang-tool-chain-build-run --cached
+#include <iostream>
+
+int main() {
+    std::cout << "Executable C++!" << std::endl;
+    return 0;
+}
+```
+
+```bash
+chmod +x script.cpp
+./script.cpp  # Auto-installs clang-tool-chain via uvx!
+```
+
+**Pass Arguments to Program:**
+```bash
+# Arguments after -- go to the program
+clang-tool-chain-build-run hello.cpp -- arg1 arg2
+
+# Combined with caching
+clang-tool-chain-build-run --cached process.cpp -- input.txt
+```
+
+### Platform Support
+
+| Platform | Shebang Support | Command |
+|----------|----------------|---------|
+| Linux    | ✅ Yes | `chmod +x script.cpp && ./script.cpp` |
+| macOS    | ✅ Yes | `chmod +x script.cpp && ./script.cpp` |
+| Windows (Git Bash) | ✅ Yes | `./script.cpp` |
+| Windows (cmd/PowerShell) | ❌ No | `clang-tool-chain-build-run --cached script.cpp` |
+
+### Documentation
+
+See [Clang/LLVM Toolchain Documentation - Build Utilities](docs/CLANG_LLVM.md#build-utilities) for:
+- Detailed caching behavior
+- Shebang setup instructions
+- Cache location and management
+- Platform-specific notes
+
+---
+
+## 🔧 Binary Utilities
+
+> LLVM binary manipulation tools for archives, symbols, and disassembly
+> 11 commands • ELF/PE/Mach-O support • Symbol inspection • Static libraries
+
+### Quick Examples
+
+```bash
+# Create static library
+clang-tool-chain-ar rcs libmylib.a obj1.o obj2.o
+
+# List symbols in binary
+clang-tool-chain-nm program
+
+# Disassemble executable
+clang-tool-chain-objdump -d program
+
+# Strip debug symbols for release
+clang-tool-chain-strip program -o program.stripped
+```
+
+### Available Commands
+
+| Command | Tool | Description |
+|---------|------|-------------|
+| `clang-tool-chain-ar` | `llvm-ar` | Archive/library creator |
+| `clang-tool-chain-ranlib` | `llvm-ranlib` | Archive index generator |
+| `clang-tool-chain-nm` | `llvm-nm` | Symbol table viewer |
+| `clang-tool-chain-objdump` | `llvm-objdump` | Object file dumper/disassembler |
+| `clang-tool-chain-strip` | `llvm-strip` | Symbol stripper |
+| `clang-tool-chain-objcopy` | `llvm-objcopy` | Object file copier/modifier |
+| `clang-tool-chain-readelf` | `llvm-readelf` | ELF file reader (Linux) |
+| `clang-tool-chain-as` | `llvm-as` | LLVM assembler |
+| `clang-tool-chain-dis` | `llvm-dis` | LLVM disassembler |
+| `clang-tool-chain-ld` | `lld` | LLVM linker |
+| `clang-tool-chain-wasm-ld` | `wasm-ld` | WebAssembly linker |
+
+### Key Features
+
+- **Cross-Platform Binary Format Support** - Works with ELF (Linux), PE/COFF (Windows), Mach-O (macOS)
+- **Static Library Creation** - Create `.a` archives with symbol tables
+- **Symbol Inspection** - View exported symbols, detect missing dependencies
+- **Binary Manipulation** - Strip symbols, modify sections, extract data
+- **Disassembly** - View generated assembly code and machine instructions
+
+### Common Workflows
+
+**Creating Static Library:**
+```bash
+# Compile source files
+clang-tool-chain-c -c math.c -o math.o
+clang-tool-chain-c -c string.c -o string.o
+
+# Create library
+clang-tool-chain-ar rcs libutils.a math.o string.o
+
+# Link program against library
+clang-tool-chain-c main.c -L. -lutils -o program
+```
+
+**Inspecting Dependencies:**
+```bash
+# Show undefined symbols (missing dependencies)
+clang-tool-chain-nm --undefined-only program
+
+# Show what library provides
+clang-tool-chain-nm --defined-only libmylib.a
+```
+
+**Release Builds:**
+```bash
+# Compile with debug info
+clang-tool-chain-cpp -g -O2 program.cpp -o program
+
+# Strip for release (reduce size by ~60-70%)
+clang-tool-chain-strip --strip-debug program -o program.release
+```
+
+### Platform Support
+
+| Format | Platform | Tools |
+|--------|----------|-------|
+| **ELF** | Linux | All tools (full support) |
+| **PE/COFF** | Windows | Most tools (llvm-readelf limited) |
+| **Mach-O** | macOS | Most tools (llvm-readelf limited) |
+
+### Documentation
+
+See [Binary Utilities Documentation](docs/BINARY_UTILS.md) for:
+- Detailed command reference with all flags
+- Platform-specific notes (ELF vs PE vs Mach-O)
+- Archive creation and management
+- Symbol inspection and debugging
+- Binary stripping and size optimization
+
+---
+
+## ✨ Format & Lint
+
+> Code formatting and static analysis for consistent code quality
+> 2 commands • Auto-formatting • Style enforcement • Bug detection
+
+### Quick Examples
+
+```bash
+# Format code in-place
+clang-tool-chain-format -i src/*.cpp include/*.h
+
+# Check formatting (CI/CD)
+clang-tool-chain-format --dry-run --Werror file.cpp
+
+# Run static analysis
+clang-tool-chain-tidy file.cpp -- -std=c++17
+
+# Auto-fix issues
+clang-tool-chain-tidy -fix file.cpp -- -std=c++17
+```
+
+### Available Commands
+
+| Command | Tool | Description |
+|---------|------|-------------|
+| `clang-tool-chain-format` | `clang-format` | Code formatter (C/C++/Objective-C) |
+| `clang-tool-chain-tidy` | `clang-tidy` | Static analyzer and linter |
+
+### Key Features
+
+- **Automatic Code Formatting** - Enforce consistent style across codebase
+- **Built-in Style Presets** - LLVM, Google, Chromium, Mozilla, WebKit, Microsoft, GNU
+- **Configuration Files** - `.clang-format` and `.clang-tidy` for project-wide settings
+- **IDE Integration** - VSCode, CLion, Vim, Emacs plugins
+- **CI/CD Ready** - Pre-commit hooks and GitHub Actions examples
+- **Auto-Fix Capabilities** - clang-tidy can automatically fix many issues
+
+### Common Workflows
+
+**Format Entire Project:**
+```bash
+# Format all C/C++ files
+find . -name '*.cpp' -o -name '*.h' | xargs clang-tool-chain-format -i
+
+# Format git-tracked files only
+git ls-files '*.cpp' '*.h' | xargs clang-tool-chain-format -i
+```
+
+**Static Analysis:**
+```bash
+# Check for bugs and modernization opportunities
+clang-tool-chain-tidy -checks='-*,bugprone-*,modernize-*' file.cpp -- -std=c++17
+
+# Performance checks
+clang-tool-chain-tidy -checks='-*,performance-*' file.cpp -- -std=c++17
+```
+
+**CI/CD Integration:**
+```yaml
+# GitHub Actions
+- name: Check formatting
+  run: clang-tool-chain-format --dry-run --Werror src/*.cpp
+
+- name: Run linter
+  run: clang-tool-chain-tidy src/*.cpp -- -std=c++17
+```
+
+### Style Presets
+
+| Style | Description | Use Case |
+|-------|-------------|----------|
+| **LLVM** | LLVM coding standards | Default, balanced |
+| **Google** | Google C++ Style Guide | Industry standard |
+| **Chromium** | Chromium project | Google-based |
+| **Mozilla** | Mozilla coding style | Firefox |
+| **WebKit** | WebKit coding style | Safari/WebKit |
+| **Microsoft** | Visual Studio style | Windows dev |
+| **GNU** | GNU coding standards | GCC projects |
+
+### Documentation
+
+See [Format & Lint Documentation](docs/FORMAT_LINT.md) for:
+- Complete clang-format configuration reference
+- clang-tidy check categories and naming conventions
+- IDE integration guides (VSCode, CLion, Vim, Emacs)
+- CI/CD integration examples (GitHub Actions, GitLab CI)
+- Pre-commit hook setup
+
+---
+
+## 📐 IWYU (Include What You Use)
+
+> Analyze and optimize C/C++ #include directives for faster build times
+> 3 commands • Dependency analysis • Auto-fix includes • Build time optimization
+
+### Quick Examples
+
+```bash
+# Analyze includes in source file
+clang-tool-chain-iwyu myfile.cpp -- -std=c++17
+
+# With compiler flags
+clang-tool-chain-iwyu myfile.cpp -- -I./include -DDEBUG
+
+# Auto-fix includes
+clang-tool-chain-iwyu myfile.cpp -- -std=c++17 | clang-tool-chain-fix-includes
+
+# Analyze entire project
+clang-tool-chain-iwyu-tool -p build/
+```
+
+### Available Commands
+
+| Command | Tool | Description |
+|---------|------|-------------|
+| `clang-tool-chain-iwyu` | `include-what-you-use` | Include analyzer |
+| `clang-tool-chain-iwyu-tool` | `iwyu_tool.py` | Batch runner for projects |
+| `clang-tool-chain-fix-includes` | `fix_includes.py` | Auto-fix includes based on IWYU output |
+
+### What IWYU Does
+
+- **Detects unnecessary includes** - Find and remove unused headers
+- **Suggests missing includes** - Add headers for symbols you use
+- **Recommends forward declarations** - Replace full includes where possible
+- **Reduces build times** - Fewer includes = faster compilation
+- **Improves modularity** - Clear header dependencies
+
+### Key Features
+
+- **Deep Analysis** - Understands what symbols are actually used in code
+- **Automatic Fixes** - `fix-includes` applies recommendations automatically
+- **Build System Integration** - Works with CMake `compile_commands.json`
+- **Configurable** - `.iwyu_mappings` for custom rules
+
+### Common Workflows
+
+**Analyze Single File:**
+```bash
+# Get recommendations
+clang-tool-chain-iwyu src/main.cpp -- -std=c++17 -Iinclude
+
+# Save output for review
+clang-tool-chain-iwyu src/main.cpp -- -std=c++17 > iwyu.out
+cat iwyu.out
+```
+
+**Auto-Fix Includes:**
+```bash
+# Pipe directly to fix-includes
+clang-tool-chain-iwyu myfile.cpp -- -std=c++17 | clang-tool-chain-fix-includes
+
+# Or review first
+clang-tool-chain-iwyu myfile.cpp -- -std=c++17 > iwyu.out
+cat iwyu.out  # Review recommendations
+clang-tool-chain-fix-includes < iwyu.out
+```
+
+**Full Project Scan:**
+```bash
+# Generate compile_commands.json with CMake
+cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+# Run IWYU on all files
+clang-tool-chain-iwyu-tool -p build/
+
+# Or specific directory
+clang-tool-chain-iwyu-tool -p build/ src/
+```
+
+### Example Output
+
+```
+src/main.cpp should add these lines:
+#include <vector>
+
+src/main.cpp should remove these lines:
+- #include <iostream>  // lines 5-5
+- #include <string>    // lines 6-6
+
+The full include-list for src/main.cpp:
+#include <vector>
+---
+```
+
+### Documentation
+
+See [IWYU Documentation](docs/IWYU.md) for:
+- Complete usage guide
+- Integration with CMake and other build systems
+- Custom mapping files
+- CI/CD integration
+- Troubleshooting include issues
+
+---
+
+## 🐛 LLDB Debugger
+
+> LLVM debugger for interactive debugging and crash analysis
+> 2 commands • Python scripting • Crash dumps • Full backtraces
+
+### Quick Examples
+
+```bash
+# Interactive debugging
+clang-tool-chain-cpp -g program.cpp -o program
+clang-tool-chain-lldb program
+
+# Analyze crash dump
+clang-tool-chain-lldb -- program core.dump
+
+# Check Python support
+clang-tool-chain-lldb-check-python
+```
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-lldb` | LLVM debugger (interactive and batch mode) |
+| `clang-tool-chain-lldb-check-python` | Verify Python scripting support |
+
+### Platform Support
+
+| Platform | Architecture | LLDB Version | Python Support | Status |
+|----------|-------------|--------------|----------------|--------|
+| Windows  | x86_64      | 21.1.5       | ✅ Ready (workflow available) | ⏳ Build Pending |
+| Linux    | x86_64      | 21.1.5       | ✅ Full (Python 3.10 ready) | ⏳ Wrapper Ready, Archives Pending |
+| Linux    | ARM64       | 21.1.5       | ✅ Full (Python 3.10 ready) | ⏳ Wrapper Ready, Archives Pending |
+| macOS    | x86_64      | 21.1.6       | ⏳ Planned | ⏳ Pending |
+| macOS    | ARM64       | 21.1.6       | ⏳ Planned | ⏳ Pending |
+
+### Key Features
+
+- **Interactive Debugging** - Set breakpoints, step through code, inspect variables
+- **Crash Analysis** - Analyze core dumps and crash reports
+- **Python Scripting** - Full LLDB Python API support (Python 3.10 bundled on Windows/Linux)
+- **Full Backtraces** - Complete stack traces with "bt all" command
+- **Advanced Variable Inspection** - Deep inspection of complex data structures
+
+### Common Workflows
+
+**Interactive Debugging:**
+```bash
+# Compile with debug symbols
+clang-tool-chain-cpp -g -O0 program.cpp -o program
+
+# Start debugger
+clang-tool-chain-lldb program
+
+# Inside LLDB:
+(lldb) breakpoint set --name main
+(lldb) run arg1 arg2
+(lldb) next
+(lldb) print variable_name
+(lldb) bt
+```
+
+**Crash Dump Analysis:**
+```bash
+# Program crashed and produced core dump
+clang-tool-chain-lldb --program
+
+ -- core.dump
+
+# Inside LLDB:
+(lldb) bt all  # Full backtrace
+(lldb) frame select 0
+(lldb) print *this
+```
+
+**Python Scripting (Advanced):**
+```bash
+# Check Python support
+clang-tool-chain-lldb-check-python
+
+# Use Python scripts in LLDB
+clang-tool-chain-lldb program
+(lldb) script import my_lldb_script
+(lldb) script my_lldb_script.analyze_heap()
+```
+
+### Environment Variables
+
+- `PYTHONPATH` - Automatically configured for LLDB Python module
+- `PYTHONHOME` - Automatically configured to bundled Python 3.10 (Windows/Linux)
+
+### Documentation
+
+See [LLDB Documentation](docs/LLDB.md) for:
+- Complete LLDB command reference
+- Python integration and scripting guide
+- Crash dump analysis techniques
+- Platform-specific notes and limitations
+
+---
+
+## 🌐 Emscripten (WebAssembly)
+
+> Compile C/C++ to WebAssembly with bundled Node.js runtime
+> 5 commands • WASM compilation • Bundled Node.js • sccache support
+
+### Quick Examples
+
+```bash
+# Compile C to WebAssembly
+clang-tool-chain-emcc hello.c -o hello.js
+
+# Compile C++ to WebAssembly
+clang-tool-chain-empp hello.cpp -o hello.js
+
+# Run with bundled Node.js
+node hello.js
+
+# With sccache for faster rebuilds
+clang-tool-chain-sccache-emcc main.c -o main.js
+```
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-emcc` | Emscripten C compiler (C → WASM) |
+| `clang-tool-chain-empp` | Emscripten C++ compiler (C++ → WASM) |
+| `clang-tool-chain-emar` | Emscripten archiver (create WASM libraries) |
+| `clang-tool-chain-sccache-emcc` | Emscripten C compiler with sccache |
+| `clang-tool-chain-sccache-empp` | Emscripten C++ compiler with sccache |
+
+### Platform Support
+
+| Platform | Architecture | Emscripten Version | Node.js | Status |
+|----------|-------------|-------------------|---------|--------|
+| Windows  | x86_64      | 4.0.19            | Bundled | ✅ Available |
+| macOS    | x86_64      | 4.0.19            | Bundled | ✅ Available |
+| macOS    | ARM64       | 4.0.19            | Bundled | ✅ Available |
+| Linux    | x86_64      | 4.0.21            | Bundled | ✅ Available |
+| Linux    | ARM64       | 4.0.21            | Bundled | ✅ Available |
+
+### Key Features
+
+- **Complete Emscripten SDK** - Full toolchain for WebAssembly compilation
+- **Bundled Node.js** - No separate Node.js installation needed
+- **sccache Support** - Compilation caching for faster rebuilds
+- **Separate LLVM** - Emscripten uses its own LLVM (LLVM 22 for Em 4.0.19), independent of main clang
+
+### Common Workflows
+
+**Compile and Run WebAssembly:**
+```bash
+# Compile game/app to WASM
+clang-tool-chain-emcc game.c -o game.js
+
+# Run with bundled Node.js
+node game.js
+```
+
+**Create WebAssembly Library:**
+```bash
+# Compile library components
+clang-tool-chain-emcc -c lib.c -o lib.o
+clang-tool-chain-emcc -c utils.c -o utils.o
+
+# Create archive
+clang-tool-chain-emar rcs libmylib.a lib.o utils.o
+```
+
+**Optimized Build:**
+```bash
+# Maximum optimization for production
+clang-tool-chain-emcc -O3 engine.c -o engine.js
+
+# With sccache for faster rebuilds during development
+clang-tool-chain-sccache-empp -O2 engine.cpp -o engine.js
+```
+
+### Documentation
+
+See [Emscripten Documentation](docs/EMSCRIPTEN.md) and [Node.js Integration](docs/NODEJS.md) for:
+- Complete Emscripten usage guide
+- WebAssembly optimization techniques
+- Node.js bundling details
+- Browser integration
+- sccache configuration
+
+---
+
+## 🌍 Cosmopolitan (Actually Portable Executables)
+
+> Build binaries that run natively on Windows, Linux, macOS, FreeBSD - unchanged
+> 2 commands • Single binary • No runtime deps • Universal compatibility
+
+### Quick Examples
+
+```bash
+# Install cosmocc toolchain
+clang-tool-chain install cosmocc
+
+# Build portable executable
+clang-tool-chain-cosmocc hello.c -o hello.com
+clang-tool-chain-cosmocpp hello.cpp -o hello.com
+
+# Same binary works everywhere!
+./hello.com  # Linux/macOS/FreeBSD/NetBSD/OpenBSD
+# On Windows: hello.com (runs natively)
+```
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-cosmocc` | Cosmopolitan C compiler (APE) |
+| `clang-tool-chain-cosmocpp` | Cosmopolitan C++ compiler (APE) |
+
+### Platform Support
+
+| Platform | Architecture | Cosmocc Version | Status |
+|----------|-------------|-----------------|--------|
+| Windows  | x86_64      | 4.0.2           | ✅ Available |
+| Linux    | x86_64      | 4.0.2           | ✅ Available |
+| Linux    | ARM64       | 4.0.2           | ✅ Available |
+| macOS    | x86_64      | 4.0.2           | ✅ Available |
+| macOS    | ARM64       | 4.0.2           | ✅ Available |
+
+**Output runs on:** Windows, Linux, macOS, FreeBSD, NetBSD, OpenBSD (x86_64 only)
+
+### About Cosmopolitan Libc
+
+Cosmopolitan Libc makes C a build-once run-anywhere language. Executables are called "Actually Portable Executables" (APE) and run natively on multiple operating systems without any runtime dependencies or modifications.
+
+### Key Features
+
+- **Single Binary** - One executable runs on all supported platforms
+- **No Runtime Dependencies** - Self-contained, no DLLs or shared libraries needed
+- **Native Execution** - Not an emulator or VM, runs natively via polyglot format
+- **Small Size** - Minimal overhead compared to standard executables
+- **Open Source** - Based on Justine Tunney's Cosmopolitan Libc
+
+### Common Workflows
+
+**Build Portable Tool:**
+```bash
+# Write normal C/C++ code
+cat > hello.c << 'EOF'
+#include <stdio.h>
+int main() {
+    printf("Hello from anywhere!\n");
+    return 0;
+}
+EOF
+
+# Compile to APE
+clang-tool-chain-cosmocc hello.c -o hello.com
+
+# Test on multiple platforms
+./hello.com  # Works on Linux, macOS, Windows, BSD!
+```
+
+**Cross-Platform Utility:**
+```bash
+# Build command-line tool
+clang-tool-chain-cosmocc -O2 mytool.c -o mytool.com
+
+# Distribute single binary
+# Users on any platform can run it directly!
+```
+
+### Documentation
+
+See [Cosmopolitan Documentation](docs/COSMOCC.md) and [Cosmopolitan Libc Project](https://github.com/jart/cosmopolitan) for:
+- Complete cosmocc usage guide
+- APE format details
+- Limitations and compatibility
+- Advanced features
+
+---
+
+## ⚙️ Management CLI
+
+> Toolchain installation, verification, and maintenance commands
+> 6 commands • Pre-install • PATH management • Diagnostics • Cleanup
+
+### Quick Examples
+
+```bash
+# Show installation info
+clang-tool-chain info
+
+# Run diagnostic tests
+clang-tool-chain test
+
+# Pre-install Clang toolchain
+clang-tool-chain install clang
+
+# Add Clang to system PATH
+clang-tool-chain install clang-env
+
+# Remove everything
+clang-tool-chain purge
+```
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain info` | Show installation details and paths |
+| `clang-tool-chain test` | Run 7 diagnostic tests |
+| `clang-tool-chain install <tool>` | Pre-install toolchain components |
+| `clang-tool-chain uninstall <tool>` | Remove from PATH (keeps files) |
+| `clang-tool-chain purge` | Delete all toolchains (with confirmation) |
+| `clang-tool-chain list-tools` | Show all available wrapper commands |
+| `clang-tool-chain version <tool>` | Show version of specific tool |
+| `clang-tool-chain path [tool]` | Show path to binaries directory |
+| `clang-tool-chain package-version` | Show package and LLVM versions |
+
+### Key Features
+
+- **Auto-Download** - Toolchains download automatically on first use
+- **PATH Management** - Add/remove tools from system PATH
+- **Diagnostics** - Verify installation with test suite
+- **Cleanup** - Remove all toolchains with single command
+
+### Common Workflows
+
+**Initial Setup:**
+```bash
+# Install package
+pip install clang-tool-chain
+
+# Verify installation
+clang-tool-chain info
+clang-tool-chain test
+
+# Pre-install core toolchain (optional)
+clang-tool-chain install clang
+```
+
+**Add to System PATH:**
+```bash
+# Add Clang to PATH (use clang directly without clang-tool-chain- prefix)
+clang-tool-chain install clang-env
+
+# Restart terminal, then use directly
+clang --version
+clang++ main.cpp -o program
+```
+
+**Cleanup:**
+```bash
+# Remove all downloaded toolchains
+clang-tool-chain purge
+
+# Or non-interactive (for scripts)
+clang-tool-chain purge --yes
+```
+
+**Diagnostics:**
+```bash
+# Run all tests (7 diagnostic checks)
+clang-tool-chain-test
+# Or: clang-tool-chain test
+
+# Show installation paths
+clang-tool-chain path
+
+# Show specific tool path
+clang-tool-chain path clang
+```
+
+### Installation Targets
+
+| Target | Description | Downloads |
+|--------|-------------|-----------|
+| `clang` | Pre-install Clang/LLVM | ~71-91 MB |
+| `clang-env` | Add Clang to PATH | Auto-installs if needed |
+| `iwyu` | Pre-install IWYU | ~53-57 MB (separate) |
+| `emscripten` | Pre-install Emscripten | ~1.4 GB (includes Node.js) |
+| `cosmocc` | Pre-install Cosmopolitan | ~40-60 MB |
+
+**Note:** Most tools auto-download on first use, so `install` is optional.
+
+### Documentation
+
+See main README sections:
+- [Installation](#-installation) - Package installation options
+- [Configuration](#️-configuration) - Environment variables
+- [Troubleshooting](#-troubleshooting) - Common issues
+
+---
+
 ## 🚀 Executable C++ Scripts (Shebang Support)
 
 **Run C++ files directly like shell scripts!** With clang-tool-chain, you can make C++ files executable and run them without a separate compile step.
@@ -189,7 +1104,7 @@ Comprehensive test coverage across all platforms and tool categories:
 Add a shebang line to your C++ file:
 
 ```cpp
-#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#!/usr/bin/env -S uvx clang-tool-chain-build-run --cached
 #include <iostream>
 
 int main() {
@@ -209,7 +1124,9 @@ chmod +x script.cpp
 ./script.cpp
 ```
 
-**That's it!** The first run compiles the code, subsequent runs use the cached binary (thanks to `--cached`).
+**That's it!** The first run auto-installs clang-tool-chain via `uvx` and compiles the code. Subsequent runs use the cached binary (thanks to `--cached`).
+
+**Requirements:** Just `uvx` in PATH (install once: `pip install uv`)
 
 ### Why This Is Incredible
 
@@ -221,7 +1138,7 @@ chmod +x script.cpp
 ### Example: Inline Tests
 
 ```cpp
-#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#!/usr/bin/env -S uvx clang-tool-chain-build-run --cached
 #include <iostream>
 #include <cassert>
 #include <vector>
@@ -249,21 +1166,46 @@ chmod +x test.cpp && ./test.cpp
 # Output: All tests passed!
 ```
 
-### Alternative: Using `uv run`
+### Alternative: Zero-Install with `uvx` (Recommended)
 
-If clang-tool-chain isn't globally installed, use `uv run`:
+For truly self-contained scripts that work anywhere without manual installation, use `uvx`:
 
 ```cpp
-#!/usr/bin/env -S uv run clang-tool-chain-build-run --cached
+#!/usr/bin/env -S uvx clang-tool-chain-build-run --cached
 #include <iostream>
 
 int main() {
-    std::cout << "Running via uv!" << std::endl;
+    std::cout << "Hello, World!" << std::endl;
     return 0;
 }
 ```
 
-This works when run from a project directory with `clang-tool-chain` as a dependency.
+```bash
+chmod +x hello.cpp
+./hello.cpp  # Just run it - no pip install needed!
+```
+
+**Why `uvx` is better:**
+- ✅ **Zero manual installation** - `uvx` automatically installs `clang-tool-chain` if not cached
+- ✅ **Works anywhere** - No need to be in a project directory
+- ✅ **Only dependency** - Just needs `uvx` in PATH (from `pip install uv`)
+- ✅ **Fast subsequent runs** - Package cached after first use
+- ✅ **Truly portable** - Share scripts with anyone who has `uvx`
+
+**Install `uvx` once:**
+```bash
+pip install uv  # Installs both uv and uvx
+```
+
+**Old way (requires manual setup):**
+```cpp
+#!/usr/bin/env -S clang-tool-chain-build-run --cached  # Requires: pip install clang-tool-chain
+```
+
+**New way (zero setup):**
+```cpp
+#!/usr/bin/env -S uvx clang-tool-chain-build-run --cached  # Only requires: pip install uv
+```
 
 ### Platform Notes
 
@@ -365,35 +1307,100 @@ For full documentation, see **[Inlined Build Directives](docs/DIRECTIVES.md)**.
 
 ---
 
-### 📋 Command Quick Reference
+## ⚡ sccache Integration
 
-#### Compilation Commands
+> Optional compilation caching for 2-10x faster rebuilds
+> Transparent caching • Distributed backends • All compilers supported
 
-| Task | Command (Default) | Windows MSVC Variant |
-|------|-------------------|---------------------|
-| **Compile C** | `clang-tool-chain-c main.c -o program` | `clang-tool-chain-c-msvc main.c -o program.exe` |
-| **Compile C++** | `clang-tool-chain-cpp main.cpp -o program` | `clang-tool-chain-cpp-msvc main.cpp -o program.exe` |
-| **Build & Run** | `clang-tool-chain-build-run main.cpp` | Same |
-| **Build & Run (Cached)** | `clang-tool-chain-build-run --cached main.cpp` | Same |
-| **Cached C** | `clang-tool-chain-sccache-c main.c -o program` | `clang-tool-chain-sccache-c-msvc main.c -o program.exe` |
-| **Cached C++** | `clang-tool-chain-sccache-cpp main.cpp -o program` | `clang-tool-chain-sccache-cpp-msvc main.cpp -o program.exe` |
-| **Link Objects** | `clang-tool-chain-ld obj1.o obj2.o -o program` | N/A (use compiler) |
-| **Create Library** | `clang-tool-chain-ar rcs libname.a obj1.o obj2.o` | Same |
-| **Format Code** | `clang-tool-chain-format -i file.cpp` | Same |
+### Quick Examples
 
-**Note:** MSVC variants require Windows SDK. See [Windows Target Selection](#windows-target-selection) for details.
+```bash
+# Install sccache support
+pip install clang-tool-chain[sccache]
+# Or: cargo install sccache
 
-#### Management Commands
+# Compile with caching
+clang-tool-chain-sccache-c main.c -o main
+clang-tool-chain-sccache-cpp main.cpp -o main
 
-| Task | Command | Description |
-|------|---------|-------------|
-| **Pre-install Clang** | `clang-tool-chain install clang` | Download Clang/LLVM (~71-91 MB) |
-| **Add to PATH** | `clang-tool-chain install clang-env` | Use `clang` directly (auto-installs if needed) |
-| **Remove from PATH** | `clang-tool-chain uninstall clang-env` | Keep files, remove from PATH |
-| **Remove Everything** | `clang-tool-chain purge` | Delete all toolchains + auto-remove from PATH |
-| **Check Installation** | `clang-tool-chain info` | Show installation details |
-| **Verify Setup** | `clang-tool-chain-test` | Run 7 diagnostic tests |
-| **List Tools** | `clang-tool-chain list-tools` | Show all available wrappers |
+# MSVC variants (Windows)
+clang-tool-chain-sccache-c-msvc main.c -o main.exe
+clang-tool-chain-sccache-cpp-msvc main.cpp -o main.exe
+
+# Emscripten (WebAssembly)
+clang-tool-chain-sccache-emcc main.c -o main.js
+clang-tool-chain-sccache-empp main.cpp -o main.js
+
+# Manage sccache
+clang-tool-chain-sccache --show-stats
+clang-tool-chain-sccache --zero-stats
+clang-tool-chain-sccache --start-server
+clang-tool-chain-sccache --stop-server
+```
+
+### How It Works
+
+- **Caches compilation results** locally based on source file content
+- **Transparent caching layer** wraps compiler invocations
+- **Requires sccache binary** in PATH (installed separately)
+- **Optional distributed backends** (Redis, S3, GCS, Azure) for team caching
+
+### Installation Options
+
+```bash
+# Option 1: Python package (easiest)
+pip install clang-tool-chain[sccache]
+
+# Option 2: Cargo (Rust package manager)
+cargo install sccache
+
+# Option 3: System package manager
+# Linux (Debian/Ubuntu)
+apt install sccache
+
+# macOS
+brew install sccache
+
+# Option 4: Download binary from GitHub
+# https://github.com/mozilla/sccache/releases
+```
+
+### sccache Commands Available
+
+- `clang-tool-chain-sccache` - Direct sccache passthrough (stats, management)
+- `clang-tool-chain-sccache-c` - C compiler with caching (GNU ABI)
+- `clang-tool-chain-sccache-cpp` - C++ compiler with caching (GNU ABI)
+- `clang-tool-chain-sccache-c-msvc` - C compiler with caching (MSVC ABI)
+- `clang-tool-chain-sccache-cpp-msvc` - C++ compiler with caching (MSVC ABI)
+- `clang-tool-chain-sccache-emcc` - Emscripten C with caching
+- `clang-tool-chain-sccache-empp` - Emscripten C++ with caching
+
+### Performance Benefits
+
+**Typical speedups:**
+- **First build:** Same as normal (cache miss)
+- **Clean rebuild:** 2-5x faster (cache hit, local)
+- **Distributed cache:** 5-10x faster (cache hit, shared team cache)
+- **No source changes:** Nearly instant (compilation skipped entirely)
+
+### Cache Statistics
+
+```bash
+# View cache effectiveness
+clang-tool-chain-sccache --show-stats
+
+# Example output:
+# Compile requests: 1250
+# Compile hits: 1100
+# Cache hit rate: 88%
+# Cache size: 1.2 GB
+```
+
+### Documentation
+
+sccache is an optional feature. See:
+- [Clang/LLVM Documentation - sccache Section](docs/CLANG_LLVM.md#sccache-integration-optional)
+- [sccache GitHub](https://github.com/mozilla/sccache) - Official documentation
 
 ---
 
@@ -560,353 +1567,6 @@ Installing Clang/LLVM traditionally requires:
 - **Automatic macOS SDK Detection** - Seamlessly finds system headers on macOS without configuration
 
 ---
-
-## 🚀 Usage
-
-### CLI Commands
-
-Manage your toolchain installation:
-
-```bash
-# Show installation information and available tools
-clang-tool-chain info
-
-# Run diagnostic tests (verify installation)
-clang-tool-chain test
-
-# List all available wrapper commands
-clang-tool-chain list-tools
-
-# Show version of a specific tool
-clang-tool-chain version clang
-clang-tool-chain version clang++
-
-# Show path to binaries directory
-clang-tool-chain path
-
-# Show path to specific tool
-clang-tool-chain path clang
-
-# Show package and LLVM versions
-clang-tool-chain package-version
-
-# Remove all downloaded toolchains and cached data
-clang-tool-chain purge          # Interactive confirmation
-clang-tool-chain purge --yes    # Skip confirmation (for scripts)
-```
-
-**About `purge` command:**
-- Removes `~/.clang-tool-chain/` directory containing all toolchains
-- Frees up ~200-400 MB per platform (Clang/LLVM binaries)
-- Also removes MinGW sysroot (~176 MB, Windows), Emscripten SDK (~1.4 GB), Node.js runtime (~90-100 MB)
-- Toolchains will be re-downloaded automatically on next use
-- Use `--yes` flag to skip confirmation prompt (useful for CI/CD scripts)
-```
-
-### Wrapper Commands
-
-#### Compiling C Code
-
-```bash
-# Simple compilation
-clang-tool-chain-c hello.c -o hello
-
-# With optimization
-clang-tool-chain-c -O2 hello.c -o hello
-
-# With debugging symbols
-clang-tool-chain-c -g hello.c -o hello
-
-# Check version
-clang-tool-chain-c --version
-```
-
-#### Compiling C++ Code
-
-```bash
-# Simple compilation
-clang-tool-chain-cpp hello.cpp -o hello
-
-# With C++20 standard
-clang-tool-chain-cpp -std=c++20 hello.cpp -o hello
-
-# With optimization and warnings
-clang-tool-chain-cpp -O3 -Wall -Wextra hello.cpp -o hello
-
-# Check version
-clang-tool-chain-cpp --version
-```
-
-#### Using the Build Utilities
-
-**Basic Build Command**
-
-The `clang-tool-chain-build` command provides a simple way to compile projects:
-
-```bash
-# Build a single C file
-clang-tool-chain-build hello.c hello
-
-# Build a C++ file with custom output name
-clang-tool-chain-build hello.cpp myprogram
-
-# Build with optimization
-clang-tool-chain-build hello.cpp myprogram -O2
-```
-
-**Build-and-Run Command**
-
-The `clang-tool-chain-build-run` command compiles and immediately executes your program:
-
-```bash
-# Compile and run a C++ program
-clang-tool-chain-build-run hello.cpp
-
-# With compiler flags
-clang-tool-chain-build-run hello.cpp -O2 -std=c++17
-
-# Pass arguments to the program
-clang-tool-chain-build-run hello.cpp -- arg1 arg2
-
-# Use caching for faster development iterations
-clang-tool-chain-build-run --cached hello.cpp
-
-# Combined: caching + compiler flags + program arguments
-clang-tool-chain-build-run --cached hello.cpp -O2 -- input.txt
-```
-
-**How it works:**
-- Takes a source file (e.g., `hello.cpp`)
-- Compiles to executable (e.g., `hello.exe` on Windows, `hello` on Unix)
-- Runs the executable immediately
-- With `--cached`: Skips compilation if source hasn't changed (SHA256 hash-based)
-
-**Shebang Support (Unix/Linux/macOS):**
-
-Make C++ files directly executable:
-
-```cpp
-#!/usr/bin/env -S clang-tool-chain-build-run --cached
-#include <iostream>
-int main() {
-    std::cout << "Hello from executable C++!" << std::endl;
-    return 0;
-}
-```
-
-```bash
-chmod +x script.cpp
-./script.cpp  # Compiles on first run, cached on subsequent runs
-```
-
-#### CMake Integration
-
-**Option 1: Environment Variables (Recommended)**
-
-```cmake
-# CMakeLists.txt
-cmake_minimum_required(VERSION 3.15)
-project(MyProject)
-
-# No changes needed - respects CC/CXX environment variables
-add_executable(myapp main.cpp)
-```
-
-```bash
-export CC=clang-tool-chain-c
-export CXX=clang-tool-chain-cpp
-cmake -B build
-cmake --build build
-```
-
-**Option 2: Direct Compiler Specification**
-
-```bash
-cmake -B build \
-    -DCMAKE_C_COMPILER=clang-tool-chain-c \
-    -DCMAKE_CXX_COMPILER=clang-tool-chain-cpp
-cmake --build build
-```
-
-#### Linking
-
-```bash
-# Link object files
-clang-tool-chain-ld obj1.o obj2.o -o program
-
-# Create shared library (Linux/macOS)
-clang-tool-chain-ld -shared obj1.o obj2.o -o libmylib.so
-
-# Create DLL (Windows)
-clang-tool-chain-ld -shared obj1.o obj2.o -o mylib.dll
-```
-
-#### Binary Utilities
-
-```bash
-# Create static library
-clang-tool-chain-ar rcs libmylib.a obj1.o obj2.o
-
-# List symbols in binary
-clang-tool-chain-nm program
-
-# List symbols in library
-clang-tool-chain-nm libmylib.a
-
-# Disassemble binary
-clang-tool-chain-objdump -d program
-
-# Show all headers
-clang-tool-chain-objdump -x program
-
-# Strip debug symbols
-clang-tool-chain-strip program -o program.stripped
-
-# Copy and modify object files
-clang-tool-chain-objcopy --strip-debug program program.stripped
-
-# Generate archive index
-clang-tool-chain-ranlib libmylib.a
-
-# Read ELF headers (Linux)
-clang-tool-chain-readelf -h program
-
-# Show program headers
-clang-tool-chain-readelf -l program
-```
-
-#### Code Formatting and Analysis
-
-```bash
-# Format C/C++ code (in-place)
-clang-tool-chain-format -i myfile.cpp
-
-# Format with specific style
-clang-tool-chain-format -i -style=LLVM myfile.cpp
-
-# Check formatting (don't modify)
-clang-tool-chain-format myfile.cpp
-
-# Run static analysis
-clang-tool-chain-tidy myfile.cpp -- -std=c++17
-
-# Run with specific checks
-clang-tool-chain-tidy -checks='-*,readability-*' myfile.cpp --
-```
-
-#### sccache Integration (Optional)
-
-Speed up repeated builds with compilation caching:
-
-```bash
-# Install with sccache support
-pip install clang-tool-chain[sccache]
-# Or: cargo install sccache
-
-# Compile with sccache caching
-clang-tool-chain-sccache-c main.c -o main
-clang-tool-chain-sccache-cpp main.cpp -o main
-
-# Windows MSVC variants with sccache
-clang-tool-chain-sccache-c-msvc main.c -o main.exe
-clang-tool-chain-sccache-cpp-msvc main.cpp -o main.exe
-
-# Emscripten (WebAssembly) with sccache
-clang-tool-chain-sccache-emcc main.c -o main.js
-clang-tool-chain-sccache-empp main.cpp -o main.js
-
-# Query cache statistics
-clang-tool-chain-sccache --show-stats
-
-# Clear cache statistics
-clang-tool-chain-sccache --zero-stats
-
-# Manage sccache server
-clang-tool-chain-sccache --start-server
-clang-tool-chain-sccache --stop-server
-clang-tool-chain-sccache --version
-```
-
-**How it works:**
-- Caches compilation results locally for faster rebuilds
-- Transparent caching layer on top of clang
-- Requires `sccache` binary in PATH
-- Works with distributed caching backends (optional)
-
-#### IWYU (Include What You Use)
-
-Analyze and optimize C/C++ #include directives:
-
-```bash
-# Analyze includes in a source file
-clang-tool-chain-iwyu myfile.cpp -- -std=c++17
-
-# With additional compiler flags
-clang-tool-chain-iwyu myfile.cpp -- -I./include -DDEBUG
-
-# Run IWYU tool (Python wrapper)
-clang-tool-chain-iwyu-tool -p build/
-
-# Automatically fix includes based on IWYU output
-clang-tool-chain-iwyu myfile.cpp -- -std=c++17 | clang-tool-chain-fix-includes
-
-# Or save recommendations to file first
-clang-tool-chain-iwyu myfile.cpp -- -std=c++17 > iwyu.out
-clang-tool-chain-fix-includes < iwyu.out
-```
-
-**What it does:**
-- Detects unnecessary #include directives
-- Suggests missing #include directives
-- Recommends forward declarations instead of full includes
-- Helps reduce compilation times and header dependencies
-
-**How it works:**
-- IWYU analyzes what symbols are actually used in your code
-- Compares against what headers are included
-- Generates recommendations for includes to add/remove
-- `fix-includes` can automatically apply the changes
-
-#### Emscripten (WebAssembly Compilation)
-
-Compile C/C++ to WebAssembly using Emscripten:
-
-```bash
-# Compile C to WebAssembly
-clang-tool-chain-emcc hello.c -o hello.js
-
-# Compile C++ to WebAssembly
-clang-tool-chain-empp hello.cpp -o hello.js
-
-# With optimization
-clang-tool-chain-emcc -O3 main.c -o main.js
-
-# Create WebAssembly library
-clang-tool-chain-emcc -c lib.c -o lib.o
-clang-tool-chain-emar rcs libmylib.a lib.o
-
-# Run the compiled WebAssembly (requires Node.js)
-node hello.js
-
-# With sccache for faster rebuilds
-clang-tool-chain-sccache-emcc main.c -o main.js
-clang-tool-chain-sccache-empp main.cpp -o main.js
-```
-
-**Platform Support:**
-- Windows x86_64: Emscripten 4.0.19
-- macOS x86_64/ARM64: Emscripten 4.0.19
-- Linux x86_64: Emscripten 4.0.15
-- Linux ARM64: Coming soon
-
-**What it includes:**
-- Emscripten compiler toolchain
-- Bundled Node.js runtime for running WebAssembly
-- Full emscripten SDK integration
-- sccache support for compilation caching
-
-**Learn more:** See [docs/EMSCRIPTEN.md](docs/EMSCRIPTEN.md) for detailed Emscripten documentation and [docs/NODEJS.md](docs/NODEJS.md) for Node.js integration details.
-
 <details id="all-available-commands">
 <summary><strong>📋 All Available Commands</strong> (click to expand - 35 wrapper commands)</summary>
 

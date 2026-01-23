@@ -108,9 +108,9 @@ int main() {
             cwd=tmp_path,
         )
 
-        assert (
-            exec_result.returncode == 0
-        ), f"Execution failed:\nstdout: {exec_result.stdout}\nstderr: {exec_result.stderr}"
+        assert exec_result.returncode == 0, (
+            f"Execution failed:\nstdout: {exec_result.stdout}\nstderr: {exec_result.stderr}"
+        )
         assert "Hello World!" in exec_result.stdout, f"Expected output not found. Got: {exec_result.stdout}"
 
     def test_02_multi_file_compilation(self, tmp_path: Path) -> None:
@@ -172,9 +172,9 @@ int main() {
             timeout=300,
         )
 
-        assert (
-            result.returncode == 0
-        ), f"Multi-file compilation failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        assert result.returncode == 0, (
+            f"Multi-file compilation failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
         assert output_js.exists(), "Output file was not created"
 
         # Execute
@@ -218,9 +218,9 @@ std::string get_message() {
             timeout=300,
         )
 
-        assert (
-            result.returncode == 0
-        ), f"Object file compilation failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        assert result.returncode == 0, (
+            f"Object file compilation failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
         assert hello_o.exists(), "Object file was not created"
         assert hello_o.stat().st_size > 0, "Object file is empty"
 
@@ -443,9 +443,9 @@ inline std::string get_greeting() {
             timeout=300,
         )
 
-        assert (
-            pch_result.returncode == 0
-        ), f"PCH generation failed:\nstdout: {pch_result.stdout}\nstderr: {pch_result.stderr}"
+        assert pch_result.returncode == 0, (
+            f"PCH generation failed:\nstdout: {pch_result.stdout}\nstderr: {pch_result.stderr}"
+        )
         assert common_pch.exists(), "Precompiled header was not created"
         assert common_pch.stat().st_size > 0, "Precompiled header is empty"
 
@@ -485,9 +485,9 @@ int main() {
             timeout=300,
         )
 
-        assert (
-            compile_result.returncode == 0
-        ), f"Compilation with PCH failed:\nstdout: {compile_result.stdout}\nstderr: {compile_result.stderr}"
+        assert compile_result.returncode == 0, (
+            f"Compilation with PCH failed:\nstdout: {compile_result.stdout}\nstderr: {compile_result.stderr}"
+        )
         assert output_js.exists()
 
         # Execute
@@ -676,9 +676,9 @@ int main() {
             timeout=300,
         )
 
-        assert (
-            link_result.returncode == 0
-        ), f"Linking failed:\nstdout: {link_result.stdout}\nstderr: {link_result.stderr}"
+        assert link_result.returncode == 0, (
+            f"Linking failed:\nstdout: {link_result.stdout}\nstderr: {link_result.stderr}"
+        )
         assert output_wasm.exists(), "WASM output file was not created"
         assert output_wasm.stat().st_size > 0, "WASM file is empty"
 
