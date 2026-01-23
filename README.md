@@ -1,8 +1,25 @@
 # Clang Tool Chain
 
-**Motivation**: *make it as easy to run a cpp program as it does to run a python file.*
+**Run C++ like a shell script. Build once, run everywhere. The entire C/C++/WASM toolchain in one `pip install`.**
 
-**A zero-configuration Python package that distributes pre-built Clang/LLVM binaries with automatic downloading and installation. Cosmopolitan for universal builds.**
+```cpp
+#!/usr/bin/env -S clang-tool-chain-build-run --cached
+#include <iostream>
+int main() { std::cout << "Hello, World!\n"; }
+```
+
+```bash
+chmod +x hello.cpp && ./hello.cpp  # That's it. No makefiles, no build steps.
+```
+
+**Build Actually Portable Executables with Cosmopolitan:**
+
+```bash
+clang-tool-chain-cosmocc hello.c -o hello.com
+# This .com file runs natively on Windows, Linux, macOS, FreeBSD - unchanged.
+```
+
+**One `pip install`, 35+ tools auto-download:** Full Clang/LLVM 21 • Complete Emscripten/WASM pipeline • IWYU • clang-format/tidy • LLDB debugger • Cosmopolitan libc • No admin rights needed • Works offline after first use
 
 [![PyPI version](https://img.shields.io/pypi/v/clang-tool-chain.svg)](https://pypi.org/project/clang-tool-chain/)
 [![Downloads](https://pepy.tech/badge/clang-tool-chain)](https://pepy.tech/project/clang-tool-chain)
@@ -10,44 +27,103 @@
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Linting](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/lint.yml)
 
-## 🔥 Script Your C/C++ Like Python (Unix/Linux/macOS)
-
-Make C/C++ files directly executable with a shebang:
-
-```cpp
-#!/usr/bin/env -S clang-tool-chain-build-run
-#include <iostream>
-int main() {
-    std::cout << "Hello, scripted C++!" << std::endl;
-    return 0;
-}
-```
+## ⚡ Quick Start - Basic Compilation
 
 ```bash
-chmod +x hello.cpp
-./hello.cpp  # Compiles and runs in one step!
+# Install
+pip install clang-tool-chain
+
+# Compile C - toolchain auto-downloads on first use (~71-91 MB)
+clang-tool-chain-c hello.c -o hello
+
+# Compile C++
+clang-tool-chain-cpp hello.cpp -o hello
+
+# That's it! Run your program
+./hello
 ```
 
-Use `--cached` for faster iterations (skips recompilation if source unchanged):
+### 🔧 Override CC/CXX for Build Scripts
+
+```bash
+# Make/CMake/Meson/etc. will use clang-tool-chain
+export CC=clang-tool-chain-c
+export CXX=clang-tool-chain-cpp
+
+# Now your build scripts just work
+make
+cmake -B build && cmake --build build
+meson setup build && ninja -C build
+```
+
+**Windows PowerShell:**
+```powershell
+$env:CC = "clang-tool-chain-c"
+$env:CXX = "clang-tool-chain-cpp"
+```
+
+> **Windows Users:** Commands use GNU ABI by default (like `zig cc`) for cross-platform consistency. Use `clang-tool-chain-c-msvc` / `clang-tool-chain-cpp-msvc` for MSVC ABI. See [Windows Target Selection](#windows-target-selection).
+
+### 🌍 Actually Portable Executables (Cosmopolitan)
+
+```bash
+# Install cosmocc toolchain (downloads on first use)
+clang-tool-chain install cosmocc
+
+# Build binary that runs on Windows, Linux, macOS, FreeBSD, NetBSD, OpenBSD
+clang-tool-chain-cosmocc hello.c -o hello.com
+clang-tool-chain-cosmocpp hello.cpp -o hello.com
+
+# Same binary works everywhere - no runtime dependencies!
+./hello.com  # Linux/macOS/FreeBSD/etc.
+# On Windows: hello.com (runs natively, not via Wine)
+```
+
+### 🚀 Executable C++ Scripts (Unix/Linux/macOS)
 
 ```cpp
 #!/usr/bin/env -S clang-tool-chain-build-run --cached
-#include <stdio.h>
-int main() { printf("Cached execution!\n"); return 0; }
+#include <iostream>
+int main() { std::cout << "Executable C++!\n"; }
 ```
 
-> **Note:** This package currently uses:
-> - **LLVM 21.1.5** for Windows, Linux (x86_64/ARM64)
-> - **LLVM 21.1.6** for macOS ARM64
-> - **LLVM 19.1.7** for macOS x86_64
+```bash
+chmod +x hello.cpp && ./hello.cpp  # Compiles and runs!
+```
+
+### 🌐 WebAssembly (Complete Emscripten Pipeline)
+
+```bash
+# Compile C/C++ to WebAssembly
+clang-tool-chain-emcc game.c -o game.js
+clang-tool-chain-empp engine.cpp -o engine.js
+
+# Run with bundled Node.js
+node game.js
+```
+
+### 📦 What You Get (35+ Tools)
+
+| Category | Tools |
+|----------|-------|
+| **Compilers** | Clang/LLVM 21, Emscripten SDK (C++ → WASM), Cosmopolitan libc (APE) |
+| **Analysis** | IWYU (include analyzer), clang-tidy, clang-format |
+| **Debugging** | LLDB debugger with Python scripting |
+| **Utilities** | ar, nm, objdump, strip, readelf, ranlib, etc. |
+| **Runtime** | Bundled Node.js for WebAssembly |
+
+> **LLVM Versions:**
+> - **LLVM 21.1.5** - Windows, Linux (x86_64/ARM64)
+> - **LLVM 21.1.6** - macOS ARM64
+> - **LLVM 19.1.7** - macOS x86_64
 >
 > See [Platform Support Matrix](#platform-support-matrix) for details.
 
 ## 📑 Table of Contents
 
-- [Quick Start](#-quick-start) - Get compiling in 30 seconds
-- [Script C/C++ Like Python](#-script-your-cc-like-python-unixlinuxmacos) - Shebang support for executable source files
+- [Quick Start](#-quick-start---basic-compilation) - Compile in 30 seconds, CC/CXX override, Cosmopolitan APE, WebAssembly
 - [Inlined Build Directives](#-inlined-build-directives) - Self-contained source files with embedded build config
+- [Executable C++ Scripts](#-executable-c-scripts-shebang-support) - Shebang support for running C++ like shell scripts
 - [Command Quick Reference](#-command-quick-reference) - Common commands at a glance
 - [Installation](#-installation) - Installation options
 - [Why clang-tool-chain?](#-why-clang-tool-chain) - Features and comparisons
@@ -101,46 +177,6 @@ Comprehensive test coverage across all platforms and tool categories:
 - **binary-utils** - LLVM binary utilities (ar, nm, objdump, strip, readelf, etc.)
 - **lldb** - LLDB debugger for crash analysis and debugging
 - **cosmocc** - Cosmopolitan Libc for Actually Portable Executables (APE)
-
-## ⚡ Quick Start
-
-Get compiling in 30 seconds:
-
-```bash
-# Install the package
-pip install clang-tool-chain
-
-# Compile C code - binaries download automatically on first use!
-echo 'int main() { return 0; }' > hello.c
-clang-tool-chain-c hello.c -o hello
-./hello  # Windows: .\hello.exe
-
-# Verify installation (optional but recommended)
-clang-tool-chain-test  # Runs 7 diagnostic tests
-```
-
-**That's it!** The LLVM toolchain (~71-91 MB) downloads automatically on first use. No manual setup required.
-
-
-### ⚠️ Windows Users: GNU ABI by Default
-
-Windows commands use **GNU ABI** (`x86_64-w64-mingw32` target) for cross-platform consistency, matching [zig cc](https://ziglang.org/learn/overview/#cross-compiling-is-a-first-class-use-case) behavior.
-
-**Default commands (GNU ABI):**
-```bash
-clang-tool-chain-c main.c -o program       # GNU ABI, no Visual Studio required
-clang-tool-chain-cpp main.cpp -o program   # Downloads ~90 MB on first use
-```
-
-**MSVC ABI variants (Windows-specific projects):**
-```bash
-clang-tool-chain-c-msvc main.c -o program.exe     # Requires Visual Studio/Windows SDK
-clang-tool-chain-cpp-msvc main.cpp -o program.exe # Downloads ~71 MB on first use
-```
-
-**✨ Automatic DLL Deployment:** GNU ABI executables automatically include required MinGW runtime DLLs in the executable directory. Your programs run immediately in `cmd.exe` without PATH setup! See [Windows DLL Deployment](#windows-dll-deployment) for details.
-
-**Which to use?** See [Windows Target Selection](#windows-target-selection) for detailed comparison and requirements.
 
 ---
 
