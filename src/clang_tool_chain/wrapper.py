@@ -102,6 +102,7 @@ from .execution.build import (
     _compute_file_hash,
     build_main,
     build_run_main,
+    run_main,
 )
 
 # ============================================================================
@@ -232,6 +233,7 @@ __all__ = [
     # Build Utilities
     "build_main",
     "build_run_main",
+    "run_main",
     "_compute_file_hash",
     # CLI Entry Points
     "clang_main",

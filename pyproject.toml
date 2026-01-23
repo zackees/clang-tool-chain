@@ -72,6 +72,7 @@ clang-tool-chain-paths = "clang_tool_chain.paths:main"
 # Build utility
 clang-tool-chain-build = "clang_tool_chain.wrapper:build_main"
 clang-tool-chain-build-run = "clang_tool_chain.wrapper:build_run_main"
+clang-tool-chain-run = "clang_tool_chain.wrapper:run_main"
 # Compilers
 clang-tool-chain-c = "clang_tool_chain.wrapper:clang_main"
 clang-tool-chain-cpp = "clang_tool_chain.wrapper:clang_cpp_main"
