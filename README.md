@@ -315,11 +315,11 @@ clang-tool-chain-tidy -fix file.cpp -- -std=c++17
 
 | Platform | Architecture | IWYU Version | Status | Notes |
 |----------|--------------|--------------|--------|-------|
-| Windows  | x86_64       | 0.21         | ⚠️ Partial | Basic analysis works, some limitations |
-| Linux    | x86_64       | 0.21         | ✅ Full | All features supported |
-| Linux    | ARM64        | 0.21         | ✅ Full | All features supported |
-| macOS    | x86_64       | 0.21         | ✅ Full | All features supported |
-| macOS    | ARM64        | 0.21         | ✅ Full | All features supported |
+| Windows  | x86_64       | 0.25         | ✅ Full | All features supported |
+| Linux    | x86_64       | 0.25         | ✅ Full | All features supported |
+| Linux    | ARM64        | 0.25         | ✅ Full | All features supported |
+| macOS    | x86_64       | 0.25         | ✅ Full | All features supported |
+| macOS    | ARM64        | 0.25         | ✅ Full | All features supported |
 
 ### Quick Examples
 
