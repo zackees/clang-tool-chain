@@ -50,13 +50,136 @@ clang-tool-chain-cpp hello.cpp -o hello
 
 **📖 [Complete Quick Start Guide](docs/QUICKSTART.md)** - Detailed examples, CMake integration, workflows, tips.
 
+---
+
+## 📊 Test Matrix
+
+Comprehensive test coverage across all platforms and tool categories ensures reliability and quality.
+
+**40 GitHub Actions workflows** covering all platform+tool combinations:
+- **5 platforms:** Windows x64, Linux x86_64, Linux ARM64, macOS x86_64, macOS ARM64
+- **8 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, lldb, format-lint, binary-utils, cosmocc
+
+### Live Test Status
+
+| Tool Category | Windows x64 | Linux x86_64 | Linux ARM64 | macOS x86_64 | macOS ARM64 |
+|---------------|-------------|--------------|-------------|--------------|-------------|
+| **clang** | [![clang-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-win.yml) | [![clang-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-linux-x86.yml) | [![clang-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-linux-arm.yml) | [![clang-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-macos-x86.yml) | [![clang-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-macos-arm.yml) |
+| **clang+sccache** | [![clang-sccache-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-win.yml) | [![clang-sccache-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-linux-x86.yml) | [![clang-sccache-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-linux-arm.yml) | [![clang-sccache-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-macos-x86.yml) | [![clang-sccache-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-macos-arm.yml) |
+| **emscripten** | [![emscripten-windows-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-windows-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-windows-x86.yml) | [![emscripten-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-x86.yml) | [![emscripten-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-arm.yml) | [![emscripten-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-x86.yml) | [![emscripten-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-arm.yml) |
+| **emscripten+sccache** | [![emscripten-sccache-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-win.yml) | [![emscripten-sccache-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-linux-x86.yml) | [![emscripten-sccache-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-linux-arm.yml) | [![emscripten-sccache-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-macos-x86.yml) | [![emscripten-sccache-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-macos-arm.yml) |
+| **iwyu** | [![iwyu-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-win.yml) | [![iwyu-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-linux-x86.yml) | [![iwyu-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-linux-arm.yml) | [![iwyu-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-macos-x86.yml) | [![iwyu-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-macos-arm.yml) |
+| **format-lint** | [![format-lint-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-win.yml) | [![format-lint-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-linux-x86.yml) | [![format-lint-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-linux-arm.yml) | [![format-lint-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-macos-x86.yml) | [![format-lint-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-macos-arm.yml) |
+| **binary-utils** | [![binary-utils-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-win.yml) | [![binary-utils-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-x86.yml) | [![binary-utils-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-arm.yml) | [![binary-utils-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-x86.yml) | [![binary-utils-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-arm.yml) |
+| **lldb** | [![lldb-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-win.yml) | [![lldb-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-x86.yml) | [![lldb-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-arm.yml) | [![lldb-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-x86.yml) | [![lldb-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-arm.yml) |
+| **cosmocc** | [![cosmocc-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-win.yml) | [![cosmocc-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-x86.yml) | [![cosmocc-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-arm.yml) | [![cosmocc-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-x86.yml) | [![cosmocc-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-arm.yml) |
+
+**📖 [Complete Test Matrix Documentation](docs/TEST_MATRIX.md)** - Tool category descriptions, test organization, running tests locally.
+
+---
+
+## 📋 All Commands (41 Total)
+
+Comprehensive reference of all available commands organized by category.
+
+### Compiler Commands (6)
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-c` | C compiler (GNU ABI, cross-platform) |
+| `clang-tool-chain-cpp` | C++ compiler (GNU ABI, cross-platform) |
+| `clang-tool-chain-c-msvc` | C compiler (MSVC ABI, Windows only) |
+| `clang-tool-chain-cpp-msvc` | C++ compiler (MSVC ABI, Windows only) |
+| `clang-tool-chain-cosmocc` | C compiler for Actually Portable Executables |
+| `clang-tool-chain-cosmocpp` | C++ compiler for Actually Portable Executables |
+
+### Compiler Commands with sccache (5)
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-sccache-c` | Cached C compiler (GNU ABI) |
+| `clang-tool-chain-sccache-cpp` | Cached C++ compiler (GNU ABI) |
+| `clang-tool-chain-sccache-c-msvc` | Cached C compiler (MSVC ABI, Windows only) |
+| `clang-tool-chain-sccache-cpp-msvc` | Cached C++ compiler (MSVC ABI, Windows only) |
+| `clang-tool-chain-sccache-stats` | Display sccache statistics |
+
+### Build Utilities (3)
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-build` | Build source files with caching |
+| `clang-tool-chain-build-run` | Build and execute with caching |
+| `clang-tool-chain-run` | Execute cached binary (no rebuild) |
+
+### Binary Utilities (11)
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-ar` | Create, modify, extract from archives (llvm-ar) |
+| `clang-tool-chain-ranlib` | Generate archive symbol index (llvm-ranlib) |
+| `clang-tool-chain-nm` | Display symbol table (llvm-nm) |
+| `clang-tool-chain-objdump` | Disassemble and analyze binaries (llvm-objdump) |
+| `clang-tool-chain-readelf` | Display ELF file information (llvm-readelf) |
+| `clang-tool-chain-readobj` | Display object file information (llvm-readobj) |
+| `clang-tool-chain-size` | Display section sizes (llvm-size) |
+| `clang-tool-chain-strings` | Extract printable strings (llvm-strings) |
+| `clang-tool-chain-strip` | Remove symbols from binaries (llvm-strip) |
+| `clang-tool-chain-cxxfilt` | Demangle C++ symbols (llvm-cxxfilt) |
+| `clang-tool-chain-symbolizer` | Symbolize stack traces (llvm-symbolizer) |
+
+### Format & Lint (2)
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-format` | Format C/C++ code (clang-format) |
+| `clang-tool-chain-tidy` | Static analysis and linting (clang-tidy) |
+
+### IWYU - Include Analyzer (3)
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-iwyu` | Analyze #include usage (include-what-you-use) |
+| `clang-tool-chain-iwyu-tool` | Run IWYU on compilation database |
+| `clang-tool-chain-fix-includes` | Auto-fix includes from IWYU output |
+
+### LLDB - Debugger (2)
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-lldb` | Interactive debugger and crash analyzer (lldb) |
+| `clang-tool-chain-lldb-check-python` | Verify Python 3.10 integration status |
+
+### Emscripten - WebAssembly (5)
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-emcc` | Emscripten C compiler (C/C++ → WebAssembly) |
+| `clang-tool-chain-empp` | Emscripten C++ compiler (C/C++ → WebAssembly) |
+| `clang-tool-chain-emar` | Emscripten archiver for WebAssembly libraries |
+| `clang-tool-chain-sccache-emcc` | Cached Emscripten C compiler |
+| `clang-tool-chain-sccache-empp` | Cached Emscripten C++ compiler |
+
+### Management & Diagnostics (4)
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain` | Main CLI (install, purge, info, help) |
+| `clang-tool-chain-test` | Run diagnostic tests (7 checks) |
+| `clang-tool-chain-fetch` | Download toolchain components |
+| `clang-tool-chain-paths` | Display installation paths |
+
+**Total: 41 commands** providing complete C/C++/WebAssembly toolchain capabilities.
+
+---
+
 ## 📑 Table of Contents
 
 ### Getting Started
 - [Quick Start](#-quick-start)
+- [Test Matrix](#-test-matrix) - Live CI/CD status for all platforms
+- [All Commands](#-all-commands-41-total) - Complete command reference
 - [Installation](#-installation)
 - [Why clang-tool-chain?](#-why-clang-tool-chain)
-- [Test Matrix](#-test-matrix)
 
 ### Tools by Category
 - [Clang/LLVM Toolchain](#️-clangllvm-toolchain) - C/C++ compilation (17 commands)
@@ -67,7 +190,7 @@ clang-tool-chain-cpp hello.cpp -o hello
 - [LLDB](#-lldb-debugger) - Debugger with Python support (2 commands)
 - [Emscripten](#-emscripten-webassembly) - WebAssembly compiler (5 commands)
 - [Cosmopolitan](#-cosmopolitan-actually-portable-executables) - APE compiler (2 commands)
-- [Management CLI](#️-management-cli) - install, purge, info, test (6 commands)
+- [Management CLI](#️-management-cli) - install, purge, info, test (4 commands)
 
 ### Cross-Cutting Features
 - [Inlined Build Directives](#-inlined-build-directives)
@@ -101,38 +224,42 @@ clang-tool-chain-cpp hello.cpp -o hello
 
 ---
 
-## 📊 Test Matrix
-
-Comprehensive test coverage across all platforms and tool categories ensures reliability and quality.
-
-**40 GitHub Actions workflows** covering all platform+tool combinations:
-- **5 platforms:** Windows x64, Linux x86_64, Linux ARM64, macOS x86_64, macOS ARM64
-- **8 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, lldb, format-lint, binary-utils, cosmocc
-
-### Live Test Status
-
-| Tool Category | Windows x64 | Linux x86_64 | Linux ARM64 | macOS x86_64 | macOS ARM64 |
-|---------------|-------------|--------------|-------------|--------------|-------------|
-| **clang** | [![clang-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-win.yml) | [![clang-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-linux-x86.yml) | [![clang-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-linux-arm.yml) | [![clang-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-macos-x86.yml) | [![clang-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-macos-arm.yml) |
-| **clang+sccache** | [![clang-sccache-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-win.yml) | [![clang-sccache-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-linux-x86.yml) | [![clang-sccache-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-linux-arm.yml) | [![clang-sccache-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-macos-x86.yml) | [![clang-sccache-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-clang-sccache-macos-arm.yml) |
-| **emscripten** | [![emscripten-windows-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-windows-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-windows-x86.yml) | [![emscripten-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-x86.yml) | [![emscripten-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-linux-arm.yml) | [![emscripten-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-x86.yml) | [![emscripten-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-macos-arm.yml) |
-| **emscripten+sccache** | [![emscripten-sccache-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-win.yml) | [![emscripten-sccache-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-linux-x86.yml) | [![emscripten-sccache-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-linux-arm.yml) | [![emscripten-sccache-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-macos-x86.yml) | [![emscripten-sccache-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-emscripten-sccache-macos-arm.yml) |
-| **iwyu** | [![iwyu-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-win.yml) | [![iwyu-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-linux-x86.yml) | [![iwyu-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-linux-arm.yml) | [![iwyu-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-macos-x86.yml) | [![iwyu-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-iwyu-macos-arm.yml) |
-| **format-lint** | [![format-lint-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-win.yml) | [![format-lint-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-linux-x86.yml) | [![format-lint-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-linux-arm.yml) | [![format-lint-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-macos-x86.yml) | [![format-lint-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-format-lint-macos-arm.yml) |
-| **binary-utils** | [![binary-utils-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-win.yml) | [![binary-utils-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-x86.yml) | [![binary-utils-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-arm.yml) | [![binary-utils-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-x86.yml) | [![binary-utils-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-arm.yml) |
-| **lldb** | [![lldb-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-win.yml) | [![lldb-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-x86.yml) | [![lldb-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-arm.yml) | [![lldb-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-x86.yml) | [![lldb-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-arm.yml) |
-| **cosmocc** | [![cosmocc-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-win.yml) | [![cosmocc-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-x86.yml) | [![cosmocc-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-arm.yml) | [![cosmocc-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-x86.yml) | [![cosmocc-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-arm.yml) |
-
-**📖 [Complete Test Matrix Documentation](docs/TEST_MATRIX.md)** - Tool category descriptions, test organization, running tests locally.
-
----
-
 ## 🛠️ Clang/LLVM Toolchain
 
 **17 commands** • Modern C/C++ compiler • Auto SDK detection • GNU/MSVC ABI • sccache support
 
+### Platform & Version Matrix
+
+| Platform | Architecture | LLVM Version | Archive Size | Linker | Status |
+|----------|--------------|--------------|--------------|--------|--------|
+| Windows  | x86_64       | 21.1.5       | ~71-90 MB    | lld    | ✅ Stable |
+| Linux    | x86_64       | 21.1.5       | ~87 MB       | lld    | ✅ Stable |
+| Linux    | ARM64        | 21.1.5       | ~91 MB       | lld    | ✅ Stable |
+| macOS    | x86_64       | 21.1.6       | ~77 MB       | ld64.lld | ✅ Stable |
+| macOS    | ARM64        | 21.1.6       | ~71 MB       | ld64.lld | ✅ Stable |
+
+### Windows ABI Selection
+
+| Feature | GNU ABI (Default) | MSVC ABI |
+|---------|-------------------|----------|
+| **Commands** | `clang-tool-chain-c/cpp` | `clang-tool-chain-c/cpp-msvc` |
+| **Cross-platform** | ✅ Yes | ❌ Windows only |
+| **Visual Studio** | ❌ Not needed | ✅ Required |
+| **MinGW Headers** | ✅ Integrated (~176 MB) | ❌ N/A |
+| **DLL Deployment** | ✅ Automatic | ❌ Uses MSVC runtime |
+| **C++ Standard** | ✅ C++11+ | ✅ C++14+ |
+| **Use Case** | Cross-platform projects | Windows-native MSVC projects |
+
+### Quick Examples
+
 ```bash
+# GNU ABI (cross-platform, default)
 clang-tool-chain-cpp hello.cpp -o hello
+
+# MSVC ABI (Windows native)
+clang-tool-chain-cpp-msvc main.cpp -o program.exe
+
+# Build system integration
 export CC=clang-tool-chain-c CXX=clang-tool-chain-cpp
 ```
 
@@ -184,8 +311,23 @@ clang-tool-chain-tidy -fix file.cpp -- -std=c++17
 
 **3 commands** • Include analyzer • Auto-fix • Build time optimization
 
+### Platform Support Matrix
+
+| Platform | Architecture | IWYU Version | Status | Notes |
+|----------|--------------|--------------|--------|-------|
+| Windows  | x86_64       | 0.21         | ⚠️ Partial | Basic analysis works, some limitations |
+| Linux    | x86_64       | 0.21         | ✅ Full | All features supported |
+| Linux    | ARM64        | 0.21         | ✅ Full | All features supported |
+| macOS    | x86_64       | 0.21         | ✅ Full | All features supported |
+| macOS    | ARM64        | 0.21         | ✅ Full | All features supported |
+
+### Quick Examples
+
 ```bash
+# Analyze includes with auto-fix
 clang-tool-chain-iwyu file.cpp -- -std=c++17 | clang-tool-chain-fix-includes
+
+# Run on entire build directory
 clang-tool-chain-iwyu-tool -p build/
 ```
 
@@ -197,10 +339,32 @@ clang-tool-chain-iwyu-tool -p build/
 
 **2 commands** • Interactive debugging • Crash analysis • Python 3.10 support
 
+### Platform & Python Support Matrix
+
+| Platform | Architecture | LLDB Version | Python 3.10 | Status | Notes |
+|----------|--------------|--------------|-------------|--------|-------|
+| Windows  | x86_64       | 21.1.5       | ⏳ Pending  | ✅ Basic | Archive rebuild needed for Python support |
+| Linux    | x86_64       | 21.1.5       | ✅ Ready    | ✅ Full | Wrapper complete, archives pending |
+| Linux    | ARM64        | 21.1.5       | ✅ Ready    | ✅ Full | Wrapper complete, archives pending |
+| macOS    | x86_64       | 21.1.6       | ⏳ Planned  | ✅ Basic | Python integration planned |
+| macOS    | ARM64        | 21.1.6       | ⏳ Planned  | ✅ Basic | Python integration planned |
+
+**Python 3.10 Features:** Full backtraces (`bt all`), Python scripting, advanced variable inspection, LLDB Python API
+
+### Quick Examples
+
 ```bash
+# Compile with debug symbols
 clang-tool-chain-cpp -g program.cpp -o program
+
+# Interactive debugging
 clang-tool-chain-lldb program
+
+# Crash analysis mode (Windows)
 clang-tool-chain-lldb --print crash_test.exe
+
+# Check Python integration status
+clang-tool-chain-lldb-check-python
 ```
 
 **📖 [Complete Documentation](docs/LLDB.md)** - Commands, Python integration, crash analysis, platform status.
@@ -211,9 +375,29 @@ clang-tool-chain-lldb --print crash_test.exe
 
 **5 commands** • C/C++ → WASM • Bundled Node.js • sccache support
 
+### Platform & Version Matrix
+
+| Platform | Architecture | Emscripten | Node.js | LLVM (bundled) | Status |
+|----------|--------------|------------|---------|----------------|--------|
+| Windows  | x86_64       | 4.0.19     | 20.18.2 | 22.0.0         | ✅ Full |
+| Linux    | x86_64       | 4.0.21     | 20.18.2 | 22.0.0         | ✅ Full |
+| Linux    | ARM64        | 4.0.21     | 20.18.2 | 22.0.0         | ✅ Full |
+| macOS    | x86_64       | 4.0.19     | 20.18.2 | 22.0.0         | ✅ Full |
+| macOS    | ARM64        | 4.0.19     | 20.18.2 | 22.0.0         | ✅ Full |
+
+**Note:** Emscripten includes its own bundled LLVM 22.0.0, separate from the main clang-tool-chain LLVM (21.1.5/21.1.6).
+
+### Quick Examples
+
 ```bash
+# Compile to WebAssembly
 clang-tool-chain-emcc hello.c -o hello.js
-node hello.js
+node hello.js  # Run with bundled Node.js
+
+# Browser output
+clang-tool-chain-emcc game.c -o game.html
+
+# With sccache for faster rebuilds
 clang-tool-chain-sccache-emcc main.c -o main.js
 ```
 
@@ -225,10 +409,33 @@ clang-tool-chain-sccache-emcc main.c -o main.js
 
 **2 commands** • Build-once run-anywhere • Single binary • No runtime deps
 
+### Universal Platform Support
+
+| Build Platform | Architecture | Cosmocc Version | Output Format | Status |
+|----------------|--------------|-----------------|---------------|--------|
+| Windows        | x86_64       | 4.0.2           | .com (APE)    | ✅ Full |
+| Linux          | x86_64       | 4.0.2           | .com (APE)    | ✅ Full |
+| Linux          | ARM64        | 4.0.2           | .com (APE)    | ✅ Full |
+| macOS          | x86_64       | 4.0.2           | .com (APE)    | ✅ Full |
+| macOS          | ARM64        | 4.0.2           | .com (APE)    | ✅ Full |
+
+**APE Runtime Support:** Windows x64, Linux x64/ARM64, macOS x64/ARM64, FreeBSD, NetBSD, OpenBSD
+
+**Note:** Cosmocc produces identical .com files on all platforms - the output is "Actually Portable" and runs natively on all supported operating systems without modification.
+
+### Quick Examples
+
 ```bash
+# Install cosmocc toolchain
 clang-tool-chain install cosmocc
+
+# Build portable executable
 clang-tool-chain-cosmocc hello.c -o hello.com
-./hello.com  # Runs on Windows, Linux, macOS, FreeBSD
+clang-tool-chain-cosmocpp hello.cpp -o hello.com
+
+# The .com file runs on ANY supported OS
+./hello.com  # Works on Linux, macOS, FreeBSD, etc.
+# On Windows: hello.com
 ```
 
 **📖 [Complete Documentation](docs/COSMOCC.md)** - Usage guide, APE format, platform support, [Cosmopolitan project](https://github.com/jart/cosmopolitan).
@@ -237,13 +444,55 @@ clang-tool-chain-cosmocc hello.c -o hello.com
 
 ## ⚙️ Management CLI
 
-**6+ commands** • Pre-install • PATH management • Diagnostics • Cleanup
+**4 diagnostic commands + 1 main CLI** • Pre-install • PATH management • Diagnostics • Cleanup
+
+### Main CLI Subcommands
 
 ```bash
-clang-tool-chain info                    # Installation details
-clang-tool-chain test                    # Run diagnostics
-clang-tool-chain install clang-env       # Add to PATH
-clang-tool-chain purge                   # Remove all
+clang-tool-chain install <target>    # Pre-install toolchains
+clang-tool-chain uninstall <target>  # Remove PATH entries
+clang-tool-chain purge              # Remove all downloaded toolchains
+clang-tool-chain info               # Show installation details
+clang-tool-chain help               # Show help message
+```
+
+**Available Targets:**
+- `clang` - Core Clang/LLVM toolchain
+- `clang-env` - Add Clang binaries to system PATH
+- `iwyu` - Include What You Use analyzer
+- `iwyu-env` - Add IWYU to system PATH
+- `lldb` - LLDB debugger
+- `lldb-env` - Add LLDB to system PATH
+- `emscripten` - Emscripten WebAssembly SDK
+- `emscripten-env` - Add Emscripten to system PATH
+- `cosmocc` - Cosmopolitan Libc toolchain
+
+### Diagnostic Commands
+
+```bash
+clang-tool-chain-test     # Run 7 diagnostic tests
+clang-tool-chain-fetch    # Download toolchain components
+clang-tool-chain-paths    # Display installation paths
+```
+
+### Quick Examples
+
+```bash
+# Pre-install Clang toolchain
+clang-tool-chain install clang
+
+# Add to system PATH (no clang-tool-chain- prefix needed)
+clang-tool-chain install clang-env
+clang++ hello.cpp -o hello  # Use directly
+
+# Check installation status
+clang-tool-chain info
+
+# Run diagnostics
+clang-tool-chain test
+
+# Clean everything
+clang-tool-chain purge --yes
 ```
 
 **📖 [Complete Documentation](docs/MANAGEMENT_CLI.md)** - Full command reference, workflows, installation targets.
