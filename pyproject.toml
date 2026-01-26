@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clang-tool-chain"
-version = "1.0.32"
+version = "1.0.33"
 description = "Clang Tool Chain - C/C++ compilation toolchain utilities"
 readme = "README.md"
 license = "Apache-2.0"
@@ -56,9 +56,6 @@ sccache = [
 Homepage = "https://github.com/zackees/clang-tool-chain"
 Repository = "https://github.com/zackees/clang-tool-chain"
 Issues = "https://github.com/zackees/clang-tool-chain/issues"
-
-[project.entry-points."flake8.extension"]
-KBI = "lint_plugins.flake8.keyboard_interrupt_checker:KeyboardInterruptChecker"
 
 [project.scripts]
 clang-tool-chain = "clang_tool_chain.cli:main"
@@ -126,10 +123,6 @@ packages = ["src/clang_tool_chain"]
 include = [
     "src/clang_tool_chain/assets/**/*",
 ]
-
-# Force include lint_plugins without path rewriting
-[tool.hatch.build.force-include]
-"lint_plugins" = "lint_plugins"
 
 [tool.hatch.build.targets.sdist]
 include = [
