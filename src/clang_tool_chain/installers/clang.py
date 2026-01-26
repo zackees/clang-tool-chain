@@ -26,9 +26,11 @@ class ClangInstaller(BaseToolchainInstaller):
     binary_name = "clang"
 
     def get_install_dir(self, platform: str, arch: str) -> Path:
+        # Override to use legacy path function for backward compatibility
         return get_install_dir(platform, arch)
 
     def get_lock_path(self, platform: str, arch: str) -> Path:
+        # Override to use legacy path function for backward compatibility
         return get_lock_path(platform, arch)
 
     def fetch_manifest(self, platform: str, arch: str) -> Manifest:

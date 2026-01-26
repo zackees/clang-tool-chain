@@ -310,3 +310,49 @@ def get_cosmocc_lock_path(platform: str | None = None, arch: str | None = None) 
     toolchain_dir.mkdir(parents=True, exist_ok=True)
     lock_path = toolchain_dir / "cosmocc-universal.lock"
     return lock_path
+
+
+# ============================================================================
+# Generic Tool Paths (Template Pattern Support)
+# ============================================================================
+
+
+def get_tool_install_dir(tool_name: str, platform: str, arch: str) -> Path:
+    """
+    Get the installation directory for a toolchain component (generic pattern).
+
+    This provides a standard path pattern for all tools:
+    ~/.clang-tool-chain/{tool_name}/{platform}/{arch}
+
+    Args:
+        tool_name: Tool name (e.g., "clang", "iwyu", "lldb")
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the tool installation directory
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    install_dir = toolchain_dir / tool_name / platform / arch
+    return install_dir
+
+
+def get_tool_lock_path(tool_name: str, platform: str, arch: str) -> Path:
+    """
+    Get the lock file path for a toolchain component installation (generic pattern).
+
+    This provides a standard lock file pattern for all tools:
+    ~/.clang-tool-chain/{tool_name}-{platform}-{arch}.lock
+
+    Args:
+        tool_name: Tool name (e.g., "clang", "iwyu", "lldb")
+        platform: Platform name (e.g., "win", "linux", "darwin")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the lock file
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    toolchain_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = toolchain_dir / f"{tool_name}-{platform}-{arch}.lock"
+    return lock_path

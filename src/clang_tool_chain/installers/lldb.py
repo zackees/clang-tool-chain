@@ -2,10 +2,7 @@
 LLDB debugger installer module.
 """
 
-from pathlib import Path
-
 from ..manifest import Manifest, fetch_lldb_platform_manifest
-from ..path_utils import get_lldb_install_dir, get_lldb_lock_path
 from .base import BaseToolchainInstaller
 
 
@@ -15,11 +12,7 @@ class LLDBInstaller(BaseToolchainInstaller):
     tool_name = "lldb"
     binary_name = "lldb"
 
-    def get_install_dir(self, platform: str, arch: str) -> Path:
-        return get_lldb_install_dir(platform, arch)
-
-    def get_lock_path(self, platform: str, arch: str) -> Path:
-        return get_lldb_lock_path(platform, arch)
+    # Use default get_install_dir() and get_lock_path() from base class
 
     def fetch_manifest(self, platform: str, arch: str) -> Manifest:
         return fetch_lldb_platform_manifest(platform, arch)

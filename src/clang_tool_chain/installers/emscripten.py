@@ -84,11 +84,19 @@ class EmscriptenInstaller(BaseToolchainInstaller):
     binary_name = "clang"  # Emscripten bundles its own clang
 
     def get_install_dir(self, platform: str, arch: str) -> Path:
-        """Return the installation directory for Emscripten."""
+        """
+        Return the installation directory for Emscripten.
+
+        Override to use legacy function for environment variable override support.
+        """
         return get_emscripten_install_dir(platform, arch)
 
     def get_lock_path(self, platform: str, arch: str) -> Path:
-        """Return the lock file path for Emscripten."""
+        """
+        Return the lock file path for Emscripten.
+
+        Override to use legacy function for environment variable override support.
+        """
         return get_emscripten_lock_path(platform, arch)
 
     def fetch_manifest(self, platform: str, arch: str):

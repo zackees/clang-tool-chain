@@ -1,0 +1,413 @@
+"""
+Composable Argument Transformers using Chain of Responsibility Pattern
+
+This module implements a flexible and composable system for transforming compiler
+arguments based on platform, tool, and ABI requirements. Each transformer is
+responsible for a specific aspect of argument transformation (SDK paths, linker
+flags, ABI configuration, etc.) and transformers can be combined in a pipeline.
+
+The Chain of Responsibility pattern allows:
+- Independent, testable transformers
+- Flexible ordering based on priority
+- Easy addition of new transformers
+- Clear separation of concerns
+
+Architecture:
+    ArgumentTransformer (ABC)
+        ├── MacOSSDKTransformer (priority=100)
+        ├── DirectivesTransformer (priority=50)
+        ├── LLDLinkerTransformer (priority=200)
+        ├── GNUABITransformer (priority=300)
+        └── MSVCABITransformer (priority=300)
+
+    ArgumentPipeline
+        - Manages transformer execution order
+        - Applies transformers in priority order (low to high)
+        - Returns final transformed arguments
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from clang_tool_chain.directives.parser import ParsedDirectives
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ToolContext:
+    """
+    Context information for argument transformation.
+
+    This provides all the information transformers need to make decisions
+    about which arguments to add or modify.
+
+    Attributes:
+        platform_name: Platform identifier (win, darwin, linux)
+        arch: Architecture (x86_64, arm64)
+        tool_name: Name of the tool being executed (clang, clang++, etc.)
+        use_msvc: True if using MSVC ABI (Windows only)
+    """
+
+    platform_name: str
+    arch: str
+    tool_name: str
+    use_msvc: bool
+
+
+class ArgumentTransformer(ABC):
+    """
+    Abstract base class for argument transformers.
+
+    Each transformer implements a specific aspect of argument transformation
+    and has a priority that determines its execution order in the pipeline.
+    Lower priority values execute first.
+    """
+
+    @abstractmethod
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """
+        Transform compiler arguments based on context.
+
+        Args:
+            args: Current compiler/linker arguments
+            context: Execution context with platform and tool information
+
+        Returns:
+            Transformed arguments (may be modified or returned as-is)
+        """
+        pass
+
+    @abstractmethod
+    def priority(self) -> int:
+        """
+        Return the priority of this transformer.
+
+        Lower values execute first. This allows control over the order
+        in which transformers are applied.
+
+        Returns:
+            Priority value (typically 0-1000)
+        """
+        pass
+
+
+class DirectivesTransformer(ArgumentTransformer):
+    """
+    Transformer for inlined build directives in source files.
+
+    Priority: 50 (runs early to allow source files to specify requirements)
+
+    This transformer parses C/C++ source files for embedded build directives
+    (e.g., // @link: pthread, // @std: c++17) and adds the corresponding
+    compiler and linker arguments.
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
+        CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE: Set to '1' to enable debug logging
+    """
+
+    def priority(self) -> int:
+        return 50
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Add arguments from inlined build directives in source files."""
+        # Check if directives are disabled
+        if os.environ.get("CLANG_TOOL_CHAIN_NO_DIRECTIVES") == "1":
+            logger.debug("Directives disabled via CLANG_TOOL_CHAIN_NO_DIRECTIVES=1")
+            return args
+
+        # Only apply to clang/clang++ compilation commands
+        if context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Find source files in arguments
+        source_files = [Path(arg) for arg in args if arg.endswith((".c", ".cpp", ".cc", ".cxx"))]
+
+        if not source_files:
+            return args
+
+        # Parse directives from all source files
+        from clang_tool_chain.directives.parser import DirectiveParser
+
+        parser = DirectiveParser()
+        all_directives: list[ParsedDirectives] = []
+
+        for source_file in source_files:
+            if not source_file.exists():
+                continue
+
+            try:
+                directives = parser.parse_file_for_current_platform(source_file)
+                all_directives.append(directives)
+
+                if os.environ.get("CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE") == "1":
+                    logger.info(f"Parsed directives from {source_file}: {directives.get_all_args()}")
+
+            except Exception as e:
+                logger.warning(f"Failed to parse directives from {source_file}: {e}")
+                continue
+
+        if not all_directives:
+            return args
+
+        # Merge all directives into final argument list
+        directive_args = []
+        for directives in all_directives:
+            directive_args.extend(directives.get_all_args())
+
+        if directive_args:
+            logger.info(f"Adding {len(directive_args)} arguments from inlined build directives")
+            # Prepend directive arguments so they can be overridden by explicit args
+            return directive_args + args
+
+        return args
+
+
+class MacOSSDKTransformer(ArgumentTransformer):
+    """
+    Transformer for macOS SDK path detection and injection.
+
+    Priority: 100 (runs after directives but before linker/ABI)
+
+    This transformer implements LLVM's official three-tier SDK detection:
+    1. Explicit -isysroot flag (user override)
+    2. SDKROOT environment variable (Xcode standard)
+    3. Automatic xcrun --show-sdk-path (fallback detection)
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_SYSROOT: Set to '1' to disable automatic -isysroot
+        SDKROOT: Custom SDK path (standard macOS variable)
+    """
+
+    def priority(self) -> int:
+        return 100
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Add macOS SDK path if needed."""
+        # Only applies to macOS clang/clang++
+        if context.platform_name != "darwin" or context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Import here to avoid circular dependency
+        from clang_tool_chain.sdk import _add_macos_sysroot_if_needed
+
+        logger.debug("Checking if macOS sysroot needs to be added")
+        return _add_macos_sysroot_if_needed(args)
+
+
+class LLDLinkerTransformer(ArgumentTransformer):
+    """
+    Transformer for forcing LLVM's lld linker on macOS and Linux.
+
+    Priority: 200 (runs after SDK but before ABI)
+
+    This transformer adds platform-specific linker flags:
+    - macOS: -fuse-ld=ld64.lld (explicit Mach-O linker, LLVM 21.x+)
+    - Linux: -fuse-ld=lld (standard ELF linker)
+
+    It also translates GNU ld flags to ld64.lld equivalents on macOS:
+    - --no-undefined -> -undefined error
+    - --fatal-warnings -> -fatal_warnings
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_USE_SYSTEM_LD: Set to '1' to use system linker
+    """
+
+    def priority(self) -> int:
+        return 200
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Add lld linker flags if needed."""
+        # Only applies to clang/clang++
+        if context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Import here to avoid circular dependency
+        from clang_tool_chain.linker import _add_lld_linker_if_needed
+
+        return _add_lld_linker_if_needed(context.platform_name, args)
+
+
+class GNUABITransformer(ArgumentTransformer):
+    """
+    Transformer for Windows GNU ABI (MinGW) configuration.
+
+    Priority: 300 (runs after SDK and linker)
+
+    This transformer adds GNU ABI target arguments for Windows:
+    - --target=x86_64-w64-windows-gnu (or aarch64-w64-windows-gnu)
+    - --sysroot pointing to MinGW sysroot
+    - -stdlib=libc++ for C++ standard library
+    - -fuse-ld=lld for LLVM linker
+    - -rtlib=compiler-rt for LLVM runtime
+    - --unwindlib=libunwind for LLVM unwinder
+
+    This is the default ABI on Windows for cross-platform consistency.
+    """
+
+    def priority(self) -> int:
+        return 300
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Add GNU ABI target arguments for Windows."""
+        # Only applies to Windows clang/clang++ when not using MSVC
+        if context.use_msvc or context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Import here to avoid circular dependency
+        from clang_tool_chain.abi import _get_gnu_target_args, _should_use_gnu_abi
+
+        if not _should_use_gnu_abi(context.platform_name, args):
+            return args
+
+        try:
+            gnu_args = _get_gnu_target_args(context.platform_name, context.arch, args)
+            if gnu_args:
+                logger.info(f"Using GNU ABI with {len(gnu_args)} additional arguments")
+                # Prepend GNU args to allow user overrides
+                return gnu_args + args
+        except Exception as e:
+            logger.error(f"Failed to set up GNU ABI: {e}")
+            import sys
+
+            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+
+        return args
+
+
+class MSVCABITransformer(ArgumentTransformer):
+    """
+    Transformer for Windows MSVC ABI configuration.
+
+    Priority: 300 (runs after SDK and linker, same as GNU ABI)
+
+    This transformer adds MSVC ABI target arguments for Windows:
+    - --target=x86_64-pc-windows-msvc (or aarch64-pc-windows-msvc)
+
+    MSVC ABI is opt-in via *-msvc variant commands and requires
+    Windows SDK to be installed.
+    """
+
+    def priority(self) -> int:
+        return 300
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Add MSVC ABI target arguments for Windows."""
+        # Only applies to Windows clang/clang++ when using MSVC variant
+        if not context.use_msvc or context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Import here to avoid circular dependency
+        from clang_tool_chain.abi import _get_msvc_target_args, _should_use_msvc_abi
+
+        if not _should_use_msvc_abi(context.platform_name, args):
+            return args
+
+        try:
+            msvc_args = _get_msvc_target_args(context.platform_name, context.arch)
+            if msvc_args:
+                logger.info(f"Using MSVC ABI with {len(msvc_args)} additional arguments")
+                # Prepend MSVC args to allow user overrides
+                return msvc_args + args
+        except Exception as e:
+            logger.error(f"Failed to set up MSVC ABI: {e}")
+            import sys
+
+            print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
+            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+
+        return args
+
+
+class ArgumentPipeline:
+    """
+    Pipeline for applying multiple argument transformers in priority order.
+
+    This class manages the execution of transformers, ensuring they run in
+    the correct order based on their priority values.
+
+    Example:
+        >>> pipeline = ArgumentPipeline([
+        ...     DirectivesTransformer(),
+        ...     MacOSSDKTransformer(),
+        ...     LLDLinkerTransformer(),
+        ...     GNUABITransformer(),
+        ... ])
+        >>> context = ToolContext("darwin", "x86_64", "clang++", False)
+        >>> transformed = pipeline.transform(["test.cpp", "-o", "test"], context)
+    """
+
+    def __init__(self, transformers: list[ArgumentTransformer]):
+        """
+        Initialize the pipeline with a list of transformers.
+
+        Args:
+            transformers: List of transformers to apply
+        """
+        # Sort transformers by priority (low to high)
+        self._transformers = sorted(transformers, key=lambda t: t.priority())
+
+        logger.debug(f"Initialized pipeline with {len(self._transformers)} transformers:")
+        for transformer in self._transformers:
+            logger.debug(f"  - {transformer.__class__.__name__} (priority={transformer.priority()})")
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """
+        Apply all transformers to the arguments in priority order.
+
+        Args:
+            args: Original compiler/linker arguments
+            context: Execution context
+
+        Returns:
+            Transformed arguments after all transformers have been applied
+        """
+        result = args.copy()
+
+        for transformer in self._transformers:
+            transformer_name = transformer.__class__.__name__
+            logger.debug(f"Applying {transformer_name}...")
+
+            try:
+                result = transformer.transform(result, context)
+            except Exception as e:
+                logger.error(f"Transformer {transformer_name} failed: {e}")
+                # Continue with next transformer, don't fail the whole pipeline
+                continue
+
+        logger.debug(f"Pipeline complete: {len(args)} -> {len(result)} arguments")
+        return result
+
+
+def create_default_pipeline() -> ArgumentPipeline:
+    """
+    Create the default argument transformation pipeline.
+
+    This includes all standard transformers in their default priority order:
+    1. DirectivesTransformer (priority=50)
+    2. MacOSSDKTransformer (priority=100)
+    3. LLDLinkerTransformer (priority=200)
+    4. GNUABITransformer (priority=300)
+    5. MSVCABITransformer (priority=300)
+
+    Returns:
+        Configured ArgumentPipeline ready for use
+    """
+    return ArgumentPipeline(
+        [
+            DirectivesTransformer(),
+            MacOSSDKTransformer(),
+            LLDLinkerTransformer(),
+            GNUABITransformer(),
+            MSVCABITransformer(),
+        ]
+    )

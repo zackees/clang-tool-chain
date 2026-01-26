@@ -31,23 +31,41 @@ class BaseToolchainInstaller(ABC):
     - binary_name: str (e.g., "clang", "include-what-you-use", "lldb")
 
     And implement:
-    - get_install_dir()
-    - get_lock_path()
     - fetch_manifest()
+
+    Optional overrides (have default implementations):
+    - get_install_dir() - default uses standard pattern
+    - get_lock_path() - default uses standard pattern
     """
 
     tool_name: str
     binary_name: str
 
-    @abstractmethod
     def get_install_dir(self, platform: str, arch: str) -> Path:
-        """Return the installation directory for this tool."""
-        pass
+        """
+        Return the installation directory for this tool.
 
-    @abstractmethod
+        Default implementation uses the standard pattern:
+        ~/.clang-tool-chain/{tool_name}/{platform}/{arch}
+
+        Override this if your tool needs a custom path (e.g., cosmocc uses universal/).
+        """
+        from ..path_utils import get_tool_install_dir
+
+        return get_tool_install_dir(self.tool_name, platform, arch)
+
     def get_lock_path(self, platform: str, arch: str) -> Path:
-        """Return the lock file path for this tool."""
-        pass
+        """
+        Return the lock file path for this tool.
+
+        Default implementation uses the standard pattern:
+        ~/.clang-tool-chain/{tool_name}-{platform}-{arch}.lock
+
+        Override this if your tool needs a custom lock path (e.g., cosmocc uses universal lock).
+        """
+        from ..path_utils import get_tool_lock_path
+
+        return get_tool_lock_path(self.tool_name, platform, arch)
 
     @abstractmethod
     def fetch_manifest(self, platform: str, arch: str) -> Manifest:

@@ -19,7 +19,6 @@ Inlined Directives Support:
 
 import hashlib
 import os
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -30,7 +29,7 @@ from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 from ..cli_parsers import parse_build_args, parse_build_run_args
 from ..directives import DirectiveParser
 from ..platform import get_platform_info
-from .core import execute_tool, run_tool
+from .core import execute_tool
 
 
 def _get_directive_args(source_path: Path) -> list[str]:
@@ -293,201 +292,23 @@ def run_main() -> NoReturn:
         # ArgumentParser calls sys.exit on error or --help
         sys.exit(e.code if e.code is not None else 1)
 
-    use_cache = args.cached
-    source_file = args.source_file
-    compiler_flags = args.compiler_flags
-    program_args = args.program_args
-
-    # Determine output executable name from source file
-    source_path = Path(source_file)
-
-    if not source_path.exists():
-        print(f"Error: Source file not found: {source_file}", file=sys.stderr)
-        sys.exit(1)
-
     # Generate output filename: src.cpp -> src.com (Actually Portable Executable)
+    source_path = Path(args.source_file)
     output_file = str(source_path.with_suffix(".com"))
 
-    output_path = Path(output_file)
-    hash_file = source_path.with_suffix(".hash")
+    # Create build configuration and execute pipeline
+    from .build_pipeline import BuildConfig, CosmoccBuildPipeline
 
-    # Determine if this is C or C++ based on file extension
-    cpp_extensions = {".cpp", ".cc", ".cxx", ".C", ".c++"}
-    is_cpp = source_path.suffix.lower() in cpp_extensions
+    config = BuildConfig(
+        source_file=args.source_file,
+        output_file=output_file,
+        compiler_flags=args.compiler_flags,
+        use_cache=args.cached,
+        program_args=args.program_args,
+    )
 
-    # Import cosmocc execution after determining platform
-    from .cosmocc import find_cosmocc_tool
-
-    # Choose the appropriate Cosmopolitan compiler
-    cosmo_compiler_name = "cosmoc++" if is_cpp else "cosmocc"
-
-    # Check cache if enabled
-    should_compile = True
-    if use_cache:
-        print(f"Checking cache for {source_file}...", file=sys.stderr)
-
-        # Compute current hash
-        current_hash = _compute_file_hash(source_path)
-
-        # Check if hash file exists and matches
-        if hash_file.exists() and output_path.exists():
-            try:
-                stored_hash = hash_file.read_text().strip()
-                if stored_hash == current_hash:
-                    print("Cache hit! Hash matches, skipping compilation.", file=sys.stderr)
-                    print(f"Using cached executable: {output_file}", file=sys.stderr)
-                    should_compile = False
-                else:
-                    print("Cache miss: Hash mismatch, recompiling...", file=sys.stderr)
-            except KeyboardInterrupt as ke:
-                handle_keyboard_interrupt_properly(ke)
-            except Exception as e:
-                print(f"Warning: Could not read hash file: {e}", file=sys.stderr)
-                print("Recompiling...", file=sys.stderr)
-        else:
-            if not output_path.exists():
-                print("Cache miss: Executable not found, compiling...", file=sys.stderr)
-            else:
-                print("Cache miss: No hash file found, compiling...", file=sys.stderr)
-
-    # Compile if needed
-    if should_compile:
-        # Check for shebang and strip if present
-        compile_source, temp_created = _strip_shebang(source_path)
-
-        try:
-            # Parse inlined build directives from the source file
-            directive_args = _get_directive_args(source_path)
-
-            # Build the compiler command
-            # Directive args come before user-specified flags so user can override
-            compiler_args = directive_args + [str(compile_source), "-o", output_file] + compiler_flags
-
-            print(f"Compiling with Cosmopolitan CC: {source_file} -> {output_file}", file=sys.stderr)
-
-            # Find the cosmocc tool and compile
-            cosmo_tool_path = find_cosmocc_tool(cosmo_compiler_name)
-
-            # Set up environment for Cosmocc
-            from .cosmocc import get_cosmocc_binary_dir, get_platform_info
-
-            platform_name, _ = get_platform_info()
-            bin_dir = get_cosmocc_binary_dir()
-            install_dir = bin_dir.parent
-
-            env = os.environ.copy()
-
-            # Add Cosmocc bin directory to PATH
-            libexec_dir = install_dir / "libexec"
-            libexec_gcc_dir = libexec_dir / "gcc"
-
-            path_dirs = [str(bin_dir)]
-
-            # Add libexec/gcc to PATH (contains target-specific subdirectories)
-            if libexec_gcc_dir.exists():
-                path_dirs.append(str(libexec_gcc_dir))
-                for target_dir in sorted(libexec_gcc_dir.iterdir()):
-                    if target_dir.is_dir():
-                        for version_dir in sorted(target_dir.iterdir()):
-                            if version_dir.is_dir():
-                                path_dirs.append(str(version_dir))
-            elif libexec_dir.exists():
-                path_dirs.append(str(libexec_dir))
-
-            # On Windows, convert paths to Unix-style for bash/POSIX shell compatibility
-            if platform_name == "win":
-
-                def to_unix_path(path: str) -> str:
-                    """Convert Windows path to Unix-style path for MSYS/Git Bash."""
-                    path = path.replace("\\", "/")
-                    # Convert drive letter: C:/foo -> /c/foo
-                    if len(path) >= 2 and path[1] == ":":
-                        drive = path[0].lower()
-                        path = f"/{drive}{path[2:]}"
-                    return path
-
-                unix_path_dirs = [to_unix_path(p) for p in path_dirs]
-                existing_path = env.get("PATH", "")
-                env["PATH"] = ":".join(unix_path_dirs) + ":" + existing_path
-            else:
-                env["PATH"] = f"{os.pathsep.join(path_dirs)}{os.pathsep}{env.get('PATH', '')}"
-
-            # Set COSMOCC environment variable
-            env["COSMOCC"] = str(install_dir)
-
-            # On Windows, need to use bash to execute the script
-            if platform_name == "win":
-                from .cosmocc import _find_windows_shell
-
-                shell = _find_windows_shell()
-                if shell:
-                    tool_path_unix = str(cosmo_tool_path).replace("\\", "/")
-                    cmd = [shell, tool_path_unix] + compiler_args
-                else:
-                    print(
-                        "Warning: No POSIX shell (bash/sh) found. Cosmocc requires a shell like Git Bash, MSYS2, or WSL.",
-                        file=sys.stderr,
-                    )
-                    cmd = [str(cosmo_tool_path)] + compiler_args
-            else:
-                import shutil
-
-                shell = shutil.which("bash") or shutil.which("sh")
-                cmd = [shell, str(cosmo_tool_path)] + compiler_args if shell else [str(cosmo_tool_path)] + compiler_args
-
-            # Run the compiler
-            result = subprocess.run(cmd, env=env)
-            exit_code = result.returncode
-        finally:
-            # Clean up temp file if created
-            if temp_created:
-                compile_source.unlink(missing_ok=True)
-
-        if exit_code != 0:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print("Compilation failed", file=sys.stderr)
-            print(f"{'=' * 60}\n", file=sys.stderr)
-            sys.exit(exit_code)
-
-        # Update hash file if caching is enabled
-        if use_cache:
-            try:
-                current_hash = _compute_file_hash(source_path)
-                hash_file.write_text(current_hash)
-                print(f"Updated cache hash: {hash_file}", file=sys.stderr)
-            except KeyboardInterrupt as ke:
-                handle_keyboard_interrupt_properly(ke)
-            except Exception as e:
-                print(f"Warning: Could not write hash file: {e}", file=sys.stderr)
-
-    print(f"\nRunning: {output_file}", file=sys.stderr)
-    if program_args:
-        print(f"Program arguments: {' '.join(program_args)}", file=sys.stderr)
-    print("=" * 60, file=sys.stderr)
-
-    # Run the compiled executable
-    try:
-        # Use absolute path for Windows compatibility
-        abs_output = output_path.absolute()
-        result = subprocess.run([str(abs_output)] + program_args)
-        sys.exit(result.returncode)
-    except FileNotFoundError:
-        print(f"\n{'=' * 60}", file=sys.stderr)
-        print("Execution Error", file=sys.stderr)
-        print(f"{'=' * 60}", file=sys.stderr)
-        print(f"Compiled executable not found: {output_file}", file=sys.stderr)
-        print("\nThe compilation appeared to succeed, but the output file cannot be found.", file=sys.stderr)
-        print(f"{'=' * 60}\n", file=sys.stderr)
-        sys.exit(1)
-    except KeyboardInterrupt as ke:
-        handle_keyboard_interrupt_properly(ke)
-    except Exception as e:
-        print(f"\n{'=' * 60}", file=sys.stderr)
-        print("Execution Error", file=sys.stderr)
-        print(f"{'=' * 60}", file=sys.stderr)
-        print(f"Error running {output_file}: {e}", file=sys.stderr)
-        print(f"{'=' * 60}\n", file=sys.stderr)
-        sys.exit(1)
+    pipeline = CosmoccBuildPipeline(config)
+    pipeline.execute(run_after_build=True)
 
 
 def build_run_main() -> NoReturn:
@@ -530,126 +351,21 @@ def build_run_main() -> NoReturn:
         # ArgumentParser calls sys.exit on error or --help
         sys.exit(e.code if e.code is not None else 1)
 
-    use_cache = args.cached
-    source_file = args.source_file
-    compiler_flags = args.compiler_flags
-    program_args = args.program_args
-
-    # Determine output executable name from source file
-    source_path = Path(source_file)
-
-    if not source_path.exists():
-        print(f"Error: Source file not found: {source_file}", file=sys.stderr)
-        sys.exit(1)
-
-    platform_name, _ = get_platform_info()
-
     # Generate output filename: src.cpp -> src (or src.exe on Windows)
+    platform_name, _ = get_platform_info()
+    source_path = Path(args.source_file)
     output_file = str(source_path.with_suffix(".exe")) if platform_name == "win" else str(source_path.with_suffix(""))
 
-    output_path = Path(output_file)
-    hash_file = source_path.with_suffix(".hash")
+    # Create build configuration and execute pipeline
+    from .build_pipeline import BuildConfig, ClangBuildPipeline
 
-    # Determine if this is C or C++ based on file extension
-    cpp_extensions = {".cpp", ".cc", ".cxx", ".C", ".c++"}
-    is_cpp = source_path.suffix.lower() in cpp_extensions
+    config = BuildConfig(
+        source_file=args.source_file,
+        output_file=output_file,
+        compiler_flags=args.compiler_flags,
+        use_cache=args.cached,
+        program_args=args.program_args,
+    )
 
-    # Choose the appropriate compiler
-    compiler = "clang++" if is_cpp else "clang"
-
-    # Check cache if enabled
-    should_compile = True
-    if use_cache:
-        print(f"Checking cache for {source_file}...", file=sys.stderr)
-
-        # Compute current hash
-        current_hash = _compute_file_hash(source_path)
-
-        # Check if hash file exists and matches
-        if hash_file.exists() and output_path.exists():
-            try:
-                stored_hash = hash_file.read_text().strip()
-                if stored_hash == current_hash:
-                    print("Cache hit! Hash matches, skipping compilation.", file=sys.stderr)
-                    print(f"Using cached executable: {output_file}", file=sys.stderr)
-                    should_compile = False
-                else:
-                    print("Cache miss: Hash mismatch, recompiling...", file=sys.stderr)
-            except KeyboardInterrupt as ke:
-                handle_keyboard_interrupt_properly(ke)
-            except Exception as e:
-                print(f"Warning: Could not read hash file: {e}", file=sys.stderr)
-                print("Recompiling...", file=sys.stderr)
-        else:
-            if not output_path.exists():
-                print("Cache miss: Executable not found, compiling...", file=sys.stderr)
-            else:
-                print("Cache miss: No hash file found, compiling...", file=sys.stderr)
-
-    # Compile if needed
-    if should_compile:
-        # Check for shebang and strip if present
-        compile_source, temp_created = _strip_shebang(source_path)
-
-        try:
-            # Parse inlined build directives from the source file
-            directive_args = _get_directive_args(source_path)
-
-            # Build the compiler command
-            # Directive args come before user-specified flags so user can override
-            compiler_args = directive_args + [str(compile_source), "-o", output_file] + compiler_flags
-
-            print(f"Compiling: {source_file} -> {output_file}", file=sys.stderr)
-
-            # Run the compiler (returns exit code instead of calling sys.exit)
-            exit_code = run_tool(compiler, compiler_args)
-        finally:
-            # Clean up temp file if created
-            if temp_created:
-                compile_source.unlink(missing_ok=True)
-
-        if exit_code != 0:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print("Compilation failed", file=sys.stderr)
-            print(f"{'=' * 60}\n", file=sys.stderr)
-            sys.exit(exit_code)
-
-        # Update hash file if caching is enabled
-        if use_cache:
-            try:
-                current_hash = _compute_file_hash(source_path)
-                hash_file.write_text(current_hash)
-                print(f"Updated cache hash: {hash_file}", file=sys.stderr)
-            except KeyboardInterrupt as ke:
-                handle_keyboard_interrupt_properly(ke)
-            except Exception as e:
-                print(f"Warning: Could not write hash file: {e}", file=sys.stderr)
-
-    print(f"\nRunning: {output_file}", file=sys.stderr)
-    if program_args:
-        print(f"Program arguments: {' '.join(program_args)}", file=sys.stderr)
-    print("=" * 60, file=sys.stderr)
-
-    # Run the compiled executable
-    try:
-        # Use absolute path for Windows compatibility
-        abs_output = output_path.absolute()
-        result = subprocess.run([str(abs_output)] + program_args)
-        sys.exit(result.returncode)
-    except FileNotFoundError:
-        print(f"\n{'=' * 60}", file=sys.stderr)
-        print("Execution Error", file=sys.stderr)
-        print(f"{'=' * 60}", file=sys.stderr)
-        print(f"Compiled executable not found: {output_file}", file=sys.stderr)
-        print("\nThe compilation appeared to succeed, but the output file cannot be found.", file=sys.stderr)
-        print(f"{'=' * 60}\n", file=sys.stderr)
-        sys.exit(1)
-    except KeyboardInterrupt as ke:
-        handle_keyboard_interrupt_properly(ke)
-    except Exception as e:
-        print(f"\n{'=' * 60}", file=sys.stderr)
-        print("Execution Error", file=sys.stderr)
-        print(f"{'=' * 60}", file=sys.stderr)
-        print(f"Error running {output_file}: {e}", file=sys.stderr)
-        print(f"{'=' * 60}\n", file=sys.stderr)
-        sys.exit(1)
+    pipeline = ClangBuildPipeline(config)
+    pipeline.execute(run_after_build=True)

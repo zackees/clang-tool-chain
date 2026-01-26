@@ -18,22 +18,19 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
-from ..abi import (
-    _get_gnu_target_args,
-    _get_msvc_target_args,
-    _should_use_gnu_abi,
-    _should_use_msvc_abi,
-)
+from ..abi import _should_use_gnu_abi
 from ..deployment.dll_deployer import post_link_dependency_deployment, post_link_dll_deployment
 from ..interrupt_utils import handle_keyboard_interrupt_properly
-from ..linker import _add_lld_linker_if_needed
 from ..logging_config import configure_logging
 from ..platform.detection import get_platform_info
 from ..platform.paths import find_sccache_binary, find_tool_binary
-from ..sdk import _add_macos_sysroot_if_needed
+from .arg_transformers import ArgumentPipeline, ToolContext, create_default_pipeline
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)
+
+# Global pipeline instance (created once and reused)
+_default_pipeline: ArgumentPipeline | None = None
 
 
 def _extract_deploy_dependencies_flag(args: list[str]) -> tuple[list[str], bool]:
@@ -61,6 +58,47 @@ def _extract_deploy_dependencies_flag(args: list[str]) -> tuple[list[str], bool]
         filtered = [arg for arg in args if arg != "--deploy-dependencies"]
         return (filtered, True)
     return (args, False)
+
+
+def _get_pipeline() -> ArgumentPipeline:
+    """
+    Get or create the default argument transformation pipeline.
+
+    The pipeline is created once and reused for all subsequent calls
+    to avoid repeated initialization.
+
+    Returns:
+        Configured ArgumentPipeline instance
+    """
+    global _default_pipeline
+    if _default_pipeline is None:
+        _default_pipeline = create_default_pipeline()
+    return _default_pipeline
+
+
+def _transform_arguments(args: list[str], tool_name: str, platform_name: str, arch: str, use_msvc: bool) -> list[str]:
+    """
+    Apply platform-specific argument transformations using the pipeline.
+
+    Args:
+        args: Original compiler/linker arguments
+        tool_name: Name of the tool being executed
+        platform_name: Platform name (e.g., "win", "darwin", "linux")
+        arch: Architecture (e.g., "x86_64", "arm64")
+        use_msvc: True if using MSVC ABI
+
+    Returns:
+        Transformed arguments with platform-specific flags added
+    """
+    context = ToolContext(
+        platform_name=platform_name,
+        arch=arch,
+        tool_name=tool_name,
+        use_msvc=use_msvc,
+    )
+
+    pipeline = _get_pipeline()
+    return pipeline.transform(args, context)
 
 
 def _extract_output_path(args: list[str], tool_name: str) -> Path | None:
@@ -222,43 +260,19 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
         print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
-    # Add macOS SDK path automatically for clang/clang++ if not already specified
+    # Apply platform-specific argument transformations using pipeline
     platform_name, arch = get_platform_info()
-    if platform_name == "darwin" and tool_name in ("clang", "clang++"):
-        logger.debug("Checking if macOS sysroot needs to be added")
-        args = _add_macos_sysroot_if_needed(args)
-
-    # Force lld linker on macOS and Linux for cross-platform consistency
     if tool_name in ("clang", "clang++"):
-        args = _add_lld_linker_if_needed(platform_name, args)
-
-    # Add Windows GNU ABI target automatically for clang/clang++ if not MSVC variant
-    if not use_msvc and tool_name in ("clang", "clang++") and _should_use_gnu_abi(platform_name, args):
         try:
-            gnu_args = _get_gnu_target_args(platform_name, arch, args)
-            args = gnu_args + args
-            logger.info(f"Using GNU ABI with args: {gnu_args}")
+            args = _transform_arguments(args, tool_name, platform_name, arch, use_msvc)
+            logger.debug(f"Transformed arguments: {len(args)} args")
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
-            # If GNU setup fails, let the tool try anyway (may fail at compile time)
-            logger.error(f"Failed to set up GNU ABI: {e}")
-            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
-            print("Continuing with default target (may fail)...\n", file=sys.stderr)
-
-    # Add Windows MSVC ABI target for clang/clang++ when using MSVC variant
-    if use_msvc and tool_name in ("clang", "clang++") and _should_use_msvc_abi(platform_name, args):
-        try:
-            msvc_args = _get_msvc_target_args(platform_name, arch)
-            args = msvc_args + args
-            logger.info(f"Using MSVC ABI with args: {msvc_args}")
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            # If MSVC setup fails, let the tool try anyway (may fail at compile time)
-            logger.error(f"Failed to set up MSVC ABI: {e}")
-            print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
-            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+            # If transformation fails, let the tool try anyway (may fail at compile time)
+            logger.error(f"Failed to transform arguments: {e}")
+            print(f"\nWarning: Failed to apply platform-specific transformations: {e}", file=sys.stderr)
+            print("Continuing with original arguments (may fail)...\n", file=sys.stderr)
 
     # Build command
     cmd = [str(tool_path)] + args
@@ -391,43 +405,19 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
 
     tool_path = find_tool_binary(tool_name)
 
-    # Add macOS SDK path automatically for clang/clang++ if not already specified
+    # Apply platform-specific argument transformations using pipeline
     platform_name, arch = get_platform_info()
-    if platform_name == "darwin" and tool_name in ("clang", "clang++"):
-        logger.debug("Checking if macOS sysroot needs to be added")
-        args = _add_macos_sysroot_if_needed(args)
-
-    # Force lld linker on macOS and Linux for cross-platform consistency
     if tool_name in ("clang", "clang++"):
-        args = _add_lld_linker_if_needed(platform_name, args)
-
-    # Add Windows GNU ABI target automatically for clang/clang++ if not MSVC variant
-    if not use_msvc and tool_name in ("clang", "clang++") and _should_use_gnu_abi(platform_name, args):
         try:
-            gnu_args = _get_gnu_target_args(platform_name, arch, args)
-            args = gnu_args + args
-            logger.info(f"Using GNU ABI with args: {gnu_args}")
+            args = _transform_arguments(args, tool_name, platform_name, arch, use_msvc)
+            logger.debug(f"Transformed arguments: {len(args)} args")
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
-            # If GNU setup fails, let the tool try anyway (may fail at compile time)
-            logger.error(f"Failed to set up GNU ABI: {e}")
-            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
-            print("Continuing with default target (may fail)...\n", file=sys.stderr)
-
-    # Add Windows MSVC ABI target for clang/clang++ when using MSVC variant
-    if use_msvc and tool_name in ("clang", "clang++") and _should_use_msvc_abi(platform_name, args):
-        try:
-            msvc_args = _get_msvc_target_args(platform_name, arch)
-            args = msvc_args + args
-            logger.info(f"Using MSVC ABI with args: {msvc_args}")
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            # If MSVC setup fails, let the tool try anyway (may fail at compile time)
-            logger.error(f"Failed to set up MSVC ABI: {e}")
-            print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
-            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+            # If transformation fails, let the tool try anyway (may fail at compile time)
+            logger.error(f"Failed to transform arguments: {e}")
+            print(f"\nWarning: Failed to apply platform-specific transformations: {e}", file=sys.stderr)
+            print("Continuing with original arguments (may fail)...\n", file=sys.stderr)
 
     # Build command
     cmd = [str(tool_path)] + args
@@ -506,39 +496,18 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
         print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
-    # Add macOS SDK path automatically if needed
+    # Apply platform-specific argument transformations using pipeline
     platform_name, arch = get_platform_info()
-    if platform_name == "darwin":
-        args = _add_macos_sysroot_if_needed(args)
-
-    # Force lld linker on macOS and Linux for cross-platform consistency
-    args = _add_lld_linker_if_needed(platform_name, args)
-
-    # Add Windows GNU ABI target automatically (if not using MSVC variant)
-    if not use_msvc and _should_use_gnu_abi(platform_name, args):
-        try:
-            gnu_args = _get_gnu_target_args(platform_name, arch, args)
-            args = gnu_args + args
-            logger.info(f"Using GNU ABI with sccache: {gnu_args}")
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            logger.error(f"Failed to set up GNU ABI: {e}")
-            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
-            print("Continuing with default target (may fail)...\n", file=sys.stderr)
-
-    # Add Windows MSVC ABI target when using MSVC variant
-    if use_msvc and _should_use_msvc_abi(platform_name, args):
-        try:
-            msvc_args = _get_msvc_target_args(platform_name, arch)
-            args = msvc_args + args
-            logger.info(f"Using MSVC ABI with sccache: {msvc_args}")
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            logger.error(f"Failed to set up MSVC ABI: {e}")
-            print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
-            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+    try:
+        args = _transform_arguments(args, "clang", platform_name, arch, use_msvc)
+        logger.debug(f"Transformed arguments for sccache: {len(args)} args")
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        # If transformation fails, let the tool try anyway (may fail at compile time)
+        logger.error(f"Failed to transform arguments: {e}")
+        print(f"\nWarning: Failed to apply platform-specific transformations: {e}", file=sys.stderr)
+        print("Continuing with original arguments (may fail)...\n", file=sys.stderr)
 
     # Build command: sccache <clang_path> <args>
     cmd = [sccache_path, str(clang_path)] + args
@@ -632,39 +601,18 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
         print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
-    # Add macOS SDK path automatically if needed
+    # Apply platform-specific argument transformations using pipeline
     platform_name, arch = get_platform_info()
-    if platform_name == "darwin":
-        args = _add_macos_sysroot_if_needed(args)
-
-    # Force lld linker on macOS and Linux for cross-platform consistency
-    args = _add_lld_linker_if_needed(platform_name, args)
-
-    # Add Windows GNU ABI target automatically (if not using MSVC variant)
-    if not use_msvc and _should_use_gnu_abi(platform_name, args):
-        try:
-            gnu_args = _get_gnu_target_args(platform_name, arch, args)
-            args = gnu_args + args
-            logger.info(f"Using GNU ABI with sccache: {gnu_args}")
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            logger.error(f"Failed to set up GNU ABI: {e}")
-            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
-            print("Continuing with default target (may fail)...\n", file=sys.stderr)
-
-    # Add Windows MSVC ABI target when using MSVC variant
-    if use_msvc and _should_use_msvc_abi(platform_name, args):
-        try:
-            msvc_args = _get_msvc_target_args(platform_name, arch)
-            args = msvc_args + args
-            logger.info(f"Using MSVC ABI with sccache: {msvc_args}")
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            logger.error(f"Failed to set up MSVC ABI: {e}")
-            print(f"\nWarning: Failed to set up Windows MSVC ABI: {e}", file=sys.stderr)
-            print("Continuing with default target (may fail)...\n", file=sys.stderr)
+    try:
+        args = _transform_arguments(args, "clang++", platform_name, arch, use_msvc)
+        logger.debug(f"Transformed arguments for sccache: {len(args)} args")
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        # If transformation fails, let the tool try anyway (may fail at compile time)
+        logger.error(f"Failed to transform arguments: {e}")
+        print(f"\nWarning: Failed to apply platform-specific transformations: {e}", file=sys.stderr)
+        print("Continuing with original arguments (may fail)...\n", file=sys.stderr)
 
     # Build command: sccache <clang++_path> <args>
     cmd = [sccache_path, str(clang_cpp_path)] + args

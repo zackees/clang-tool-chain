@@ -23,11 +23,7 @@ class NodeJSInstaller(BaseToolchainInstaller):
     tool_name = "nodejs"
     binary_name = "node"
 
-    def get_install_dir(self, platform: str, arch: str) -> Path:
-        return get_nodejs_install_dir(platform, arch)
-
-    def get_lock_path(self, platform: str, arch: str) -> Path:
-        return get_nodejs_lock_path(platform, arch)
+    # Use default get_install_dir() and get_lock_path() from base class
 
     def fetch_manifest(self, platform: str, arch: str) -> Manifest:
         return fetch_nodejs_platform_manifest(platform, arch)
