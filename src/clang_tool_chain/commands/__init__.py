@@ -51,7 +51,7 @@ Note: build_main and build_run_main need to be imported from wrapper.py
 until they are moved to execution.build module.
 """
 
-from .entry_points import (
+from clang_tool_chain.commands.entry_points import (
     clang_cpp_main,
     clang_cpp_msvc_main,
     clang_format_main,

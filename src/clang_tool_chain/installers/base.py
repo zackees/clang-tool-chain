@@ -13,11 +13,11 @@ from pathlib import Path
 
 import fasteners
 
-from ..archive import download_archive, extract_tarball
-from ..interrupt_utils import handle_keyboard_interrupt_properly
-from ..logging_config import configure_logging
-from ..manifest import Manifest
-from ..permissions import _robust_rmtree, fix_file_permissions
+from clang_tool_chain.archive import download_archive, extract_tarball
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+from clang_tool_chain.logging_config import configure_logging
+from clang_tool_chain.manifest import Manifest
+from clang_tool_chain.permissions import _robust_rmtree, fix_file_permissions
 
 logger = configure_logging(__name__)
 

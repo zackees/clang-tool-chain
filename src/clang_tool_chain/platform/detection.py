@@ -9,10 +9,9 @@ import platform
 import subprocess
 from pathlib import Path
 
+from clang_tool_chain import downloader
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from .. import downloader
-from ..logging_config import configure_logging
+from clang_tool_chain.logging_config import configure_logging
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)

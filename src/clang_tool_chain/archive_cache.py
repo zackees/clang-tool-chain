@@ -11,9 +11,8 @@ import shutil
 from pathlib import Path
 
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from .logging_config import configure_logging
-from .path_utils import get_archive_cache_dir, get_cached_archive_path
+from clang_tool_chain.logging_config import configure_logging
+from clang_tool_chain.path_utils import get_archive_cache_dir, get_cached_archive_path
 
 logger = configure_logging(__name__)
 

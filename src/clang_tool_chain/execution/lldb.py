@@ -9,15 +9,60 @@ import logging
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import NoReturn
 
+from clang_tool_chain import downloader
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from .. import downloader
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+class LldbPythonStatus(Enum):
+    """Status of LLDB Python environment."""
+
+    READY = "ready"
+    MISSING = "missing"
+    INCOMPLETE = "incomplete"
+
+
+@dataclass
+class LldbPythonEnvironment:
+    """
+    Diagnostic information about LLDB Python environment configuration.
+
+    Attributes:
+        python_available: True if Python directory exists
+        python_dir: Path to Python directory
+        site_packages: Path to site-packages directory
+        lldb_module: True if LLDB Python module exists
+        python_zip: True if python310.zip exists (Windows)
+        python_lib_dir: True if Lib/ directory exists (Linux/macOS)
+        python_dll: True if python310.dll exists (Windows)
+        pythonpath_value: Value for PYTHONPATH environment variable
+        pythonhome_value: Value for PYTHONHOME environment variable
+        status: Overall status (ready, missing, or incomplete)
+        message: Human-readable status message
+    """
+
+    python_available: bool = False
+    python_dir: str | None = None
+    site_packages: str | None = None
+    lldb_module: bool = False
+    python_zip: bool = False
+    python_lib_dir: bool = False
+    python_dll: bool = False
+    pythonpath_value: str | None = None
+    pythonhome_value: str | None = None
+    status: LldbPythonStatus = LldbPythonStatus.MISSING
+    message: str = "Python modules not found"
+
+    def is_ready(self) -> bool:
+        """Check if Python environment is fully configured."""
+        return self.status == LldbPythonStatus.READY
 
 
 def get_platform_info() -> tuple[str, str]:
@@ -158,103 +203,80 @@ def find_lldb_tool(tool_name: str) -> Path:
     return tool_path
 
 
-def check_lldb_python_environment() -> dict[str, bool | str | None]:
+def check_lldb_python_environment() -> LldbPythonEnvironment:
     """
     Check the LLDB Python environment configuration and return diagnostic information.
 
     Returns:
-        Dictionary containing diagnostic information:
-        - "python_available": True if Python modules are bundled
-        - "python_dir": Path to Python directory (or None)
-        - "site_packages": Path to site-packages directory (or None)
-        - "lldb_module": True if LLDB Python module exists
-        - "python_zip": True if python310.zip exists
-        - "python_lib_dir": True if Lib/ directory exists (Linux)
-        - "python_dll": True if python310.dll exists (Windows)
-        - "pythonpath_value": What PYTHONPATH would be set to
-        - "pythonhome_value": What PYTHONHOME would be set to
-        - "status": "ready", "missing", or "incomplete"
-        - "message": Human-readable status message
+        LldbPythonEnvironment object containing diagnostic information
     """
     platform_name, arch = get_platform_info()
     install_dir = downloader.get_lldb_install_dir(platform_name, arch)
     python_dir = install_dir / "python"
     bin_dir = install_dir / "bin"
 
-    result = {
-        "python_available": False,
-        "python_dir": None,
-        "site_packages": None,
-        "lldb_module": False,
-        "python_zip": False,
-        "python_lib_dir": False,
-        "python_dll": False,
-        "pythonpath_value": None,
-        "pythonhome_value": None,
-        "status": "missing",
-        "message": "Python modules not found",
-    }
+    result = LldbPythonEnvironment()
 
     if python_dir.exists():
-        result["python_available"] = True
-        result["python_dir"] = str(python_dir)
-        result["pythonhome_value"] = str(python_dir)
+        result.python_available = True
+        result.python_dir = str(python_dir)
+        result.pythonhome_value = str(python_dir)
 
         # Check site-packages
         site_packages = python_dir / "Lib" / "site-packages"
         if site_packages.exists():
-            result["site_packages"] = str(site_packages)
-            result["pythonpath_value"] = str(site_packages)
+            result.site_packages = str(site_packages)
+            result.pythonpath_value = str(site_packages)
 
             # Check for LLDB Python module
             lldb_module = site_packages / "lldb"
             if lldb_module.exists():
-                result["lldb_module"] = True
+                result.lldb_module = True
 
         # Check for Python standard library (two possible formats)
         # Windows: python310.zip (compressed)
         python_zip = python_dir / "python310.zip"
         if python_zip.exists():
-            result["python_zip"] = True
+            result.python_zip = True
 
         # Linux/macOS: Lib/ directory (extracted)
         lib_dir = python_dir / "Lib"
         if lib_dir.exists() and lib_dir.is_dir():
-            result["python_lib_dir"] = True
+            result.python_lib_dir = True
 
         # Check for python310.dll on Windows (required by liblldb.dll)
         if platform_name == "win":
             python_dll = bin_dir / "python310.dll"
             if python_dll.exists():
-                result["python_dll"] = True
+                result.python_dll = True
 
         # Determine overall status
         # Python stdlib can be either python310.zip (Windows) or Lib/ directory (Linux/macOS)
-        has_stdlib = result["python_zip"] or result["python_lib_dir"]
+        has_stdlib = result.python_zip or result.python_lib_dir
 
         # On Windows, python310.dll is required for LLDB to run
         has_python_runtime = True
         if platform_name == "win":
-            has_python_runtime = result["python_dll"]  # type: ignore[assignment]
+            has_python_runtime = result.python_dll
 
-        if result["lldb_module"] and has_stdlib and has_python_runtime:
-            result["status"] = "ready"
-            stdlib_type = "python310.zip" if result["python_zip"] else "Lib/ directory"
-            result["message"] = f"Python environment is fully configured (stdlib: {stdlib_type})"
+        if result.lldb_module and has_stdlib and has_python_runtime:
+            result.status = LldbPythonStatus.READY
+            stdlib_type = "python310.zip" if result.python_zip else "Lib/ directory"
+            result.message = f"Python environment is fully configured (stdlib: {stdlib_type})"
         elif not has_python_runtime:
-            result["status"] = "incomplete"
-            result["message"] = "Python runtime (python310.dll) is missing from bin/ directory"
-        elif result["lldb_module"]:
-            result["status"] = "incomplete"
-            result["message"] = "LLDB module found but Python standard library missing"
+            result.status = LldbPythonStatus.INCOMPLETE
+            result.message = "Python runtime (python310.dll) is missing from bin/ directory"
+        elif result.lldb_module:
+            result.status = LldbPythonStatus.INCOMPLETE
+            result.message = "LLDB module found but Python standard library missing"
         elif has_stdlib:
-            result["status"] = "incomplete"
-            result["message"] = "Python standard library found but LLDB module missing"
+            result.status = LldbPythonStatus.INCOMPLETE
+            result.message = "Python standard library found but LLDB module missing"
         else:
-            result["status"] = "incomplete"
-            result["message"] = "Python directory exists but modules are incomplete"
+            result.status = LldbPythonStatus.INCOMPLETE
+            result.message = "Python directory exists but modules are incomplete"
     else:
-        result["message"] = f"Python directory not found at {python_dir}"
+        result.message = f"Python directory not found at {python_dir}"
 
     return result
 
@@ -282,47 +304,46 @@ def print_lldb_python_diagnostics() -> int:
         # Check Python environment
         diagnostics = check_lldb_python_environment()
 
-        status = diagnostics["status"]
-        assert isinstance(status, str), "Status should be a string"
+        status = diagnostics.status.value
         print(f"Status: {status.upper()}")
-        print(f"Message: {diagnostics['message']}")
+        print(f"Message: {diagnostics.message}")
         print()
 
         print("Python Components:")
-        print(f"  Python Directory: {diagnostics['python_dir'] or 'NOT FOUND'}")
-        print(f"  Site-Packages: {diagnostics['site_packages'] or 'NOT FOUND'}")
-        print(f"  LLDB Module: {'✓ FOUND' if diagnostics['lldb_module'] else '✗ MISSING'}")
+        print(f"  Python Directory: {diagnostics.python_dir or 'NOT FOUND'}")
+        print(f"  Site-Packages: {diagnostics.site_packages or 'NOT FOUND'}")
+        print(f"  LLDB Module: {'✓ FOUND' if diagnostics.lldb_module else '✗ MISSING'}")
         # Show both Windows (python310.zip) and Linux (Lib/) stdlib formats
-        if diagnostics["python_zip"]:
+        if diagnostics.python_zip:
             print("  Python Stdlib (python310.zip): ✓ FOUND")
-        elif diagnostics["python_lib_dir"]:
+        elif diagnostics.python_lib_dir:
             print("  Python Stdlib (Lib/ directory): ✓ FOUND")
         else:
             print("  Python Stdlib: ✗ MISSING")
         # Show python310.dll status on Windows
         if platform_name == "win":
-            print(f"  Python Runtime (python310.dll): {'✓ FOUND' if diagnostics['python_dll'] else '✗ MISSING'}")
+            print(f"  Python Runtime (python310.dll): {'✓ FOUND' if diagnostics.python_dll else '✗ MISSING'}")
         print()
 
         print("Environment Variables (when LLDB runs):")
-        if diagnostics["pythonpath_value"]:
-            print(f"  PYTHONPATH={diagnostics['pythonpath_value']}")
+        if diagnostics.pythonpath_value:
+            print(f"  PYTHONPATH={diagnostics.pythonpath_value}")
         else:
             print("  PYTHONPATH: (not set - Python disabled)")
 
-        if diagnostics["pythonhome_value"]:
-            print(f"  PYTHONHOME={diagnostics['pythonhome_value']}")
+        if diagnostics.pythonhome_value:
+            print(f"  PYTHONHOME={diagnostics.pythonhome_value}")
         else:
             print("  PYTHONHOME: (not set - Python disabled)")
 
-        if diagnostics["python_available"]:
+        if diagnostics.python_available:
             print("  LLDB_DISABLE_PYTHON: (removed - Python enabled)")
         else:
             print("  LLDB_DISABLE_PYTHON: 1 (Python disabled)")
         print()
 
         # Print recommendations
-        if diagnostics["status"] == "ready":
+        if diagnostics.is_ready():
             print("✓ Python environment is ready for full 'bt all' backtraces!")
             print()
             print("You can now use:")
@@ -330,7 +351,7 @@ def print_lldb_python_diagnostics() -> int:
             print("  - Python scripting in LLDB")
             print("  - Advanced variable inspection")
             return 0
-        elif diagnostics["status"] == "incomplete":
+        elif diagnostics.status == LldbPythonStatus.INCOMPLETE:
             print("⚠ Python environment is incomplete.")
             print()
             print("Troubleshooting:")

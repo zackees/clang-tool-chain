@@ -24,9 +24,8 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from .logging_config import configure_logging
-from .manifest import ToolchainInfrastructureError
+from clang_tool_chain.logging_config import configure_logging
+from clang_tool_chain.manifest import ToolchainInfrastructureError
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)

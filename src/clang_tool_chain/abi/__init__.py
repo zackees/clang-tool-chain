@@ -14,8 +14,8 @@ Other Platforms:
     - Linux/macOS: Use native GNU-like ABI (no special configuration needed)
 """
 
-from .windows_gnu import _get_gnu_target_args, _should_use_gnu_abi
-from .windows_msvc import _get_msvc_target_args, _should_use_msvc_abi
+from clang_tool_chain.abi.windows_gnu import _get_gnu_target_args, _should_use_gnu_abi
+from clang_tool_chain.abi.windows_msvc import _get_msvc_target_args, _should_use_msvc_abi
 
 __all__ = [
     "_should_use_gnu_abi",

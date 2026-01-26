@@ -13,10 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
-from ..abi import _should_use_gnu_abi
-from ..deployment.dll_deployer import post_link_dependency_deployment, post_link_dll_deployment
-from ..interrupt_utils import handle_keyboard_interrupt_properly
-from ..logging_config import configure_logging
+from clang_tool_chain.abi import _should_use_gnu_abi
+from clang_tool_chain.deployment.dll_deployer import post_link_dependency_deployment, post_link_dll_deployment
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+from clang_tool_chain.logging_config import configure_logging
 
 logger = configure_logging(__name__)
 

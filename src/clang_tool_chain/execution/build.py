@@ -24,12 +24,11 @@ import tempfile
 from pathlib import Path
 from typing import NoReturn
 
+from clang_tool_chain.cli_parsers import parse_build_args, parse_build_run_args
+from clang_tool_chain.directives import DirectiveParser
+from clang_tool_chain.execution.core import execute_tool
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from ..cli_parsers import parse_build_args, parse_build_run_args
-from ..directives import DirectiveParser
-from ..platform import get_platform_info
-from .core import execute_tool
+from clang_tool_chain.platform import get_platform_info
 
 
 def _get_directive_args(source_path: Path) -> list[str]:

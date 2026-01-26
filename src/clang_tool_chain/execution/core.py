@@ -18,13 +18,13 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
-from ..abi import _should_use_gnu_abi
-from ..deployment.dll_deployer import post_link_dependency_deployment, post_link_dll_deployment
-from ..interrupt_utils import handle_keyboard_interrupt_properly
-from ..logging_config import configure_logging
-from ..platform.detection import get_platform_info
-from ..platform.paths import find_sccache_binary, find_tool_binary
-from .arg_transformers import ArgumentPipeline, ToolContext, create_default_pipeline
+from clang_tool_chain.abi import _should_use_gnu_abi
+from clang_tool_chain.deployment.dll_deployer import post_link_dependency_deployment, post_link_dll_deployment
+from clang_tool_chain.execution.arg_transformers import ArgumentPipeline, ToolContext, create_default_pipeline
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+from clang_tool_chain.logging_config import configure_logging
+from clang_tool_chain.platform.detection import get_platform_info
+from clang_tool_chain.platform.paths import find_sccache_binary, find_tool_binary
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)

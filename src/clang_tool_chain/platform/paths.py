@@ -9,8 +9,12 @@ import os
 import shutil
 from pathlib import Path
 
-from ..logging_config import configure_logging
-from .detection import _get_toolchain_directory_listing, get_platform_binary_dir, get_platform_info
+from clang_tool_chain.logging_config import configure_logging
+from clang_tool_chain.platform.detection import (
+    _get_toolchain_directory_listing,
+    get_platform_binary_dir,
+    get_platform_info,
+)
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)

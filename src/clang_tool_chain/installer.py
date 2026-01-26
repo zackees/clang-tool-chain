@@ -17,8 +17,8 @@ This module re-exports their public APIs for backward compatibility.
 
 # Re-export Clang/LLVM installer
 # Re-export helper function
-from .installers.base import get_latest_version_info
-from .installers.clang import (
+from clang_tool_chain.installers.base import get_latest_version_info
+from clang_tool_chain.installers.clang import (
     _subprocess_install_toolchain,
     download_and_install_toolchain,
     ensure_toolchain,
@@ -26,7 +26,7 @@ from .installers.clang import (
 )
 
 # Re-export Cosmocc installer
-from .installers.cosmocc import (
+from clang_tool_chain.installers.cosmocc import (
     _subprocess_install_cosmocc,
     download_and_install_cosmocc,
     ensure_cosmocc,
@@ -35,7 +35,7 @@ from .installers.cosmocc import (
 
 # Re-export Emscripten installer
 # DEPRECATED: link_clang_binaries_to_emscripten kept for backward compatibility
-from .installers.emscripten import (
+from clang_tool_chain.installers.emscripten import (
     create_emscripten_config,
     download_and_install_emscripten,
     ensure_emscripten_available,
@@ -44,7 +44,7 @@ from .installers.emscripten import (
 )
 
 # Re-export IWYU installer
-from .installers.iwyu import (
+from clang_tool_chain.installers.iwyu import (
     _subprocess_install_iwyu,
     download_and_install_iwyu,
     ensure_iwyu,
@@ -52,7 +52,7 @@ from .installers.iwyu import (
 )
 
 # Re-export LLDB installer
-from .installers.lldb import (
+from clang_tool_chain.installers.lldb import (
     _subprocess_install_lldb,
     download_and_install_lldb,
     ensure_lldb,
@@ -60,17 +60,17 @@ from .installers.lldb import (
 )
 
 # Re-export Node.js installer
-from .installers.nodejs import (
+from clang_tool_chain.installers.nodejs import (
     download_and_install_nodejs,
     ensure_nodejs_available,
     is_nodejs_installed,
 )
 
 # Re-export manifest functions for backward compatibility
-from .manifest import fetch_nodejs_platform_manifest, fetch_platform_manifest
+from clang_tool_chain.manifest import fetch_nodejs_platform_manifest, fetch_platform_manifest
 
 # Re-export path utility functions for backward compatibility
-from .path_utils import get_install_dir, get_nodejs_install_dir
+from clang_tool_chain.path_utils import get_install_dir, get_nodejs_install_dir
 
 # Export all public functions
 __all__ = [

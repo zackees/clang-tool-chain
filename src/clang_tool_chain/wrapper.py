@@ -51,7 +51,7 @@ For new code, you can import from the specific sub-modules:
 # ============================================================================
 # ABI Configuration
 # ============================================================================
-from .abi import (
+from clang_tool_chain.abi import (
     _get_gnu_target_args,
     _get_msvc_target_args,
     _should_use_gnu_abi,
@@ -61,7 +61,7 @@ from .abi import (
 # ============================================================================
 # CLI Entry Points (Main Functions)
 # ============================================================================
-from .commands import (
+from clang_tool_chain.commands import (
     clang_cpp_main,
     clang_cpp_msvc_main,
     clang_format_main,
@@ -98,7 +98,7 @@ from .commands import (
 # Build Utilities
 # ============================================================================
 # Also re-export the internal hash function used by build utilities
-from .execution.build import (
+from clang_tool_chain.execution.build import (
     _compute_file_hash,
     build_main,
     build_run_main,
@@ -108,7 +108,7 @@ from .execution.build import (
 # ============================================================================
 # Core Tool Execution
 # ============================================================================
-from .execution.core import (
+from clang_tool_chain.execution.core import (
     execute_tool,
     run_tool,
     sccache_clang_cpp_main,
@@ -118,7 +118,7 @@ from .execution.core import (
 # ============================================================================
 # Cosmocc Tool Execution
 # ============================================================================
-from .execution.cosmocc import (
+from clang_tool_chain.execution.cosmocc import (
     execute_cosmocc_tool,
     find_cosmocc_tool,
     get_cosmocc_binary_dir,
@@ -127,7 +127,7 @@ from .execution.cosmocc import (
 # ============================================================================
 # Emscripten Tool Execution
 # ============================================================================
-from .execution.emscripten import (
+from clang_tool_chain.execution.emscripten import (
     ensure_nodejs_available,
     execute_emscripten_tool,
     find_emscripten_tool,
@@ -136,7 +136,7 @@ from .execution.emscripten import (
 # ============================================================================
 # IWYU Tool Execution
 # ============================================================================
-from .execution.iwyu import (
+from clang_tool_chain.execution.iwyu import (
     execute_iwyu_tool,
     find_iwyu_tool,
     get_iwyu_binary_dir,
@@ -145,7 +145,7 @@ from .execution.iwyu import (
 # ============================================================================
 # LLDB Tool Execution
 # ============================================================================
-from .execution.lldb import (
+from clang_tool_chain.execution.lldb import (
     execute_lldb_tool,
     find_lldb_tool,
     get_lldb_binary_dir,
@@ -154,12 +154,12 @@ from .execution.lldb import (
 # ============================================================================
 # Linker Configuration
 # ============================================================================
-from .linker import (
+from clang_tool_chain.linker import (
     _add_lld_linker_if_needed,
     _should_force_lld,
     _translate_linker_flags_for_macos_lld,
 )
-from .platform import (
+from clang_tool_chain.platform import (
     find_sccache_binary,
     find_tool_binary,
     get_platform_binary_dir,
@@ -167,8 +167,8 @@ from .platform import (
 )
 
 # Also import internal functions that other modules need
-from .platform.detection import _get_toolchain_directory_listing
-from .platform.paths import (
+from clang_tool_chain.platform.detection import _get_toolchain_directory_listing
+from clang_tool_chain.platform.paths import (
     get_assets_dir,
     get_node_binary_name,
     get_nodejs_install_dir_path,
@@ -177,7 +177,7 @@ from .platform.paths import (
 # ============================================================================
 # SDK Detection & Configuration
 # ============================================================================
-from .sdk import (
+from clang_tool_chain.sdk import (
     _add_macos_sysroot_if_needed,
     _detect_windows_sdk,
     _print_macos_sdk_error,

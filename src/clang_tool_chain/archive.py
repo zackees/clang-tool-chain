@@ -22,11 +22,10 @@ from urllib.request import Request, urlopen
 import pyzstd
 
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from .logging_config import configure_logging
-from .manifest import ToolchainInfrastructureError, VersionInfo
-from .parallel_download import DownloadConfig, download_file_parallel
-from .permissions import _robust_rmtree
+from clang_tool_chain.logging_config import configure_logging
+from clang_tool_chain.manifest import ToolchainInfrastructureError, VersionInfo
+from clang_tool_chain.parallel_download import DownloadConfig, download_file_parallel
+from clang_tool_chain.permissions import _robust_rmtree
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)
@@ -241,8 +240,8 @@ def download_archive_parts(version_info: VersionInfo, temp_dir: Path) -> Path:
     try:
         with open(output_path, "wb") as outfile:
             for i, part_info in enumerate(parts, 1):
-                part_url = part_info["href"]
-                part_sha256 = part_info["sha256"]
+                part_url = part_info.href
+                part_sha256 = part_info.sha256
 
                 logger.info(f"Downloading part {i}/{len(parts)} from {part_url}")
 

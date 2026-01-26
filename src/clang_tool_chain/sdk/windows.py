@@ -8,11 +8,40 @@ and displaying helpful warnings when the SDK is not found for MSVC compilation.
 import logging
 import os
 import sys
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
 
-def _detect_windows_sdk() -> dict[str, str] | None:  # pyright: ignore[reportUnusedFunction]
+@dataclass
+class WindowsSdkInfo:
+    """
+    Windows SDK installation information from environment variables.
+
+    Attributes:
+        sdk_dir: Windows SDK directory (WindowsSdkDir env var)
+        ucrt_dir: Universal CRT SDK directory (UniversalCRTSdkDir)
+        vc_tools_dir: VC Tools directory (VCToolsInstallDir)
+        vs_install_dir: Visual Studio installation (VSINSTALLDIR)
+        sdk_version: Windows SDK version (WindowsSDKVersion)
+    """
+
+    sdk_dir: str | None = None
+    ucrt_dir: str | None = None
+    vc_tools_dir: str | None = None
+    vs_install_dir: str | None = None
+    sdk_version: str | None = None
+
+    def is_detected(self) -> bool:
+        """Check if SDK was detected (has at least one component)."""
+        return any([self.sdk_dir, self.ucrt_dir, self.vc_tools_dir, self.vs_install_dir])
+
+    def has_minimal_sdk(self) -> bool:
+        """Check if minimal SDK for compilation is present."""
+        return bool(self.sdk_dir or self.vc_tools_dir)
+
+
+def _detect_windows_sdk() -> WindowsSdkInfo:  # pyright: ignore[reportUnusedFunction]
     """
     Detect Windows SDK installation via environment variables.
 
@@ -20,54 +49,52 @@ def _detect_windows_sdk() -> dict[str, str] | None:  # pyright: ignore[reportUnu
     that are typically set by vcvars*.bat or Visual Studio Developer Command Prompt.
 
     Returns:
-        Dictionary with SDK information if found, None otherwise.
-        Dictionary keys: 'sdk_dir', 'vc_tools_dir', 'sdk_version' (if available)
+        WindowsSdkInfo object with detected SDK information
 
     Note:
         This function only checks environment variables. It does not search the
         registry or filesystem for SDK installations. The goal is to detect if
         the user has already set up their Visual Studio environment.
     """
-    sdk_info = {}
+    sdk_info = WindowsSdkInfo()
 
     # Check for Windows SDK environment variables
     # These are set by vcvarsall.bat and similar VS setup scripts
     sdk_dir = os.environ.get("WindowsSdkDir") or os.environ.get("WindowsSDKDir")  # noqa: SIM112
     if sdk_dir:
-        sdk_info["sdk_dir"] = sdk_dir
+        sdk_info.sdk_dir = sdk_dir
         logger.debug(f"Windows SDK found via environment: {sdk_dir}")
 
     # Check for Universal CRT SDK (required for C runtime)
     ucrt_sdk_dir = os.environ.get("UniversalCRTSdkDir")  # noqa: SIM112
     if ucrt_sdk_dir:
-        sdk_info["ucrt_dir"] = ucrt_sdk_dir
+        sdk_info.ucrt_dir = ucrt_sdk_dir
         logger.debug(f"Universal CRT SDK found: {ucrt_sdk_dir}")
 
     # Check for VC Tools (MSVC compiler toolchain)
     vc_tools_dir = os.environ.get("VCToolsInstallDir")  # noqa: SIM112
     if vc_tools_dir:
-        sdk_info["vc_tools_dir"] = vc_tools_dir
+        sdk_info.vc_tools_dir = vc_tools_dir
         logger.debug(f"VC Tools found: {vc_tools_dir}")
 
     # Check for VS installation directory
     vs_install_dir = os.environ.get("VSINSTALLDIR")
     if vs_install_dir:
-        sdk_info["vs_install_dir"] = vs_install_dir
+        sdk_info.vs_install_dir = vs_install_dir
         logger.debug(f"Visual Studio installation found: {vs_install_dir}")
 
     # Check for Windows SDK version
     sdk_version = os.environ.get("WindowsSDKVersion")  # noqa: SIM112
     if sdk_version:
-        sdk_info["sdk_version"] = sdk_version.rstrip("\\")  # Remove trailing backslash if present
+        sdk_info.sdk_version = sdk_version.rstrip("\\")  # Remove trailing backslash if present
         logger.debug(f"Windows SDK version: {sdk_version}")
 
-    # Return SDK info if we found at least the SDK directory or VC tools
-    if sdk_info:
-        logger.info(f"Windows SDK detected: {', '.join(sdk_info.keys())}")
-        return sdk_info
+    # Return SDK info (always, even if empty)
+    if sdk_info.is_detected():
+        logger.info("Windows SDK detected")
 
-    logger.debug("Windows SDK not detected in environment variables")
-    return None
+    logger.debug("Windows SDK not detected in environment variables" if not sdk_info.is_detected() else "")
+    return sdk_info
 
 
 def _print_msvc_sdk_warning() -> None:  # pyright: ignore[reportUnusedFunction]

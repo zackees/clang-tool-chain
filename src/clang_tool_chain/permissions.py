@@ -15,8 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from .logging_config import configure_logging
+from clang_tool_chain.logging_config import configure_logging
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)

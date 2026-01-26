@@ -9,13 +9,12 @@ import subprocess
 import sys
 from typing import Any, NoReturn
 
+from clang_tool_chain import sccache_runner, wrapper
+from clang_tool_chain.abi.windows_gnu import _get_gnu_target_args, _should_use_gnu_abi
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from . import sccache_runner, wrapper
-from .abi.windows_gnu import _get_gnu_target_args, _should_use_gnu_abi
-from .linker import _add_lld_linker_if_needed
-from .platform.detection import get_platform_info
-from .sdk import _add_macos_sysroot_if_needed
+from clang_tool_chain.linker import _add_lld_linker_if_needed
+from clang_tool_chain.platform.detection import get_platform_info
+from clang_tool_chain.sdk import _add_macos_sysroot_if_needed
 
 try:
     from .__version__ import __version__
@@ -406,9 +405,9 @@ def cmd_purge(args: argparse.Namespace) -> int:
     if all_components:
         print("Installed components:")
         for comp in all_components:
-            status = " (in PATH)" if comp["in_path"] else ""
-            install_path = comp.get("install_path", "unknown")
-            print(f"  - {comp['name']}: {install_path}{status}")
+            status = " (in PATH)" if comp.in_path else ""
+            install_path = comp.install_path if comp.install_path else "unknown"
+            print(f"  - {comp.name}: {install_path}{status}")
         print()
 
     # Show PATH components that will be cleaned up

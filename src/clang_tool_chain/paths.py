@@ -8,8 +8,8 @@ toolchain binary paths in JSON format.
 import json
 import sys
 
-from . import downloader, wrapper
-from .interrupt_utils import handle_keyboard_interrupt_properly
+from clang_tool_chain import downloader, wrapper
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 
 
 def main() -> int:

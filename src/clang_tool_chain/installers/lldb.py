@@ -2,8 +2,8 @@
 LLDB debugger installer module.
 """
 
-from ..manifest import Manifest, fetch_lldb_platform_manifest
-from .base import BaseToolchainInstaller
+from clang_tool_chain.installers.base import BaseToolchainInstaller
+from clang_tool_chain.manifest import Manifest, fetch_lldb_platform_manifest
 
 
 class LLDBInstaller(BaseToolchainInstaller):

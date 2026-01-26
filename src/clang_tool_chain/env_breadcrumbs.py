@@ -7,7 +7,7 @@ All tracking is now done via SQLite database.
 Kept for backward compatibility with existing code.
 """
 
-from . import component_db
+from clang_tool_chain import component_db
 
 
 def mark_component_installed(component: str, install_path: str | None = None) -> None:
@@ -66,8 +66,8 @@ def get_component_bin_path(component: str) -> str | None:
         Path to the bin directory, or None if not installed to env
     """
     info = component_db.get_component_info(component)
-    if info and info["in_path"]:
-        return info["path_bin_dir"]
+    if info and info.in_path:
+        return info.path_bin_dir
     return None
 
 

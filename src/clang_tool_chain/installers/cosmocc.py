@@ -5,12 +5,12 @@ Cosmopolitan Libc (Cosmocc) installer module.
 import sys
 from pathlib import Path
 
-from ..interrupt_utils import handle_keyboard_interrupt_properly
-from ..logging_config import configure_logging
-from ..manifest import Manifest, fetch_cosmocc_platform_manifest
-from ..path_utils import get_cosmocc_install_dir, get_cosmocc_lock_path
-from ..permissions import _robust_rmtree
-from .base import BaseToolchainInstaller
+from clang_tool_chain.installers.base import BaseToolchainInstaller
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+from clang_tool_chain.logging_config import configure_logging
+from clang_tool_chain.manifest import Manifest, fetch_cosmocc_platform_manifest
+from clang_tool_chain.path_utils import get_cosmocc_install_dir, get_cosmocc_lock_path
+from clang_tool_chain.permissions import _robust_rmtree
 
 logger = configure_logging(__name__)
 

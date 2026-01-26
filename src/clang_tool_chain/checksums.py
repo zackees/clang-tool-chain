@@ -13,7 +13,7 @@ To add checksums for a new release:
 1. Download the official binary from https://github.com/llvm/llvm-project/releases
 2. Verify the GPG signature or GitHub attestation
 3. Compute the SHA256 checksum: `sha256sum <file>` (Linux/macOS) or `certutil -hashfile <file> SHA256` (Windows)
-4. Add the checksum to the KNOWN_CHECKSUMS dictionary below
+4. Add the checksum to the _RAW_CHECKSUMS dictionary below
 
 Platform keys follow the format: "{os}-{arch}"
 - Windows x64: "win-x86_64"
@@ -23,9 +23,49 @@ Platform keys follow the format: "{os}-{arch}"
 - Linux ARM: "linux-arm64"
 """
 
-# Database of known SHA256 checksums for LLVM releases
+from dataclasses import dataclass, field
+
+
+@dataclass
+class PlatformChecksum:
+    """
+    SHA256 checksum for a specific platform.
+
+    Attributes:
+        platform: Platform key in format "{os}-{arch}" (e.g., "linux-x86_64")
+        sha256: SHA256 checksum as hex string
+    """
+
+    platform: str
+    sha256: str
+
+
+@dataclass
+class VersionChecksums:
+    """
+    All platform checksums for a specific LLVM version.
+
+    Attributes:
+        version: LLVM version string (e.g., "21.1.5")
+        platforms: Dictionary mapping platform key to PlatformChecksum
+    """
+
+    version: str
+    platforms: dict[str, PlatformChecksum] = field(default_factory=dict)
+
+    def get_checksum(self, platform: str) -> str | None:
+        """Get checksum for a specific platform."""
+        checksum_obj = self.platforms.get(platform)
+        return checksum_obj.sha256 if checksum_obj else None
+
+    def has_checksum(self, platform: str) -> bool:
+        """Check if checksum exists for platform."""
+        return platform in self.platforms and bool(self.platforms[platform].sha256)
+
+
+# Raw database of known SHA256 checksums for LLVM releases (for easier editing)
 # Format: {version: {platform: checksum}}
-KNOWN_CHECKSUMS: dict[str, dict[str, str]] = {
+_RAW_CHECKSUMS: dict[str, dict[str, str]] = {
     "21.1.5": {
         # Windows x64 - Full archive (not installer)
         # File: clang+llvm-21.1.5-x86_64-pc-windows-msvc.tar.xz
@@ -53,6 +93,19 @@ KNOWN_CHECKSUMS: dict[str, dict[str, str]] = {
     # "21.1.3": {...},
 }
 
+# Convert raw checksums to strongly-typed structure
+KNOWN_CHECKSUMS: dict[str, VersionChecksums] = {
+    version: VersionChecksums(
+        version=version,
+        platforms={
+            plat: PlatformChecksum(platform=plat, sha256=checksum)
+            for plat, checksum in platforms.items()
+            if checksum  # Skip empty checksums
+        },
+    )
+    for version, platforms in _RAW_CHECKSUMS.items()
+}
+
 
 def get_checksum(version: str, platform: str) -> str | None:
     """
@@ -70,10 +123,7 @@ def get_checksum(version: str, platform: str) -> str | None:
         'abc123...'  # Returns checksum if available, None otherwise
     """
     version_checksums = KNOWN_CHECKSUMS.get(version)
-    if version_checksums is None:
-        return None
-
-    return version_checksums.get(platform)
+    return version_checksums.get_checksum(platform) if version_checksums else None
 
 
 def has_checksum(version: str, platform: str) -> bool:
@@ -91,8 +141,8 @@ def has_checksum(version: str, platform: str) -> bool:
         >>> has_checksum("21.1.5", "linux-x86_64")
         False  # No checksum available yet
     """
-    checksum = get_checksum(version, platform)
-    return checksum is not None and len(checksum) > 0
+    version_checksums = KNOWN_CHECKSUMS.get(version)
+    return version_checksums.has_checksum(platform) if version_checksums else False
 
 
 def get_supported_versions() -> list[str]:
@@ -127,7 +177,7 @@ def get_supported_platforms(version: str) -> list[str]:
     if version_checksums is None:
         return []
 
-    return [platform for platform, checksum in version_checksums.items() if checksum]
+    return [platform for platform, checksum_obj in version_checksums.platforms.items() if checksum_obj.sha256]
 
 
 def add_checksum(version: str, platform: str, checksum: str) -> None:
@@ -135,7 +185,7 @@ def add_checksum(version: str, platform: str, checksum: str) -> None:
     Add or update a checksum for a specific version and platform.
 
     This function is primarily for programmatic updates to the checksum database.
-    For permanent additions, edit the KNOWN_CHECKSUMS dictionary directly.
+    For permanent additions, edit the _RAW_CHECKSUMS dictionary directly.
 
     Args:
         version: LLVM version string (e.g., "21.1.5")
@@ -146,9 +196,9 @@ def add_checksum(version: str, platform: str, checksum: str) -> None:
         >>> add_checksum("21.1.5", "linux-x86_64", "abc123...")
     """
     if version not in KNOWN_CHECKSUMS:
-        KNOWN_CHECKSUMS[version] = {}
+        KNOWN_CHECKSUMS[version] = VersionChecksums(version=version)
 
-    KNOWN_CHECKSUMS[version][platform] = checksum.lower()
+    KNOWN_CHECKSUMS[version].platforms[platform] = PlatformChecksum(platform=platform, sha256=checksum.lower())
 
 
 def format_platform_key(os_name: str, arch: str) -> str:

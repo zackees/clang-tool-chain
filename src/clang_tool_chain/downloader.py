@@ -21,7 +21,7 @@ to maintain backward compatibility with existing code.
 # ============================================================================
 # Re-exports from archive.py
 # ============================================================================
-from .archive import (
+from clang_tool_chain.archive import (
     download_archive,
     download_archive_parts,
     download_file,
@@ -33,7 +33,7 @@ from .archive import (
 # ============================================================================
 # Re-exports from installer.py
 # ============================================================================
-from .installer import (
+from clang_tool_chain.installer import (
     download_and_install_cosmocc,
     download_and_install_emscripten,
     download_and_install_iwyu,
@@ -58,8 +58,8 @@ from .installer import (
 # ============================================================================
 # Re-exports from logging_config.py
 # ============================================================================
-from .logging_config import configure_logging
-from .manifest import (
+from clang_tool_chain.logging_config import configure_logging
+from clang_tool_chain.manifest import (
     EMSCRIPTEN_MANIFEST_BASE_URL,
     IWYU_MANIFEST_BASE_URL,
     LLDB_MANIFEST_BASE_URL,
@@ -89,7 +89,7 @@ from .manifest import (
 # ============================================================================
 # Re-exports from path_utils.py
 # ============================================================================
-from .path_utils import (
+from clang_tool_chain.path_utils import (
     get_cosmocc_install_dir,
     get_cosmocc_lock_path,
     get_emscripten_install_dir,
@@ -108,7 +108,7 @@ from .path_utils import (
 # ============================================================================
 # Re-exports from permissions.py
 # ============================================================================
-from .permissions import _robust_rmtree, fix_file_permissions
+from clang_tool_chain.permissions import _robust_rmtree, fix_file_permissions
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)

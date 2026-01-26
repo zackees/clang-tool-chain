@@ -7,7 +7,7 @@ instances for various entry points in the clang-tool-chain package.
 
 import argparse
 
-from .cli_args import BuildArgs, BuildRunArgs, LldbArgs
+from clang_tool_chain.cli_args import BuildArgs, BuildRunArgs, LldbArgs
 
 
 def create_build_parser() -> argparse.ArgumentParser:

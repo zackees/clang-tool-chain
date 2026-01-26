@@ -13,9 +13,8 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
+from clang_tool_chain import downloader
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from .. import downloader
 
 # Configure logging
 logger = logging.getLogger(__name__)

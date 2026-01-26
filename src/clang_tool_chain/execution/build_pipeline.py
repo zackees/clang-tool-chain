@@ -23,10 +23,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
+from clang_tool_chain.directives import DirectiveParser
+from clang_tool_chain.execution.core import run_tool
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from ..directives import DirectiveParser
-from .core import run_tool
 
 
 def _compute_file_hash(file_path: Path) -> str:

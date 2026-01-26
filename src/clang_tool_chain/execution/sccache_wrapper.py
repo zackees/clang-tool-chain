@@ -11,14 +11,14 @@ import sys
 from pathlib import Path
 from typing import Literal, NoReturn
 
-from ..abi import _get_gnu_target_args, _get_msvc_target_args, _should_use_gnu_abi, _should_use_msvc_abi
-from ..interrupt_utils import handle_keyboard_interrupt_properly
-from ..linker import _add_lld_linker_if_needed
-from ..logging_config import configure_logging
-from ..platform.detection import get_platform_info
-from ..platform.paths import find_sccache_binary, find_tool_binary
-from ..sdk import _add_macos_sysroot_if_needed
-from .platform_executor import ExecutionContext, get_platform_executor
+from clang_tool_chain.abi import _get_gnu_target_args, _get_msvc_target_args, _should_use_gnu_abi, _should_use_msvc_abi
+from clang_tool_chain.execution.platform_executor import ExecutionContext, get_platform_executor
+from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+from clang_tool_chain.linker import _add_lld_linker_if_needed
+from clang_tool_chain.logging_config import configure_logging
+from clang_tool_chain.platform.detection import get_platform_info
+from clang_tool_chain.platform.paths import find_sccache_binary, find_tool_binary
+from clang_tool_chain.sdk import _add_macos_sysroot_if_needed
 
 logger = configure_logging(__name__)
 

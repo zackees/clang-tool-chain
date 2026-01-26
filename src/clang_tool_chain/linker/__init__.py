@@ -7,7 +7,7 @@ This package provides linker-related functionality including:
 - Platform-specific linker selection logic
 """
 
-from .lld import (
+from clang_tool_chain.linker.lld import (
     _add_lld_linker_if_needed,
     _should_force_lld,
     _translate_linker_flags_for_macos_lld,

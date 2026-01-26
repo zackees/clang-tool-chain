@@ -14,8 +14,7 @@ from typing import Any, TypeVar
 from urllib.request import Request, urlopen
 
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-
-from .logging_config import configure_logging
+from clang_tool_chain.logging_config import configure_logging
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)
@@ -80,13 +79,31 @@ class RootManifest:
 
 
 @dataclass
+class ArchivePart:
+    """
+    Represents a single part of a multi-part archive.
+
+    Attributes:
+        part_number: Sequential part number (1, 2, 3, ...)
+        href: Download URL for this part
+        sha256: SHA256 checksum for verification
+        size_bytes: Size of this part in bytes (optional)
+    """
+
+    part_number: int
+    href: str
+    sha256: str
+    size_bytes: int | None = None
+
+
+@dataclass
 class VersionInfo:
     """Represents version information in a platform manifest."""
 
     version: str
     href: str
     sha256: str
-    parts: list[dict[str, str]] | None = None  # Optional multi-part archive information
+    parts: list[ArchivePart] | None = None  # Optional multi-part archive information
 
 
 @dataclass
@@ -141,13 +158,35 @@ def _parse_manifest(data: dict[str, Any]) -> Manifest:
         # Parse nested versions structure
         for key, value in data["versions"].items():
             if isinstance(value, dict) and "href" in value and "sha256" in value:
-                parts = value.get("parts", None)  # Optional multi-part archive info
+                parts_raw = value.get("parts", None)
+                parts = None
+                if parts_raw and isinstance(parts_raw, list):
+                    parts = [
+                        ArchivePart(
+                            part_number=p.get("part", idx + 1),
+                            href=p["href"],
+                            sha256=p["sha256"],
+                            size_bytes=p.get("size"),
+                        )
+                        for idx, p in enumerate(parts_raw)
+                    ]
                 versions[key] = VersionInfo(version=key, href=value["href"], sha256=value["sha256"], parts=parts)
     else:
         # Parse flat structure (all non-"latest" keys are version entries)
         for key, value in data.items():
             if key != "latest" and isinstance(value, dict) and "href" in value and "sha256" in value:
-                parts = value.get("parts", None)  # Optional multi-part archive info
+                parts_raw = value.get("parts", None)
+                parts = None
+                if parts_raw and isinstance(parts_raw, list):
+                    parts = [
+                        ArchivePart(
+                            part_number=p.get("part", idx + 1),
+                            href=p["href"],
+                            sha256=p["sha256"],
+                            size_bytes=p.get("size"),
+                        )
+                        for idx, p in enumerate(parts_raw)
+                    ]
                 versions[key] = VersionInfo(version=key, href=value["href"], sha256=value["sha256"], parts=parts)
 
     return Manifest(latest=latest, versions=versions)

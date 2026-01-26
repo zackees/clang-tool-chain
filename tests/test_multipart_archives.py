@@ -18,6 +18,7 @@ from clang_tool_chain.downloader import (
     download_archive_parts,
     is_multipart_archive,
 )
+from clang_tool_chain.manifest import ArchivePart
 
 
 class TestMultipartDetection:
@@ -40,8 +41,8 @@ class TestMultipartDetection:
             href="https://example.com/archive.tar.zst",
             sha256="abc123",
             parts=[
-                {"href": "https://example.com/archive.tar.zst.part1", "sha256": "part1hash"},
-                {"href": "https://example.com/archive.tar.zst.part2", "sha256": "part2hash"},
+                ArchivePart(part_number=1, href="https://example.com/archive.tar.zst.part1", sha256="part1hash"),
+                ArchivePart(part_number=2, href="https://example.com/archive.tar.zst.part2", sha256="part2hash"),
             ],
         )
         assert is_multipart_archive(version_info)
@@ -137,8 +138,8 @@ class TestDownloadArchiveParts:
             href="https://example.com/archive.tar.zst",
             sha256=full_sha256,
             parts=[
-                {"href": "https://example.com/archive.tar.zst.part1", "sha256": part1_sha256},
-                {"href": "https://example.com/archive.tar.zst.part2", "sha256": part2_sha256},
+                ArchivePart(part_number=1, href="https://example.com/archive.tar.zst.part1", sha256=part1_sha256),
+                ArchivePart(part_number=2, href="https://example.com/archive.tar.zst.part2", sha256=part2_sha256),
             ],
         )
 
@@ -170,7 +171,7 @@ class TestDownloadArchiveParts:
             href="https://example.com/archive.tar.zst",
             sha256="fullhash",
             parts=[
-                {"href": "https://example.com/archive.tar.zst.part1", "sha256": wrong_sha256},
+                ArchivePart(part_number=1, href="https://example.com/archive.tar.zst.part1", sha256=wrong_sha256),
             ],
         )
 
@@ -209,8 +210,8 @@ class TestDownloadArchive:
             href="https://example.com/archive.tar.zst",
             sha256="abc123",
             parts=[
-                {"href": "https://example.com/part1", "sha256": "hash1"},
-                {"href": "https://example.com/part2", "sha256": "hash2"},
+                ArchivePart(part_number=1, href="https://example.com/part1", sha256="hash1"),
+                ArchivePart(part_number=2, href="https://example.com/part2", sha256="hash2"),
             ],
         )
 
@@ -260,8 +261,8 @@ class TestManifestParsing:
         assert version_info.sha256 == "fullhash123"
         assert version_info.parts is not None
         assert len(version_info.parts) == 3
-        assert version_info.parts[0]["href"] == "https://example.com/part1"
-        assert version_info.parts[0]["sha256"] == "hash1"
+        assert version_info.parts[0].href == "https://example.com/part1"
+        assert version_info.parts[0].sha256 == "hash1"
 
     def test_parse_single_part_manifest(self):
         """Test parsing manifest without multi-part info."""

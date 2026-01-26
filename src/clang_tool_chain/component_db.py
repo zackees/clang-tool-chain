@@ -9,10 +9,59 @@ Database location: ~/.clang-tool-chain/components.db
 
 import datetime
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-from .path_utils import get_home_toolchain_dir
+from clang_tool_chain.path_utils import get_home_toolchain_dir
+
+
+@dataclass
+class ComponentInfo:
+    """
+    Information about an installed toolchain component.
+
+    Attributes:
+        id: Database primary key
+        name: Component name (e.g., "clang", "iwyu", "emscripten")
+        installed: Whether component files are downloaded/installed
+        install_path: Installation directory path (None if not installed)
+        installed_at: ISO 8601 timestamp of installation
+        in_path: Whether component binaries are in system PATH
+        path_bin_dir: PATH directory for this component
+        path_installed_at: ISO 8601 timestamp of PATH installation
+        version: Component version string
+    """
+
+    id: int
+    name: str
+    installed: bool
+    install_path: str | None = None
+    installed_at: str | None = None
+    in_path: bool = False
+    path_bin_dir: str | None = None
+    path_installed_at: str | None = None
+    version: str = "1.0"
+
+    @classmethod
+    def from_db_row(cls, row: sqlite3.Row) -> "ComponentInfo":
+        """Create ComponentInfo from SQLite Row."""
+        # Handle optional version field (may not exist in older databases)
+        try:
+            version = row["version"]
+        except (KeyError, IndexError):
+            version = "1.0"
+
+        return cls(
+            id=row["id"],
+            name=row["name"],
+            installed=bool(row["installed"]),
+            install_path=row["install_path"],
+            installed_at=row["installed_at"],
+            in_path=bool(row["in_path"]),
+            path_bin_dir=row["path_bin_dir"],
+            path_installed_at=row["path_installed_at"],
+            version=version,
+        )
 
 
 def get_db_path() -> Path:
@@ -181,7 +230,7 @@ def unmark_component_from_path(name: str) -> None:
     conn.close()
 
 
-def get_component_info(name: str) -> dict[str, Any] | None:
+def get_component_info(name: str) -> ComponentInfo | None:
     """
     Get information about a specific component.
 
@@ -189,7 +238,7 @@ def get_component_info(name: str) -> dict[str, Any] | None:
         name: Component name (e.g., "clang", "iwyu", "emscripten")
 
     Returns:
-        Dictionary with component info, or None if not found
+        ComponentInfo object, or None if not found
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -199,7 +248,7 @@ def get_component_info(name: str) -> dict[str, Any] | None:
     conn.close()
 
     if row:
-        return dict(row)
+        return ComponentInfo.from_db_row(row)
     return None
 
 
@@ -214,7 +263,7 @@ def is_component_installed(name: str) -> bool:
         True if component is installed, False otherwise
     """
     info = get_component_info(name)
-    return info is not None and info["installed"]
+    return info is not None and info.installed
 
 
 def is_component_in_path(name: str) -> bool:
@@ -228,15 +277,15 @@ def is_component_in_path(name: str) -> bool:
         True if component is in PATH, False otherwise
     """
     info = get_component_info(name)
-    return info is not None and info["in_path"]
+    return info is not None and info.in_path
 
 
-def get_all_installed_components() -> list[dict[str, Any]]:
+def get_all_installed_components() -> list[ComponentInfo]:
     """
     Get all installed components.
 
     Returns:
-        List of dictionaries with component information
+        List of ComponentInfo objects
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -245,7 +294,7 @@ def get_all_installed_components() -> list[dict[str, Any]]:
     rows = cursor.fetchall()
     conn.close()
 
-    return [dict(row) for row in rows]
+    return [ComponentInfo.from_db_row(row) for row in rows]
 
 
 def get_all_path_components() -> list[tuple[str, str]]:
