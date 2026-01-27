@@ -190,7 +190,7 @@ Detailed documentation is organized into focused sub-documents:
 
 - **[Clang/LLVM Toolchain](docs/CLANG_LLVM.md)** - Clang/LLVM compiler wrappers, macOS SDK detection, Windows GNU/MSVC ABI, sccache integration
 - **[Inlined Build Directives](docs/DIRECTIVES.md)** - Self-contained source files with embedded build configuration
-- **[DLL Deployment](docs/DLL_DEPLOYMENT.md)** - Windows MinGW DLL automatic deployment (detailed guide)
+- **[Library Deployment](docs/SHARED_LIBRARY_DEPLOYMENT.md)** - Cross-platform automatic library deployment (Windows DLL, Linux .so, macOS .dylib)
 - **[Emscripten](docs/EMSCRIPTEN.md)** - WebAssembly compilation with Emscripten
 - **[LLDB Debugger](docs/LLDB.md)** - LLVM debugger for interactive debugging and crash analysis
 - **[Node.js Integration](docs/NODEJS.md)** - Bundled Node.js runtime for WebAssembly
@@ -199,11 +199,20 @@ Detailed documentation is organized into focused sub-documents:
 - **[Maintainer Tools](docs/MAINTAINER.md)** - Binary packaging, archive creation, troubleshooting
 - **[Testing Guide](docs/TESTING.md)** - Test infrastructure, running tests, CI/CD
 
-## Windows MinGW DLL Deployment
+## Automatic Library Dependency Deployment
 
-**Automatic DLL Deployment for Windows Executables and Shared Libraries (GNU ABI)**
+**Cross-Platform Automatic Library Deployment for Executables and Shared Libraries**
 
-When compiling Windows executables (`.exe`) or shared libraries (`.dll`) with the GNU ABI (default on Windows), clang-tool-chain automatically copies required MinGW runtime DLLs to the output directory. This ensures your executables run immediately in `cmd.exe` without PATH modifications, and shared libraries have their transitive dependencies available.
+clang-tool-chain automatically detects and deploys required runtime libraries to the output directory on all platforms:
+- **Windows**: MinGW DLLs (`.dll`) for GNU ABI executables and shared libraries
+- **Linux**: Shared objects (`.so`) for executables and shared libraries
+- **macOS**: Dynamic libraries (`.dylib`) for executables and shared libraries
+
+This ensures your executables and libraries run immediately without PATH/LD_LIBRARY_PATH/DYLD_LIBRARY_PATH modifications, and shared libraries have their transitive dependencies available.
+
+### Windows MinGW DLL Deployment
+
+When compiling Windows executables (`.exe`) or shared libraries (`.dll`) with the GNU ABI (default on Windows), clang-tool-chain automatically copies required MinGW runtime DLLs to the output directory.
 
 ### How It Works
 
@@ -272,6 +281,95 @@ clang-tool-chain-cpp main.cpp -o program.exe
 - Implementation: `src/clang_tool_chain/deployment/dll_deployer.py`
 - Tests: `tests/test_dll_deployment.py` (38 comprehensive tests)
 - Integration: `src/clang_tool_chain/execution/core.py` (post-link hooks)
+
+### Linux Shared Library Deployment
+
+When compiling Linux executables or shared libraries (`.so`), clang-tool-chain can automatically detect and copy required shared libraries to the output directory using the `--deploy-dependencies` flag.
+
+**How It Works**:
+1. **Dependency Detection**: Uses `ldd` to detect required shared libraries
+2. **Smart Copying**: Copies `.so` files to the executable directory
+3. **Symlink Handling**: Preserves symlinks (e.g., `libunwind.so.8` → `libunwind.so.8.0.1`)
+4. **Non-Fatal**: Library deployment never fails your build - warnings only
+
+**Example Usage**:
+```bash
+# Build with automatic library deployment
+clang-tool-chain-cpp -shared -fPIC mylib.cpp -o mylib.so --deploy-dependencies
+# Output: Deployed 2 shared libraries for mylib.so
+
+# Build executable with library deployment
+clang-tool-chain-cpp main.cpp -o program --deploy-dependencies -lunwind
+# Output: Deployed 1 shared library for program
+
+# Run without LD_LIBRARY_PATH setup required
+./program  # Works immediately!
+```
+
+**Environment Variables**:
+- **`CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1`** - Disable automatic library deployment
+- **`CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1`** - Enable verbose logging
+
+**Performance**:
+- Dependency detection: ~50-200ms (ldd overhead)
+- Library copying: ~50-100ms (2-3 libraries typically)
+- Total overhead: ~100-300ms per build
+
+**See Also**:
+- Implementation: `src/clang_tool_chain/deployment/so_deployer.py`
+- Tests: `tests/test_so_deployment.py` (43 comprehensive tests)
+- Factory: `src/clang_tool_chain/deployment/factory.py`
+
+### macOS Dynamic Library Deployment
+
+When compiling macOS executables or dynamic libraries (`.dylib`), clang-tool-chain can automatically detect and copy required dynamic libraries to the output directory using the `--deploy-dependencies` flag.
+
+**How It Works**:
+1. **Dependency Detection**: Uses `otool -L` to detect required dynamic libraries
+2. **Smart Copying**: Copies `.dylib` files to the executable directory
+3. **@rpath Handling**: Supports @rpath, @loader_path, and absolute paths
+4. **Non-Fatal**: Library deployment never fails your build - warnings only
+
+**Example Usage**:
+```bash
+# Build with automatic library deployment
+clang-tool-chain-cpp -shared -fPIC mylib.cpp -o mylib.dylib --deploy-dependencies
+# Output: Deployed 2 dynamic libraries for mylib.dylib
+
+# Build executable with library deployment
+clang-tool-chain-cpp main.cpp -o program --deploy-dependencies -lunwind
+# Output: Deployed 1 dynamic library for program
+
+# Run without DYLD_LIBRARY_PATH setup required
+./program  # Works immediately!
+```
+
+**Environment Variables**:
+- **`CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1`** - Disable automatic library deployment
+- **`CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1`** - Enable verbose logging
+
+**Performance**:
+- Dependency detection: ~50-200ms (otool overhead)
+- Library copying: ~50-100ms (2-3 libraries typically)
+- Total overhead: ~100-300ms per build
+
+**See Also**:
+- Implementation: `src/clang_tool_chain/deployment/dylib_deployer.py`
+- Tests: `tests/test_dylib_deployment.py` (51 comprehensive tests)
+- Factory: `src/clang_tool_chain/deployment/factory.py`
+
+### Cross-Platform Environment Variables
+
+For maximum compatibility, clang-tool-chain supports both legacy (Windows-specific) and modern (cross-platform) environment variables:
+
+| Variable | Platform | Purpose | Status |
+|----------|----------|---------|--------|
+| `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS` | Windows (legacy) | Disable DLL deployment | ✅ Existing |
+| `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS` | All platforms | Disable library deployment | ✅ New |
+| `CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE` | Windows (legacy) | Verbose logging | ✅ Existing |
+| `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE` | All platforms | Verbose logging | ✅ New |
+
+**Backward Compatibility**: All existing Windows-specific variables (`*_DLLS`, `*_DLL_*`) still work and will be honored alongside the modern cross-platform variables (`*_LIBS`, `*_LIB_*`).
 
 ## Development Commands
 

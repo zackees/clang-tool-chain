@@ -9,12 +9,12 @@ without PATH modifications.
 import logging
 import os
 import re
-import shutil
 import subprocess
-import uuid
 from pathlib import Path
 
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
+from .base_deployer import BaseLibraryDeployer
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +64,243 @@ HEURISTIC_MINGW_DLLS = [
 ]
 
 
+def _get_mingw_sysroot_bin_dir_impl(arch: str) -> Path:
+    """
+    Get the MinGW sysroot bin directory containing runtime DLLs.
+
+    Helper function that can be mocked in tests.
+
+    Args:
+        arch: Architecture ("x86_64" or "arm64")
+
+    Returns:
+        Path to sysroot/bin directory
+
+    Raises:
+        ValueError: If architecture is unsupported
+        RuntimeError: If sysroot not found
+    """
+    from ..platform.detection import get_platform_binary_dir
+
+    # Get clang bin directory (downloads toolchain if needed)
+    clang_bin_dir = get_platform_binary_dir()
+    clang_root = clang_bin_dir.parent
+
+    # Determine sysroot name
+    if arch == "x86_64":
+        sysroot_name = "x86_64-w64-mingw32"
+    elif arch == "arm64":
+        sysroot_name = "aarch64-w64-mingw32"
+    else:
+        raise ValueError(f"Unsupported architecture: {arch}")
+
+    sysroot_bin = clang_root / sysroot_name / "bin"
+
+    if not sysroot_bin.exists():
+        raise RuntimeError(f"MinGW sysroot bin directory not found: {sysroot_bin}")
+
+    return sysroot_bin
+
+
+def _find_dll_in_toolchain_impl(dll_name: str, arch: str) -> Path | None:
+    """
+    Find DLL in MinGW sysroot or clang bin directory.
+
+    Helper function that can be mocked in tests.
+
+    Args:
+        dll_name: DLL filename
+        arch: Architecture ("x86_64" or "arm64")
+
+    Returns:
+        Path to DLL if found, None otherwise
+    """
+    from ..platform.detection import get_platform_binary_dir
+
+    # Search locations in priority order
+    search_dirs = []
+
+    # 1. MinGW sysroot/bin directory
+    try:
+        sysroot_bin = _get_mingw_sysroot_bin_dir_impl(arch)
+        search_dirs.append(sysroot_bin)
+    except (ValueError, RuntimeError) as e:
+        logger.debug(f"Cannot access MinGW sysroot: {e}")
+
+    # 2. Clang bin directory (for sanitizer DLLs that may be in bin/)
+    try:
+        clang_bin_dir = get_platform_binary_dir()
+        search_dirs.append(clang_bin_dir)
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+        return None
+    except Exception as e:
+        logger.debug(f"Cannot access clang bin directory: {e}")
+
+    # Search each directory
+    for search_dir in search_dirs:
+        dll_path = search_dir / dll_name
+        if dll_path.exists():
+            logger.debug(f"Found {dll_name} in {search_dir}")
+            return dll_path
+
+    logger.debug(f"DLL not found in any search directory: {dll_name}")
+    return None
+
+
+class DllDeployer(BaseLibraryDeployer):
+    """
+    Windows DLL deployer using llvm-objdump for detection.
+
+    Features:
+    - Uses llvm-objdump -p (PE import table parsing)
+    - Handles MinGW runtime and sanitizer DLLs
+    - Recursive transitive dependency scanning
+    - Atomic deployment with hard link optimization
+    """
+
+    def __init__(self, arch: str = "x86_64"):
+        super().__init__("windows", arch)
+        self._compiled_mingw_patterns = [re.compile(p, re.IGNORECASE) for p in MINGW_DLL_PATTERNS]
+        self._compiled_sanitizer_patterns = [re.compile(p, re.IGNORECASE) for p in SANITIZER_DLL_PATTERNS]
+
+    def detect_dependencies(self, binary_path: Path) -> list[str]:
+        """
+        Detect DLL dependencies using llvm-objdump -p.
+
+        Parses PE import table to extract DLL dependencies. Falls back to
+        heuristic list if objdump fails.
+
+        Args:
+            binary_path: Path to executable or DLL
+
+        Returns:
+            List of DLL names
+
+        Raises:
+            subprocess.TimeoutExpired: If objdump times out
+            subprocess.CalledProcessError: If objdump fails
+        """
+        try:
+            from ..platform.detection import get_platform_binary_dir
+
+            # Get llvm-objdump from the toolchain
+            clang_bin_dir = get_platform_binary_dir()
+            objdump_path = clang_bin_dir / "llvm-objdump.exe"
+
+            if not objdump_path.exists():
+                self.logger.warning("llvm-objdump not found, using heuristic DLL list")
+                return HEURISTIC_MINGW_DLLS.copy()
+
+            # Run llvm-objdump -p to get PE headers
+            self.logger.debug(f"Running llvm-objdump on: {binary_path}")
+            result = subprocess.run(
+                [str(objdump_path), "-p", str(binary_path)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+
+            # Parse DLL dependencies from output
+            dll_pattern = re.compile(r"DLL Name:\s+(\S+)", re.IGNORECASE)
+            detected_dlls = []
+
+            for match in dll_pattern.finditer(result.stdout):
+                dll_name = match.group(1)
+                detected_dlls.append(dll_name)
+
+            return detected_dlls
+
+        except subprocess.TimeoutExpired:
+            self.logger.warning(f"llvm-objdump timed out on {binary_path}")
+            return HEURISTIC_MINGW_DLLS.copy()
+        except subprocess.CalledProcessError as e:
+            self.logger.warning(f"llvm-objdump failed: {e}")
+            return HEURISTIC_MINGW_DLLS.copy()
+        except FileNotFoundError:
+            self.logger.warning("llvm-objdump not found")
+            return HEURISTIC_MINGW_DLLS.copy()
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
+            return []
+        except Exception as e:
+            self.logger.warning(f"DLL detection failed: {e}")
+            return HEURISTIC_MINGW_DLLS.copy()
+
+    def is_deployable_library(self, lib_name: str) -> bool:
+        """
+        Check if a DLL should be deployed.
+
+        Rules:
+        - Exclude Windows system DLLs
+        - Include MinGW runtime DLLs
+        - Include sanitizer DLLs
+
+        Args:
+            lib_name: DLL filename
+
+        Returns:
+            True if DLL should be deployed
+        """
+        dll_name_lower = lib_name.lower()
+
+        # Exclude Windows system DLLs
+        if dll_name_lower in WINDOWS_SYSTEM_DLLS:
+            return False
+
+        # Check against MinGW patterns
+        if any(pattern.match(dll_name_lower) for pattern in self._compiled_mingw_patterns):
+            return True
+
+        # Check against sanitizer patterns
+        return any(pattern.match(dll_name_lower) for pattern in self._compiled_sanitizer_patterns)
+
+    def find_library_in_toolchain(self, lib_name: str) -> Path | None:
+        """
+        Find DLL in MinGW sysroot or clang bin directory.
+
+        Search order:
+        1. MinGW sysroot/bin (runtime DLLs)
+        2. Clang bin directory (sanitizer DLLs)
+
+        Args:
+            lib_name: DLL filename
+
+        Returns:
+            Path to DLL if found, None otherwise
+        """
+        # Call module-level function so it can be mocked in tests
+        return find_dll_in_toolchain(lib_name, "win", self.arch)
+
+    def get_library_extension(self) -> str:
+        """Return Windows library extension."""
+        return ".dll"
+
+    def _get_mingw_sysroot_bin_dir(self) -> Path:
+        """
+        Get the MinGW sysroot bin directory containing runtime DLLs.
+
+        Returns:
+            Path to sysroot/bin directory
+
+        Raises:
+            ValueError: If architecture is unsupported
+            RuntimeError: If sysroot not found
+        """
+        # Call module-level function so it can be mocked in tests
+        return get_mingw_sysroot_bin_dir("win", self.arch)
+
+
+# ===== BACKWARD COMPATIBILITY FUNCTIONS =====
+# These functions maintain the existing API for code that uses dll_deployer directly
+
+
 def _is_deployable_dll(dll_name: str) -> bool:
     """
     Check if a DLL name matches MinGW runtime or sanitizer DLL patterns.
+
+    Backward compatibility wrapper for existing code.
 
     Args:
         dll_name: DLL filename (e.g., "libwinpthread-1.dll", "libclang_rt.asan_dynamic-x86_64.dll")
@@ -84,18 +318,8 @@ def _is_deployable_dll(dll_name: str) -> bool:
         >>> _is_deployable_dll("libclang_rt.asan_dynamic-x86_64.dll")
         True
     """
-    dll_name_lower = dll_name.lower()
-
-    # Exclude Windows system DLLs
-    if dll_name_lower in WINDOWS_SYSTEM_DLLS:
-        return False
-
-    # Check against MinGW patterns
-    if any(re.match(pattern, dll_name_lower) for pattern in MINGW_DLL_PATTERNS):
-        return True
-
-    # Check against sanitizer patterns
-    return any(re.match(pattern, dll_name_lower) for pattern in SANITIZER_DLL_PATTERNS)
+    deployer = DllDeployer()
+    return deployer.is_deployable_library(dll_name)
 
 
 # Keep backward compatibility alias
@@ -107,6 +331,8 @@ def _is_mingw_dll(dll_name: str) -> bool:  # pyright: ignore[reportUnusedFunctio
 def _extract_dll_dependencies(binary_path: Path, objdump_path: Path) -> list[str]:
     """
     Extract DLL dependencies from a binary file (EXE or DLL) using llvm-objdump.
+
+    Backward compatibility wrapper.
 
     Args:
         binary_path: Path to the binary file (.exe or .dll)
@@ -164,97 +390,30 @@ def detect_required_dlls(exe_path: Path, platform_name: str = "win", arch: str =
     if not exe_path.exists():
         raise FileNotFoundError(f"Executable not found: {exe_path}")
 
-    # Try to use llvm-objdump for precise DLL detection
+    deployer = DllDeployer(arch)
+
+    # First attempt direct detection
     try:
-        from ..platform.detection import get_platform_binary_dir
+        direct_deps = deployer.detect_dependencies(exe_path)
 
-        # Get llvm-objdump from the toolchain
-        clang_bin_dir = get_platform_binary_dir()
-        objdump_path = clang_bin_dir / "llvm-objdump.exe"
-
-        if not objdump_path.exists():
-            logger.warning("llvm-objdump not found, using heuristic DLL list")
+        # If heuristic was returned (empty list, or fallback list), return it directly
+        if direct_deps == HEURISTIC_MINGW_DLLS:
             return HEURISTIC_MINGW_DLLS.copy()
 
-        # Run llvm-objdump -p to get PE headers
-        logger.debug(f"Running llvm-objdump on: {exe_path}")
-        result = subprocess.run(
-            [str(objdump_path), "-p", str(exe_path)],
-            capture_output=True,
-            text=True,
-            timeout=10,  # 10-second timeout
-        )
-
-        if result.returncode != 0:
-            logger.warning(f"llvm-objdump failed (exit {result.returncode}), using heuristic DLL list")
+        # Check if any deployable DLLs were found
+        deployable_direct = [d for d in direct_deps if deployer.is_deployable_library(d)]
+        if not deployable_direct and direct_deps:
+            # objdump found DLLs but none are deployable - use heuristic
+            return HEURISTIC_MINGW_DLLS.copy()
+        if not direct_deps:
+            # No DLLs found - use heuristic
             return HEURISTIC_MINGW_DLLS.copy()
 
-        # Extract direct dependencies from the executable
-        all_direct_deps = _extract_dll_dependencies(exe_path, objdump_path)
-        total_dlls_found = len(all_direct_deps)
+        # Normal case: use full recursive detection
+        dependencies = deployer.detect_all_dependencies(exe_path, recursive=True)
+        return sorted(dependencies)  # Sort for consistent ordering
 
-        detected_dlls = []
-        for dll_name in all_direct_deps:
-            if _is_deployable_dll(dll_name):
-                detected_dlls.append(dll_name)
-                logger.debug(f"Detected deployable DLL dependency: {dll_name}")
-
-        # If llvm-objdump succeeded and detected deployable DLLs, recursively scan them
-        if detected_dlls:
-            logger.debug(f"Found {len(detected_dlls)} direct deployable DLL(s)")
-
-            # Recursively scan detected DLLs for transitive dependencies
-            all_required_dlls = set(detected_dlls)
-            dlls_to_scan = detected_dlls.copy()
-            scanned_dlls = set()
-
-            while dlls_to_scan:
-                current_dll = dlls_to_scan.pop(0)
-                if current_dll in scanned_dlls:
-                    continue
-                scanned_dlls.add(current_dll)
-
-                # Find the DLL in the toolchain
-                dll_path = find_dll_in_toolchain(current_dll, platform_name, arch)
-                if dll_path is None:
-                    logger.debug(f"Cannot scan dependencies for {current_dll}: not found in toolchain")
-                    continue
-
-                # Extract dependencies from this DLL
-                try:
-                    transitive_deps = _extract_dll_dependencies(dll_path, objdump_path)
-                    for dep_name in transitive_deps:
-                        if _is_deployable_dll(dep_name) and dep_name not in all_required_dlls:
-                            logger.debug(f"Found transitive dependency: {dep_name} (via {current_dll})")
-                            all_required_dlls.add(dep_name)
-                            dlls_to_scan.append(dep_name)
-                except KeyboardInterrupt as ke:
-                    handle_keyboard_interrupt_properly(ke)
-                except Exception as e:
-                    logger.debug(f"Failed to scan dependencies for {current_dll}: {e}")
-
-            logger.debug(f"Total deployable DLLs (including transitive): {len(all_required_dlls)}")
-            return list(all_required_dlls)
-
-        # If llvm-objdump found DLL imports but no MinGW DLLs, still use heuristic fallback
-        # This covers the case where the executable was compiled but objdump may have
-        # missed MinGW DLLs in its output (parsing issues, etc.)
-        if total_dlls_found > 0:
-            logger.debug("llvm-objdump found DLL imports but no MinGW DLLs, using heuristic list")
-            return HEURISTIC_MINGW_DLLS.copy()
-
-        # No DLL imports found at all - likely means PE import table couldn't be parsed
-        logger.debug("No DLL imports found by llvm-objdump, using heuristic list")
-        return HEURISTIC_MINGW_DLLS.copy()
-
-    except subprocess.TimeoutExpired:
-        logger.warning("llvm-objdump timed out after 10 seconds, using heuristic DLL list")
-        return HEURISTIC_MINGW_DLLS.copy()
-
-    except KeyboardInterrupt as ke:
-        handle_keyboard_interrupt_properly(ke)
-    except Exception as e:
-        logger.warning(f"DLL detection failed: {e}, using heuristic DLL list")
+    except Exception:
         return HEURISTIC_MINGW_DLLS.copy()
 
 
@@ -262,17 +421,7 @@ def _atomic_copy_dll(src_dll: Path, dest_dll: Path) -> bool:
     """
     Atomically deploy a DLL using hard links (preferred) or file copy with atomic rename.
 
-    This function ensures that concurrent compilations writing to the same directory
-    don't corrupt DLL files. Uses the following algorithm:
-    1. Check timestamp - skip if destination is up-to-date
-    2. Try to create hard link (zero disk space, instant operation)
-    3. If hard link fails, fall back to copy + atomic rename
-    4. Handle race conditions gracefully
-
-    Hard links are preferred because:
-    - Zero additional disk space (same inode)
-    - Instant operation (no data copy)
-    - Automatic updates (if source DLL changes, all links reflect it)
+    Backward compatibility wrapper using BaseLibraryDeployer._atomic_copy.
 
     Args:
         src_dll: Source DLL path in MinGW sysroot
@@ -288,98 +437,15 @@ def _atomic_copy_dll(src_dll: Path, dest_dll: Path) -> bool:
         >>> _atomic_copy_dll(Path("/src/libwinpthread-1.dll"), Path("/dest/libwinpthread-1.dll"))
         True  # DLL deployed successfully (hard link or copy)
     """
-    # Check if destination exists and compare timestamps
-    if dest_dll.exists():
-        src_stat = src_dll.stat()
-        dest_stat = dest_dll.stat()
-
-        # Skip if destination is up-to-date
-        if src_stat.st_mtime <= dest_stat.st_mtime:
-            logger.debug(f"Skipped (up-to-date): {dest_dll.name}")
-            return False
-
-        # Destination exists but is outdated - remove it before deployment
-        try:
-            dest_dll.unlink()
-        except OSError as e:
-            logger.debug(f"Could not remove outdated {dest_dll.name}: {e}")
-            # Continue anyway - hard link/copy will fail if can't remove
-
-    # Try hard link first (preferred - zero disk space, instant)
-    try:
-        os.link(src_dll, dest_dll)
-        logger.debug(f"Deployed (hard link): {dest_dll.name}")
-        return True
-    except (OSError, NotImplementedError) as e:
-        # Hard link failed - fall back to copy
-        # Common reasons: cross-filesystem, permissions, filesystem doesn't support hard links
-        logger.debug(f"Hard link failed for {dest_dll.name} ({e.__class__.__name__}), falling back to copy")
-
-    # Fallback: Copy with atomic rename
-    # Create temporary file in destination directory with unique name
-    # Format: .{dll_name}.{uuid}.tmp
-    temp_name = f".{dest_dll.name}.{uuid.uuid4().hex[:8]}.tmp"
-    temp_dll = dest_dll.parent / temp_name
-
-    try:
-        # Copy source to temporary file
-        shutil.copy2(src_dll, temp_dll)
-        logger.debug(f"Copied to temp: {temp_name}")
-
-        # Atomic rename (on Windows, this may fail if destination exists)
-        try:
-            # On POSIX, this is atomic and replaces existing files
-            # On Windows, this fails if destination exists (need to handle)
-            if os.name == "nt":
-                # Windows: use os.replace() which is atomic if supported by filesystem
-                # If destination exists, replace will succeed atomically (Python 3.3+)
-                temp_dll.replace(dest_dll)
-            else:
-                # POSIX: rename is atomic and replaces existing files
-                temp_dll.rename(dest_dll)
-
-            logger.debug(f"Deployed (copy): {dest_dll.name}")
-            return True
-
-        except FileExistsError:
-            # Race condition: another process already created the file
-            # This is OK - just clean up our temp file
-            logger.debug(f"Skipped (race condition): {dest_dll.name} - another process deployed it")
-            temp_dll.unlink(missing_ok=True)
-            return False
-
-        except OSError as e:
-            # On Windows, replace() might fail if file is in use
-            # Try to compare temp with destination - if identical, it's OK
-            if dest_dll.exists():
-                # Check if files are identical by size and mtime
-                try:
-                    temp_stat = temp_dll.stat()
-                    dest_stat = dest_dll.stat()
-                    if temp_stat.st_size == dest_stat.st_size:
-                        # Files are same size, likely identical - clean up and succeed
-                        logger.debug(
-                            f"Skipped (file in use but same size): {dest_dll.name} - assuming identical, error: {e}"
-                        )
-                        temp_dll.unlink(missing_ok=True)
-                        return False
-                except OSError:
-                    pass  # Ignore stat errors, will re-raise original error below
-
-            # Re-raise if we couldn't handle it
-            raise
-
-    except KeyboardInterrupt as ke:
-        handle_keyboard_interrupt_properly(ke)
-    except Exception:
-        # Clean up temp file on any error
-        temp_dll.unlink(missing_ok=True)
-        raise
+    deployer = DllDeployer()
+    return deployer._atomic_copy(src_dll, dest_dll)
 
 
 def get_mingw_sysroot_bin_dir(platform_name: str, arch: str) -> Path:
     """
     Get the MinGW sysroot bin directory containing runtime DLLs.
+
+    Backward compatibility wrapper.
 
     Args:
         platform_name: Platform name ("win")
@@ -397,36 +463,14 @@ def get_mingw_sysroot_bin_dir(platform_name: str, arch: str) -> Path:
         >>> get_mingw_sysroot_bin_dir("win", "x86_64")
         PosixPath('~/.clang-tool-chain/clang/win/x86_64/x86_64-w64-mingw32/bin')
     """
-    from ..platform.detection import get_platform_binary_dir
-
-    # Get clang bin directory (downloads toolchain if needed)
-    clang_bin_dir = get_platform_binary_dir()
-    clang_root = clang_bin_dir.parent
-
-    # Determine sysroot name (from windows_gnu.py:106-113)
-    if arch == "x86_64":
-        sysroot_name = "x86_64-w64-mingw32"
-    elif arch == "arm64":
-        sysroot_name = "aarch64-w64-mingw32"
-    else:
-        raise ValueError(f"Unsupported architecture: {arch}")
-
-    sysroot_bin = clang_root / sysroot_name / "bin"
-
-    if not sysroot_bin.exists():
-        raise RuntimeError(f"MinGW sysroot bin directory not found: {sysroot_bin}")
-
-    return sysroot_bin
+    return _get_mingw_sysroot_bin_dir_impl(arch)
 
 
 def find_dll_in_toolchain(dll_name: str, platform_name: str, arch: str) -> Path | None:
     """
     Find a DLL in the toolchain (MinGW sysroot or sanitizer directories).
 
-    Searches in multiple locations:
-    1. MinGW sysroot/bin directory (for MinGW runtime DLLs)
-    2. Clang bin directory (for sanitizer DLLs that may be copied there)
-    3. MinGW sysroot/bin directory again (sanitizer DLLs are also stored here)
+    Backward compatibility wrapper.
 
     Args:
         dll_name: DLL filename (e.g., "libwinpthread-1.dll", "libclang_rt.asan_dynamic-x86_64.dll")
@@ -440,36 +484,7 @@ def find_dll_in_toolchain(dll_name: str, platform_name: str, arch: str) -> Path 
         >>> find_dll_in_toolchain("libwinpthread-1.dll", "win", "x86_64")
         PosixPath('~/.clang-tool-chain/clang/win/x86_64/x86_64-w64-mingw32/bin/libwinpthread-1.dll')
     """
-    from ..platform.detection import get_platform_binary_dir
-
-    # Search locations in priority order
-    search_dirs = []
-
-    # 1. MinGW sysroot/bin directory
-    try:
-        sysroot_bin = get_mingw_sysroot_bin_dir(platform_name, arch)
-        search_dirs.append(sysroot_bin)
-    except (ValueError, RuntimeError) as e:
-        logger.debug(f"Cannot access MinGW sysroot: {e}")
-
-    # 2. Clang bin directory (for sanitizer DLLs that may be in bin/)
-    try:
-        clang_bin_dir = get_platform_binary_dir()
-        search_dirs.append(clang_bin_dir)
-    except KeyboardInterrupt as ke:
-        handle_keyboard_interrupt_properly(ke)
-    except Exception as e:
-        logger.debug(f"Cannot access clang bin directory: {e}")
-
-    # Search each directory
-    for search_dir in search_dirs:
-        dll_path = search_dir / dll_name
-        if dll_path.exists():
-            logger.debug(f"Found {dll_name} in {search_dir}")
-            return dll_path
-
-    logger.debug(f"DLL not found in any search directory: {dll_name}")
-    return None
+    return _find_dll_in_toolchain_impl(dll_name, arch)
 
 
 def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_abi: bool) -> None:
@@ -546,50 +561,13 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
         # Get platform info for sysroot lookup
         _, arch = get_platform_info()
 
-        # Detect required DLLs (with recursive scanning)
-        logger.debug(f"Detecting required DLLs for: {output_exe_path}")
-        required_dlls = detect_required_dlls(output_exe_path, platform_name, arch)
+        # Use deployer for actual deployment
+        deployer = DllDeployer(arch)
+        deployed_count = deployer.deploy_all(output_exe_path)
 
-        if not required_dlls:
-            logger.debug("No deployable DLLs required")
-            return
-
-        # Destination directory (same as executable)
-        dest_dir = output_exe_path.parent.resolve()
-
-        # Deploy each required DLL
-        deployed_count = 0
-        skipped_count = 0
-
-        for dll_name in required_dlls:
-            # Find DLL in toolchain (MinGW sysroot or sanitizer directories)
-            src_dll = find_dll_in_toolchain(dll_name, platform_name, arch)
-
-            if src_dll is None:
-                logger.warning(f"Source DLL not found in toolchain, skipping: {dll_name}")
-                continue
-
-            dest_dll = dest_dir / dll_name
-
-            # Atomically copy DLL (handles race conditions)
-            try:
-                was_copied = _atomic_copy_dll(src_dll, dest_dll)
-                if was_copied:
-                    deployed_count += 1
-                else:
-                    skipped_count += 1
-            except PermissionError:
-                logger.warning(f"Permission denied copying {dll_name}, skipping")
-                continue
-            except OSError as e:
-                logger.warning(f"Failed to copy {dll_name}: {e}, skipping")
-                continue
-
-        # Summary logging
-        if deployed_count > 0:
-            logger.info(f"Deployed {deployed_count} runtime DLL(s) for {output_exe_path.name}")
-        elif skipped_count > 0:
-            logger.debug(f"All {skipped_count} runtime DLL(s) up-to-date for {output_exe_path.name}")
+        # Log results
+        if deployed_count == 0:
+            logger.debug("No runtime DLLs deployed (all up-to-date or none required)")
 
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
@@ -606,8 +584,8 @@ def post_link_dependency_deployment(output_path: Path, platform_name: str, use_g
 
     Supports:
     - Windows (.dll): MinGW runtime DLLs via llvm-objdump
-    - Linux (.so): libc++, libunwind via llvm-readelf (future)
-    - macOS (.dylib): libc++, libunwind via otool (future)
+    - Linux (.so): libc++, libunwind via ldd/readelf
+    - macOS (.dylib): libc++, libunwind via otool
 
     Args:
         output_path: Path to the output shared library (.dll, .so, or .dylib)
@@ -618,20 +596,31 @@ def post_link_dependency_deployment(output_path: Path, platform_name: str, use_g
         None
 
     Environment Variables:
-        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS: Set to "1" to disable deployment
-        CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE: Set to "1" for verbose logging
+        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS: Set to "1" to disable deployment (all platforms)
+        CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS: Set to "1" to disable deployment (alias)
+        CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE: Set to "1" for verbose logging (all platforms)
+        CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE: Set to "1" for verbose logging (alias)
 
     Examples:
         >>> post_link_dependency_deployment(Path("mylib.dll"), "win", True)
         # Deploys libwinpthread-1.dll, libstdc++-6.dll, etc. to mylib.dll directory
+        >>> post_link_dependency_deployment(Path("mylib.so"), "linux", False)
+        # Deploys libunwind.so.8, libc++.so.1, etc. to mylib.so directory
+        >>> post_link_dependency_deployment(Path("mylib.dylib"), "darwin", False)
+        # Deploys libunwind.1.dylib, libc++.1.dylib, etc. to mylib.dylib directory
     """
-    # Check opt-out environment variable
+    # Check opt-out environment variables (either DLL-specific or generic)
     if os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS") == "1":
         logger.debug("Dependency deployment disabled via CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS")
         return
+    if os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS") == "1":
+        logger.debug("Dependency deployment disabled via CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS")
+        return
 
-    # Enable verbose logging if requested
+    # Enable verbose logging if requested (either DLL-specific or generic)
     if os.environ.get("CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE") == "1":
+        logger.setLevel(logging.DEBUG)
+    if os.environ.get("CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE") == "1":
         logger.setLevel(logging.DEBUG)
 
     # Check if output exists
@@ -674,33 +663,12 @@ def _deploy_windows_dll_dependencies(dll_path: Path, use_gnu_abi: bool) -> None:
 
         _, arch = get_platform_info()
 
-        # Reuse existing detection logic - it already works for DLLs!
-        required_dlls = detect_required_dlls(dll_path, "win", arch)
+        # Use deployer
+        deployer = DllDeployer(arch)
+        deployed_count = deployer.deploy_all(dll_path)
 
-        if not required_dlls:
-            logger.debug("No deployable dependencies required")
-            return
-
-        dest_dir = dll_path.parent.resolve()
-        deployed_count = 0
-
-        for dll_name in required_dlls:
-            src_dll = find_dll_in_toolchain(dll_name, "win", arch)
-            if src_dll is None:
-                logger.warning(f"Source DLL not found, skipping: {dll_name}")
-                continue
-
-            dest_dll = dest_dir / dll_name
-            try:
-                if _atomic_copy_dll(src_dll, dest_dll):
-                    deployed_count += 1
-            except PermissionError:
-                logger.warning(f"Permission denied copying {dll_name}, skipping")
-            except OSError as e:
-                logger.warning(f"Failed to copy {dll_name}: {e}")
-
-        if deployed_count > 0:
-            logger.info(f"Deployed {deployed_count} runtime DLL(s) for {dll_path.name}")
+        if deployed_count == 0:
+            logger.debug("No runtime dependencies deployed")
 
     except KeyboardInterrupt as ke:
         handle_keyboard_interrupt_properly(ke)
@@ -712,7 +680,8 @@ def _deploy_linux_so_dependencies(so_path: Path) -> None:
     """
     Deploy libc++/libunwind for a Linux shared library.
 
-    Currently a placeholder for future implementation.
+    Uses SoDeployer to detect shared library dependencies and copies them
+    to the output directory.
 
     Args:
         so_path: Path to the output .so file
@@ -720,14 +689,35 @@ def _deploy_linux_so_dependencies(so_path: Path) -> None:
     Returns:
         None
     """
-    logger.debug(f"Linux .so dependency deployment not yet implemented: {so_path}")
+    try:
+        from ..platform.detection import get_platform_info
+        from .factory import create_deployer
+
+        _, arch = get_platform_info()
+
+        # Use factory to create Linux deployer
+        deployer = create_deployer("linux", arch)
+        if deployer is None:
+            logger.warning("Linux deployer not available")
+            return
+
+        deployed_count = deployer.deploy_all(so_path)
+
+        if deployed_count == 0:
+            logger.debug("No shared libraries deployed")
+
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        logger.warning(f"Linux shared library deployment failed: {e}")
 
 
 def _deploy_macos_dylib_dependencies(dylib_path: Path) -> None:
     """
     Deploy libc++/libunwind for a macOS dylib.
 
-    Currently a placeholder for future implementation.
+    Uses DylibDeployer to detect dylib dependencies and copies them
+    to the output directory.
 
     Args:
         dylib_path: Path to the output .dylib file
@@ -735,4 +725,24 @@ def _deploy_macos_dylib_dependencies(dylib_path: Path) -> None:
     Returns:
         None
     """
-    logger.debug(f"macOS .dylib dependency deployment not yet implemented: {dylib_path}")
+    try:
+        from ..platform.detection import get_platform_info
+        from .factory import create_deployer
+
+        _, arch = get_platform_info()
+
+        # Use factory to create macOS deployer
+        deployer = create_deployer("darwin", arch)
+        if deployer is None:
+            logger.warning("macOS deployer not available")
+            return
+
+        deployed_count = deployer.deploy_all(dylib_path)
+
+        if deployed_count == 0:
+            logger.debug("No dylibs deployed")
+
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        logger.warning(f"macOS dylib deployment failed: {e}")

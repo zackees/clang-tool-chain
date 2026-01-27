@@ -269,21 +269,16 @@ class TestWindowsDependencyDeployment:
             # Create a minimal valid DLL-like file for testing
             dll_path.touch()
 
-            # Mock the detection and deployment
-            with (
-                patch("clang_tool_chain.deployment.dll_deployer.detect_required_dlls") as mock_detect,
-                patch("clang_tool_chain.deployment.dll_deployer.find_dll_in_toolchain") as mock_find,
-                patch("clang_tool_chain.deployment.dll_deployer._atomic_copy_dll") as mock_copy,
-            ):
-                mock_detect.return_value = ["libwinpthread-1.dll"]
-                mock_find.return_value = Path("/fake/libwinpthread-1.dll")
-                mock_copy.return_value = True
+            # Mock the DllDeployer's deploy_all method
+            with patch("clang_tool_chain.deployment.dll_deployer.DllDeployer") as mock_deployer_class:
+                mock_deployer = mock_deployer_class.return_value
+                mock_deployer.deploy_all.return_value = 2  # Simulate 2 DLLs deployed
 
                 post_link_dependency_deployment(dll_path, "win", True)
 
-                mock_detect.assert_called_once()
-                mock_find.assert_called_once()
-                mock_copy.assert_called_once()
+                # Verify deployer was instantiated and deploy_all was called
+                mock_deployer_class.assert_called_once()
+                mock_deployer.deploy_all.assert_called_once_with(dll_path)
 
     @pytest.mark.skipif(os.name != "nt", reason="Windows-only test")
     def test_dll_deployment_with_missing_source_dll(self):
@@ -292,18 +287,17 @@ class TestWindowsDependencyDeployment:
             dll_path = Path(tmpdir) / "test.dll"
             dll_path.touch()
 
-            with (
-                patch("clang_tool_chain.deployment.dll_deployer.detect_required_dlls") as mock_detect,
-                patch("clang_tool_chain.deployment.dll_deployer.find_dll_in_toolchain") as mock_find,
-            ):
-                mock_detect.return_value = ["libwinpthread-1.dll"]
-                mock_find.return_value = None  # DLL not found
+            # Mock the DllDeployer's deploy_all method to return 0 (no DLLs deployed)
+            with patch("clang_tool_chain.deployment.dll_deployer.DllDeployer") as mock_deployer_class:
+                mock_deployer = mock_deployer_class.return_value
+                mock_deployer.deploy_all.return_value = 0  # No DLLs deployed (all missing)
 
                 # Should not raise, just warn
                 post_link_dependency_deployment(dll_path, "win", True)
 
-                mock_detect.assert_called_once()
-                mock_find.assert_called_once()
+                # Verify deployer was instantiated and deploy_all was called
+                mock_deployer_class.assert_called_once()
+                mock_deployer.deploy_all.assert_called_once_with(dll_path)
 
 
 class TestFlagNotPassedToClang:

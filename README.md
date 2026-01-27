@@ -596,12 +596,13 @@ clang-tool-chain install clang-env   # Use 'clang' directly
 
 ## ✨ Features
 
-41 wrapper commands • Auto-download • 94% size reduction • Cross-platform
+41 wrapper commands • Auto-download • 94% size reduction • Cross-platform • Auto library deployment
 
 - **Zero Configuration** - Auto-downloads to `~/.clang-tool-chain/`
 - **Ultra-Compact** - 71-91 MB (94% smaller via zstd-22)
 - **41 Commands** - Clang/LLVM, Emscripten, IWYU, LLDB, formatters, binary utils
 - **Cross-Platform** - Windows x64, macOS x64/ARM64, Linux x64/ARM64
+- **Auto Library Deployment** - Windows DLLs, Linux .so, macOS .dylib copied automatically
 - **Concurrent-Safe** - File locking for parallel builds
 - **Python Native** - Seamless Python integration
 
@@ -625,6 +626,78 @@ clang-tool-chain-c main.c utils.c math.c -o program
 ```
 
 **📖 [Complete Documentation](docs/EXAMPLES.md)** - Multi-file projects, static libraries, CMake, WebAssembly, Cosmopolitan, executable scripts, directives, Windows examples, IWYU, formatting, debugging, sccache, binary utilities.
+
+---
+
+## 📦 Automatic Library Deployment
+
+**Zero-config dependency deployment across all platforms**
+
+clang-tool-chain automatically detects and copies required runtime libraries to your output directory, ensuring executables run immediately without PATH/LD_LIBRARY_PATH configuration.
+
+### Windows (Automatic)
+
+```bash
+# MinGW DLLs automatically deployed
+clang-tool-chain-cpp hello.cpp -o hello.exe
+# Output: Deployed 3 MinGW DLL(s) for hello.exe
+# hello.exe, libwinpthread-1.dll, libgcc_s_seh-1.dll, libstdc++-6.dll
+
+.\hello.exe  # Runs immediately - no PATH setup needed!
+```
+
+### Linux (Opt-in via --deploy-dependencies)
+
+```bash
+# Shared libraries deployed with flag
+clang-tool-chain-cpp main.cpp -o program --deploy-dependencies -lunwind
+# Output: Deployed 1 shared library for program
+# program, libunwind.so.8, libunwind.so.8.0.1
+
+./program  # Runs immediately - no LD_LIBRARY_PATH needed!
+```
+
+### macOS (Opt-in via --deploy-dependencies)
+
+```bash
+# Dynamic libraries deployed with flag
+clang-tool-chain-cpp main.cpp -o program --deploy-dependencies -lunwind
+# Output: Deployed 1 dynamic library for program
+# program, libunwind.dylib
+
+./program  # Runs immediately - no DYLD_LIBRARY_PATH needed!
+```
+
+### Configuration
+
+**Disable deployment:**
+```bash
+# Cross-platform (modern)
+export CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
+
+# Windows-specific (legacy)
+export CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+```
+
+**Enable verbose logging:**
+```bash
+export CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1
+clang-tool-chain-cpp main.cpp -o program --deploy-dependencies
+# DEBUG: Detecting dependencies for program
+# DEBUG: Found library: libunwind.so.8
+# DEBUG: Copying libunwind.so.8 to output directory
+# INFO: Deployed 1 shared library for program
+```
+
+**Features:**
+- **Smart Copying**: Timestamp checking avoids unnecessary copies
+- **Symlink Preservation**: Linux .so versioning maintained (libunwind.so.8 → libunwind.so.8.0.1)
+- **Hard Link Optimization**: Zero disk space when possible (Windows)
+- **System Library Filtering**: Only deploys toolchain libraries, excludes system libraries
+- **Non-Fatal**: Deployment errors never fail your build (warnings only)
+- **Fast**: <300ms overhead per build
+
+**📖 [Complete Documentation](docs/SHARED_LIBRARY_DEPLOYMENT.md)** - Detailed deployment guide for all platforms, environment variables, troubleshooting.
 
 ---
 
@@ -672,7 +745,9 @@ jobs:
 
 **Key Environment Variables:**
 - `CLANG_TOOL_CHAIN_DOWNLOAD_PATH` - Override installation location
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS` - Disable Windows DLL deployment
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS` - Disable automatic library deployment (all platforms)
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS` - Disable Windows DLL deployment (legacy, Windows only)
+- `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE` - Enable verbose library deployment logging
 - `CLANG_TOOL_CHAIN_USE_SYSTEM_LD` - Use system linker instead of LLD
 - `CLANG_TOOL_CHAIN_NO_DIRECTIVES` - Disable inlined build directives
 - `SDKROOT` - Custom macOS SDK path (auto-detected by default)
