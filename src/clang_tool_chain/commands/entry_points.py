@@ -155,10 +155,17 @@ def lld_main() -> NoReturn:
 
 
 def wasm_ld_main() -> NoReturn:
-    """Entry point for wasm-ld linker wrapper (WebAssembly linker)."""
-    from ..execution.core import execute_tool
+    """
+    Entry point for wasm-ld linker wrapper (WebAssembly linker).
 
-    execute_tool("wasm-ld")
+    Uses Emscripten's bundled wasm-ld to ensure LLVM version compatibility
+    with emcc. Emscripten bundles its own LLVM toolchain, and all tools
+    (emcc, wasm-ld, etc.) must use the same LLVM version to avoid IR
+    incompatibility errors.
+    """
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-ld")
 
 
 # ============================================================================

@@ -150,6 +150,58 @@ def find_emscripten_tool(tool_name: str) -> Path:
     return tool_script
 
 
+def find_emscripten_wasm_ld_binary() -> Path:
+    """
+    Find Emscripten's bundled wasm-ld binary.
+
+    Unlike emcc/em++ (Python scripts in emscripten/ subdir), wasm-ld is a
+    native binary in bin/ directory. Using Emscripten's bundled wasm-ld
+    ensures LLVM version compatibility with emcc.
+
+    Returns:
+        Path to Emscripten's wasm-ld binary
+
+    Raises:
+        RuntimeError: If wasm-ld binary is not found
+    """
+    platform_name, arch = get_platform_info()
+
+    # Ensure Emscripten is installed
+    from .. import downloader
+
+    downloader.ensure_emscripten_available(platform_name, arch)
+
+    # wasm-ld is in bin/ directory (not emscripten/ subdir)
+    install_dir = Path.home() / ".clang-tool-chain" / "emscripten" / platform_name / arch
+    bin_dir = install_dir / "bin"
+
+    if not bin_dir.exists():
+        raise RuntimeError(
+            f"Emscripten bin directory not found: {bin_dir}\n"
+            f"Installation may have failed or is incomplete.\n"
+            f"Try removing ~/.clang-tool-chain/emscripten and running again."
+        )
+
+    # Add .exe extension on Windows
+    exe_ext = ".exe" if platform_name == "win" else ""
+    wasm_ld_path = bin_dir / f"wasm-ld{exe_ext}"
+
+    if not wasm_ld_path.exists():
+        raise RuntimeError(
+            f"Emscripten wasm-ld binary not found: {wasm_ld_path}\n"
+            f"Expected location: {bin_dir}/wasm-ld{exe_ext}\n"
+            f"Emscripten directory: {install_dir}\n"
+            f"\n"
+            f"This binary should be bundled with Emscripten and use the same\n"
+            f"LLVM version as emcc. If missing, try reinstalling:\n"
+            f"  clang-tool-chain purge\n"
+            f"  clang-tool-chain install emscripten"
+        )
+
+    logger.info(f"Found Emscripten wasm-ld: {wasm_ld_path}")
+    return wasm_ld_path
+
+
 def ensure_nodejs_available() -> Path:
     """
     Ensure Node.js is available (bundled or system).
@@ -899,3 +951,63 @@ exec "{real_clangpp}" "$@"
                 logger.warning(f"Failed to clean up trampoline directory: {e}")
 
     sys.exit(return_code)
+
+
+def execute_emscripten_binary_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
+    """
+    Execute an Emscripten native binary tool (like wasm-ld).
+
+    Unlike emcc/em++ (Python scripts), some Emscripten tools are native
+    binaries that can be executed directly. This function:
+    - Finds the binary in Emscripten's bin/ directory
+    - Ensures Emscripten is installed
+    - Executes directly (no Python interpreter needed)
+
+    Args:
+        tool_name: Name of the binary tool (e.g., "wasm-ld")
+        args: Arguments to pass to the tool (defaults to sys.argv[1:])
+
+    Raises:
+        RuntimeError: If the tool cannot be found or executed
+    """
+    if args is None:
+        args = sys.argv[1:]
+
+    logger.info(f"Executing Emscripten binary tool: {tool_name} with {len(args)} arguments")
+    logger.debug(f"Arguments: {args}")
+
+    # Find tool binary based on tool name
+    if tool_name == "wasm-ld":
+        try:
+            tool_path = find_emscripten_wasm_ld_binary()
+        except RuntimeError as e:
+            logger.error(f"Failed to find Emscripten wasm-ld: {e}")
+            print(f"\n{'=' * 60}", file=sys.stderr)
+            print("clang-tool-chain Emscripten wasm-ld Error", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
+            print(f"{e}", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
+            sys.exit(1)
+    else:
+        raise RuntimeError(f"Unknown Emscripten binary tool: {tool_name}")
+
+    # Build command: tool_path args...
+    cmd = [str(tool_path)] + args
+
+    logger.info(f"Executing command: {tool_path} (with {len(args)} args)")
+    logger.debug(f"Full command: {' '.join(cmd[:5])}{'...' if len(cmd) > 5 else ''}")
+
+    # Execute directly (native binary, no Python interpreter needed)
+    try:
+        result = subprocess.run(cmd)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        logger.error(f"Failed to execute binary: {tool_path}")
+        print(f"\nError: Binary not found or not executable: {tool_path}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        logger.error(f"Failed to execute Emscripten binary tool: {e}")
+        print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
+        sys.exit(1)
