@@ -72,4 +72,7 @@ jobs:
 
     - name: Run Emscripten full pipeline tests
       run: uv run pytest tests/test_emscripten_full_pipeline.py -v
+
+    - name: Run LLVM version consistency tests
+      run: uv run pytest tests/test_version_consistency.py -v
       shell: bash
