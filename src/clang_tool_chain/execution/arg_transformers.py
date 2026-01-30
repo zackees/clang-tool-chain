@@ -209,9 +209,10 @@ class LLDLinkerTransformer(ArgumentTransformer):
 
     Priority: 200 (runs after SDK but before ABI)
 
-    This transformer adds platform-specific linker flags:
-    - macOS: -fuse-ld=ld64.lld (explicit Mach-O linker, LLVM 21.x+)
-    - Linux: -fuse-ld=lld (standard ELF linker)
+    This transformer adds -fuse-ld=lld linker flag. The clang driver
+    automatically dispatches to the correct linker binary:
+    - macOS: ld64.lld (Mach-O linker)
+    - Linux: ld.lld (ELF linker)
 
     It also translates GNU ld flags to ld64.lld equivalents on macOS:
     - --no-undefined -> -undefined error

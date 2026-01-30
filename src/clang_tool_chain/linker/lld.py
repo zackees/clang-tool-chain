@@ -35,11 +35,12 @@ def _llvm_supports_ld64_lld_flag() -> bool:
     """
     Check if the current platform's LLVM version supports -fuse-ld=ld64.lld.
 
-    The -fuse-ld=ld64.lld flag is only recognized by LLVM 21.x and later.
-    Earlier versions require -fuse-ld=lld (which auto-detects Mach-O from target).
+    Note: The clang driver does NOT recognize -fuse-ld=ld64.lld as a valid option.
+    This function exists for backward compatibility but always returns False in practice
+    because -fuse-ld=lld should be used instead (clang auto-dispatches to ld64.lld on Darwin).
 
     Returns:
-        True if LLVM >= 21.x, False otherwise.
+        True if LLVM >= 21.x (but we always fall back to -fuse-ld=lld anyway)
     """
     from ..platform.detection import get_platform_info
 
@@ -272,6 +273,39 @@ def _user_specified_lld_on_macos(args: list[str]) -> bool:
     return "-fuse-ld=lld" in args_str or "-fuse-ld=ld64.lld" in args_str
 
 
+def _user_specified_ld64_lld(args: list[str]) -> bool:
+    """
+    Check if the user explicitly specified -fuse-ld=ld64.lld.
+
+    This is used to emit a warning that the flag will be auto-converted
+    to -fuse-ld=lld since clang driver doesn't recognize ld64.lld.
+
+    Args:
+        args: Command-line arguments
+
+    Returns:
+        True if user specified -fuse-ld=ld64.lld
+    """
+    return any("-fuse-ld=ld64.lld" in arg for arg in args)
+
+
+def _convert_ld64_lld_to_lld(args: list[str]) -> list[str]:
+    """
+    Convert -fuse-ld=ld64.lld to -fuse-ld=lld in arguments.
+
+    The clang driver does not recognize -fuse-ld=ld64.lld as a valid option.
+    This function converts it to -fuse-ld=lld which the driver recognizes
+    and automatically dispatches to ld64.lld on Darwin targets.
+
+    Args:
+        args: Original compiler arguments
+
+    Returns:
+        Modified arguments with -fuse-ld=ld64.lld replaced by -fuse-ld=lld
+    """
+    return [arg.replace("-fuse-ld=ld64.lld", "-fuse-ld=lld") for arg in args]
+
+
 # pyright: reportUnusedFunction=false
 def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     """
@@ -284,9 +318,10 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     - Faster linking performance
     - Uniform toolchain across all platforms
 
-    Platform-specific linker flags:
-    - macOS: Uses -fuse-ld=ld64.lld (explicit Mach-O variant required by LLVM 21.x+)
-    - Linux: Uses -fuse-ld=lld (standard ELF linker)
+    Platform-specific behavior:
+    - Uses -fuse-ld=lld on all platforms (clang driver auto-dispatches)
+    - macOS: Clang driver finds ld64.lld (Mach-O linker)
+    - Linux: Clang driver finds ld.lld (ELF linker)
 
     The function is skipped when:
     - User sets CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1
@@ -302,14 +337,25 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
         args: Original compiler arguments
 
     Returns:
-        Modified arguments with platform-specific -fuse-ld flag prepended if needed
+        Modified arguments with -fuse-ld=lld flag prepended if needed
     """
     # On macOS, if user explicitly specified LLD, we still need to translate flags
     # and ensure ld64.lld symlink exists, even though we don't inject the -fuse-ld flag ourselves
     if platform_name == "darwin" and _user_specified_lld_on_macos(args):
         logger.debug("User specified LLD on macOS, translating GNU ld flags to ld64.lld equivalents")
-        # Ensure ld64.lld symlink exists for user-specified -fuse-ld=ld64.lld
+        # Ensure ld64.lld symlink exists for lld to dispatch to Mach-O mode
         _ensure_ld64_lld_symlink()
+
+        # Check if user specified -fuse-ld=ld64.lld (which is not a valid clang driver option)
+        # and emit a warning about the auto-conversion to -fuse-ld=lld
+        if _user_specified_ld64_lld(args):
+            print(
+                "[clang-tool-chain] Warning: -fuse-ld=ld64.lld is not a valid clang driver option. "
+                "Auto-converting to -fuse-ld=lld (clang driver auto-dispatches to ld64.lld on Darwin).",
+                file=sys.stderr,
+            )
+            args = _convert_ld64_lld_to_lld(args)
+
         return _translate_linker_flags_for_macos_lld(args)
 
     if not _should_force_lld(platform_name, args):
@@ -320,22 +366,13 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     # On macOS, translate GNU ld flags to ld64.lld equivalents
     if platform_name == "darwin":
         args = _translate_linker_flags_for_macos_lld(args)
+        # Ensure ld64.lld symlink exists for lld to dispatch to Mach-O mode
+        _ensure_ld64_lld_symlink()
 
-        # Check LLVM version to determine the correct linker flag
-        if _llvm_supports_ld64_lld_flag():
-            # LLVM 21.x+ supports explicit -fuse-ld=ld64.lld
-            _ensure_ld64_lld_symlink()
-            return ["-fuse-ld=ld64.lld"] + args
-        else:
-            # LLVM < 21.x: rewrite to -fuse-ld=lld with compatibility notice
-            version = _get_llvm_version_for_platform()
-            version_str = f"{version[0]}.{version[1]}.{version[2]}"
-            print(
-                f"[clang-tool-chain] LLVM {version_str} does not support -fuse-ld=ld64.lld, "
-                f"using -fuse-ld=lld instead (lld auto-detects Mach-O from target)",
-                file=sys.stderr,
-            )
-            return ["-fuse-ld=lld"] + args
-    else:
-        # Linux uses standard lld
-        return ["-fuse-ld=lld"] + args
+    # Always use -fuse-ld=lld on all platforms.
+    # Note: -fuse-ld=ld64.lld is NOT a valid clang driver option.
+    # The clang driver only recognizes generic names like "lld", "gold", "bfd".
+    # When -fuse-ld=lld is used, clang automatically dispatches to:
+    # - Darwin: ld64.lld (Mach-O linker)
+    # - Linux: ld.lld (ELF linker)
+    return ["-fuse-ld=lld"] + args

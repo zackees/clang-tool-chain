@@ -99,28 +99,37 @@ class TestMacOSLLDFlagTranslation(unittest.TestCase):
 class TestMacOSLLDIntegration(unittest.TestCase):
     """Integration tests for macOS LLD linker behavior."""
 
-    def test_macos_auto_injects_ld64_lld(self):
-        """Test that macOS automatically injects -fuse-ld=ld64.lld (explicit Mach-O variant)."""
+    def test_macos_auto_injects_lld(self):
+        """Test that macOS automatically injects -fuse-ld=lld (dispatches to ld64.lld).
+
+        Note: This test verifies that we use -fuse-ld=lld (not -fuse-ld=ld64.lld) because
+        the clang driver does NOT recognize -fuse-ld=ld64.lld as a valid option.
+        The driver only recognizes generic names like "lld" and automatically dispatches
+        to ld64.lld on Darwin targets.
+        """
         args = ["main.cpp", "-o", "main"]
-        # Mock LLVM version check to return True (supports ld64.lld)
-        with patch("clang_tool_chain.linker.lld._llvm_supports_ld64_lld_flag", return_value=True):
-            result = _add_lld_linker_if_needed("darwin", args)
-            self.assertEqual(result[0], "-fuse-ld=ld64.lld")
+        result = _add_lld_linker_if_needed("darwin", args)
+        # Should inject -fuse-ld=lld (NOT -fuse-ld=ld64.lld which is invalid)
+        self.assertEqual(result[0], "-fuse-ld=lld")
 
     def test_macos_flag_translation_with_auto_inject(self):
-        """Test that flag translation happens when LLD is auto-injected on macOS."""
+        """Test that flag translation happens when LLD is auto-injected on macOS.
+
+        Note: This test verifies that GNU ld flags are translated AND that we use
+        -fuse-ld=lld (not -fuse-ld=ld64.lld). The clang driver does not recognize
+        -fuse-ld=ld64.lld as a valid option, so we must use -fuse-ld=lld.
+        """
         args = ["-Wl,--no-undefined", "-Wl,--fatal-warnings", "main.cpp", "-o", "main"]
-        # Mock LLVM version check to return True (supports ld64.lld)
-        with patch("clang_tool_chain.linker.lld._llvm_supports_ld64_lld_flag", return_value=True):
-            result = _add_lld_linker_if_needed("darwin", args)
-            # Should have ld64.lld flag first (explicit Mach-O variant)
-            self.assertEqual(result[0], "-fuse-ld=ld64.lld")
-            # Flags should be translated
-            self.assertIn("-Wl,-undefined,error", result)
-            self.assertIn("-Wl,-fatal_warnings", result)
-            # Original GNU flags should not be present
-            self.assertNotIn("-Wl,--no-undefined", result)
-            self.assertNotIn("-Wl,--fatal-warnings", result)
+        result = _add_lld_linker_if_needed("darwin", args)
+        # Should have -fuse-ld=lld first (NOT -fuse-ld=ld64.lld which is invalid)
+        # The clang driver dispatches to ld64.lld automatically on Darwin
+        self.assertEqual(result[0], "-fuse-ld=lld")
+        # Flags should be translated to ld64.lld equivalents
+        self.assertIn("-Wl,-undefined,error", result)
+        self.assertIn("-Wl,-fatal_warnings", result)
+        # Original GNU flags should not be present
+        self.assertNotIn("-Wl,--no-undefined", result)
+        self.assertNotIn("-Wl,--fatal-warnings", result)
 
     def test_macos_user_lld_triggers_flag_translation(self):
         """Test that user-specified -fuse-ld=lld triggers flag translation on macOS."""
@@ -134,16 +143,23 @@ class TestMacOSLLDIntegration(unittest.TestCase):
         self.assertEqual(result.count("-fuse-ld=lld"), 1)
         self.assertNotIn("-fuse-ld=ld64.lld", result)
 
-    def test_macos_user_ld64_lld_triggers_flag_translation(self):
-        """Test that user-specified -fuse-ld=ld64.lld triggers flag translation on macOS."""
+    def test_macos_user_ld64_lld_auto_converts_and_translates(self):
+        """Test that user-specified -fuse-ld=ld64.lld is auto-converted to -fuse-ld=lld.
+
+        Note: This test verifies that when the user specifies -fuse-ld=ld64.lld,
+        it is automatically converted to -fuse-ld=lld (with a warning emitted to stderr)
+        because the clang driver does NOT recognize -fuse-ld=ld64.lld as a valid option.
+        Flag translation to ld64.lld equivalents still occurs.
+        """
         args = ["-fuse-ld=ld64.lld", "-Wl,--fatal-warnings", "main.cpp", "-o", "main"]
         result = _add_lld_linker_if_needed("darwin", args)
-        # User's -fuse-ld=ld64.lld should be preserved
-        self.assertEqual(result[0], "-fuse-ld=ld64.lld")
-        # Flags should be translated
+        # -fuse-ld=ld64.lld should be auto-converted to -fuse-ld=lld
+        self.assertEqual(result[0], "-fuse-ld=lld")
+        # Flags should still be translated
         self.assertEqual(result[1], "-Wl,-fatal_warnings")
-        # No additional -fuse-ld flag should be added
-        self.assertEqual(result.count("-fuse-ld=ld64.lld"), 1)
+        # Should have exactly one -fuse-ld=lld and no -fuse-ld=ld64.lld
+        self.assertEqual(result.count("-fuse-ld=lld"), 1)
+        self.assertNotIn("-fuse-ld=ld64.lld", result)
 
     def test_macos_system_linker_env_skips_injection_and_translation(self):
         """Test that CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1 skips LLD and flag translation."""
