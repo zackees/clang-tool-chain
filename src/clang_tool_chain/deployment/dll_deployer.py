@@ -630,12 +630,22 @@ def post_link_dependency_deployment(output_path: Path, platform_name: str, use_g
 
     suffix = output_path.suffix.lower()
 
-    if platform_name == "win" and suffix == ".dll":
+    if platform_name == "win" and suffix in (".dll", ".exe"):
         _deploy_windows_dll_dependencies(output_path, use_gnu_abi)
-    elif platform_name == "linux" and (suffix == ".so" or ".so." in output_path.name):
-        _deploy_linux_so_dependencies(output_path)
-    elif platform_name == "darwin" and suffix == ".dylib":
-        _deploy_macos_dylib_dependencies(output_path)
+    elif platform_name == "linux":
+        # Deploy for shared libraries (.so, .so.1.2.3) and executables (no extension)
+        # Skip object files (.o) and static libraries (.a)
+        if suffix in (".o", ".a"):
+            logger.debug(f"Dependency deployment skipped for object/static file: {suffix}")
+        else:
+            _deploy_linux_so_dependencies(output_path)
+    elif platform_name == "darwin":
+        # Deploy for dylibs and executables (no extension)
+        # Skip object files (.o) and static libraries (.a)
+        if suffix in (".o", ".a"):
+            logger.debug(f"Dependency deployment skipped for object/static file: {suffix}")
+        else:
+            _deploy_macos_dylib_dependencies(output_path)
     else:
         logger.debug(f"Dependency deployment not supported for {suffix} on {platform_name}")
 

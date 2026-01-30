@@ -141,10 +141,11 @@ class SoDeployer(BaseLibraryDeployer):
         Search for .so file in toolchain and system paths.
 
         Search order:
-        1. Clang toolchain lib directory
-        2. /usr/local/lib (user installs)
-        3. /usr/lib/<arch> (system libs, filtered)
-        4. Resolve symlinks to real files
+        1. Clang compiler-rt directory (lib/clang/<version>/lib/<target>/) - for sanitizer runtimes
+        2. Clang toolchain lib directory
+        3. /usr/local/lib (user installs)
+        4. /usr/lib/<arch> (system libs, filtered)
+        5. Resolve symlinks to real files
 
         Args:
             lib_name: Library filename to locate
@@ -156,22 +157,42 @@ class SoDeployer(BaseLibraryDeployer):
             from clang_tool_chain.platform.detection import get_platform_binary_dir
 
             clang_bin = get_platform_binary_dir()
-            clang_lib = clang_bin.parent / "lib"
+            clang_root = clang_bin.parent
+            clang_lib = clang_root / "lib"
 
             # Architecture-specific lib directory
             if self.arch == "x86_64":
                 arch_lib_dir = "x86_64-linux-gnu"
+                compiler_rt_targets = ["x86_64-unknown-linux-gnu", "linux"]
             elif self.arch == "arm64" or self.arch == "aarch64":
                 arch_lib_dir = "aarch64-linux-gnu"
+                compiler_rt_targets = ["aarch64-unknown-linux-gnu", "linux"]
             else:
                 arch_lib_dir = self.arch
+                compiler_rt_targets = ["linux"]
 
-            search_paths = [
-                clang_lib,
-                Path("/usr/local/lib"),
-                Path(f"/usr/lib/{arch_lib_dir}"),
-                Path("/usr/lib"),
-            ]
+            search_paths: list[Path] = []
+
+            # Search compiler-rt directories first (for sanitizer runtimes like libclang_rt.asan.so)
+            # Path pattern: lib/clang/<version>/lib/<target>/
+            clang_version_dir = clang_lib / "clang"
+            if clang_version_dir.exists():
+                for version_dir in clang_version_dir.iterdir():
+                    if version_dir.is_dir():
+                        for target in compiler_rt_targets:
+                            rt_lib_dir = version_dir / "lib" / target
+                            if rt_lib_dir.exists():
+                                search_paths.append(rt_lib_dir)
+
+            # Then search standard lib directories
+            search_paths.extend(
+                [
+                    clang_lib,
+                    Path("/usr/local/lib"),
+                    Path(f"/usr/lib/{arch_lib_dir}"),
+                    Path("/usr/lib"),
+                ]
+            )
 
             for search_dir in search_paths:
                 if not search_dir.exists():

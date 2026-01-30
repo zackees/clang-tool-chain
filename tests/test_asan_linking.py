@@ -226,7 +226,7 @@ class TestASANLinking:
         if os.name == "nt":
             output_exe = simple_cpp_file.parent / "test_asan.exe"
 
-        # Compile with ASAN
+        # Compile with ASAN and deploy dependencies for portable execution
         compile_cmd = [
             "clang-tool-chain-cpp",
             "-fsanitize=address",
@@ -234,6 +234,7 @@ class TestASANLinking:
             str(simple_cpp_file),
             "-o",
             str(output_exe),
+            "--deploy-dependencies",
         ]
 
         result = subprocess.run(compile_cmd, capture_output=True, text=True)
@@ -371,13 +372,14 @@ class TestASANLinking:
         if os.name == "nt":
             output_exe = temp_dir / "test_asan_error.exe"
 
-        # Compile with ASAN
+        # Compile with ASAN and deploy dependencies for portable execution
         compile_cmd = [
             "clang-tool-chain-cpp",
             "-fsanitize=address",
             str(cpp_file),
             "-o",
             str(output_exe),
+            "--deploy-dependencies",
         ]
 
         compile_result = subprocess.run(compile_cmd, capture_output=True, text=True)
