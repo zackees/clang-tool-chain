@@ -8,12 +8,15 @@ ObjdumpDLLDetector, HeuristicDLLDetector, and TransitiveDependencyScanner.
 import sys
 import tempfile
 from pathlib import Path
+
+# Handle imports based on platform
+# Import for type checking on all platforms, but only use at runtime on Windows
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Handle imports based on platform
-if sys.platform == "win32":
+if TYPE_CHECKING or sys.platform == "win32":
     from clang_tool_chain.deployment.dll_detector import (
         DLLDetector,
         HeuristicDLLDetector,
