@@ -399,3 +399,75 @@ class TestASANLinking:
         assert "heap-buffer-overflow" in error_output or "ASAN" in error_output or "ERROR" in error_output, (
             f"ASAN error message not found in output:\n{error_output}"
         )
+
+    @pytest.mark.skipif(platform.system() != "Linux", reason="Linux-specific rpath test")
+    def test_asan_runs_without_ld_library_path(self, simple_cpp_file):
+        """
+        Test that ASAN executable runs without LD_LIBRARY_PATH on Linux.
+
+        This test verifies:
+        1. The ASAN runtime library is deployed next to the executable
+        2. The executable has rpath set to $ORIGIN
+        3. The executable runs without LD_LIBRARY_PATH modification
+
+        This is critical for ensuring deployed executables are self-contained.
+        """
+        output_exe = simple_cpp_file.parent / "test_asan_rpath"
+        output_dir = simple_cpp_file.parent
+
+        # Compile with ASAN and deploy-dependencies
+        compile_cmd = [
+            "clang-tool-chain-cpp",
+            "-fsanitize=address",
+            str(simple_cpp_file),
+            "-o",
+            str(output_exe),
+            "--deploy-dependencies",
+        ]
+
+        result = subprocess.run(compile_cmd, capture_output=True, text=True)
+        assert result.returncode == 0, f"Compilation failed: {result.stderr}"
+        assert output_exe.exists(), "Executable not created"
+
+        # Verify ASAN library was deployed
+        asan_libs = list(output_dir.glob("libclang_rt.asan*.so*"))
+        assert len(asan_libs) > 0, (
+            f"ASAN runtime library not deployed.\nFiles in output dir: {[f.name for f in output_dir.iterdir()]}"
+        )
+
+        # Verify rpath is set to $ORIGIN using readelf
+        readelf_result = subprocess.run(
+            ["readelf", "-d", str(output_exe)],
+            capture_output=True,
+            text=True,
+        )
+        # Check for RPATH or RUNPATH containing $ORIGIN
+        has_origin_rpath = "$ORIGIN" in readelf_result.stdout or "ORIGIN" in readelf_result.stdout
+        assert has_origin_rpath, f"Executable does not have $ORIGIN in rpath.\nreadelf output:\n{readelf_result.stdout}"
+
+        # Run the executable with LD_LIBRARY_PATH cleared
+        # This ensures the executable finds the ASAN library via rpath, not system paths
+        env = os.environ.copy()
+        env["LD_LIBRARY_PATH"] = ""  # Clear LD_LIBRARY_PATH
+
+        run_result = subprocess.run(
+            [str(output_exe)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env=env,
+            cwd=str(output_dir),  # Run from output directory
+        )
+
+        # Should run successfully
+        assert run_result.returncode == 0, (
+            f"ASAN executable failed to run without LD_LIBRARY_PATH:\n"
+            f"STDOUT: {run_result.stdout}\n"
+            f"STDERR: {run_result.stderr}\n"
+            f"This indicates rpath is not correctly set or ASAN library not deployed."
+        )
+
+        # Verify correct output
+        assert "1 2 3 4 5" in run_result.stdout, (
+            f"Expected output not found.\nSTDOUT: {run_result.stdout}\nSTDERR: {run_result.stderr}"
+        )

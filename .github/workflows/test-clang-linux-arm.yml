@@ -24,6 +24,20 @@ jobs:
     - name: Install uv
       run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
+    - name: Remove system ASAN libraries
+      run: |
+        # Remove any system-installed ASAN libraries to ensure tests use bundled ASAN
+        # This verifies the toolchain is self-contained
+        echo "Checking for system ASAN libraries..."
+        dpkg -l | grep -i asan || echo "No ASAN packages found"
+
+        # Remove ASAN packages if present (libasan is typically from gcc)
+        sudo apt-get remove -y libasan* || true
+
+        # Verify ASAN libraries are not in standard paths
+        echo "Verifying no system ASAN in /usr/lib..."
+        ls /usr/lib/aarch64-linux-gnu/libasan* 2>/dev/null && echo "WARNING: System ASAN found!" || echo "OK: No system ASAN"
+
     - name: Install package
       run: |
         uv venv
@@ -71,3 +85,9 @@ jobs:
     - name: Run integration tests
       run: |
         uv run pytest tests/test_integration.py -v
+
+    - name: Run ASAN linking tests
+      run: |
+        # Test ASAN functionality with deployed libraries
+        # This verifies executables work without LD_LIBRARY_PATH
+        uv run pytest tests/test_asan_linking.py -v

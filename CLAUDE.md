@@ -8,6 +8,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The version number is carefully managed and coordinated with binary distributions, manifests, and PyPI releases. Unauthorized version changes can break the distribution system and user installations.
 
+### Files to Update When Bumping Version
+
+When the repository owner requests a version bump, update these files **in order**:
+
+1. **`pyproject.toml`** (line ~7) - Primary source of truth
+   ```toml
+   version = "X.Y.Z"
+   ```
+
+2. **`src/clang_tool_chain/__version__.py`** (line 3) - Python module version
+   ```python
+   __version__ = "X.Y.Z"
+   ```
+
+3. **`uv.lock`** - Auto-generated; run `uv sync` or `uv pip install -e .` to update
+
+**Verification:** Run `uv run pytest tests/test_version.py -v` to ensure versions are consistent.
+
 ## Project Overview
 
 This is a Python package that distributes pre-built Clang/LLVM binaries for Windows, macOS, and Linux with Python wrapper executables. The package provides automatic downloading, installation, and execution of LLVM/Clang toolchain binaries with minimal configuration required.

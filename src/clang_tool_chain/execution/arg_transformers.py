@@ -331,6 +331,62 @@ class ASANRuntimeTransformer(ArgumentTransformer):
         return ["-shared-libasan"] + args
 
 
+class RPathTransformer(ArgumentTransformer):
+    """
+    Transformer for adding rpath when --deploy-dependencies is used on Linux.
+
+    Priority: 275 (runs after ASAN but before ABI)
+
+    This transformer adds -Wl,-rpath,$ORIGIN to ensure executables can find
+    deployed shared libraries (like ASAN runtime) in the same directory
+    without requiring LD_LIBRARY_PATH to be set.
+
+    The rpath is only added when:
+    - Platform is Linux
+    - --deploy-dependencies flag is present
+    - Not a compile-only operation (-c flag)
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_RPATH: Set to '1' to disable automatic rpath injection
+    """
+
+    def priority(self) -> int:
+        return 275
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Add -Wl,-rpath,$ORIGIN when --deploy-dependencies is used on Linux."""
+        # Only applies to Linux clang/clang++
+        if context.platform_name != "linux" or context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Check if compile-only (no linking)
+        if "-c" in args:
+            return args
+
+        # Check if --deploy-dependencies is present
+        # Note: The flag may have been stripped already by core.py, so we also check env var
+        has_deploy_flag = "--deploy-dependencies" in args
+        deploy_from_env = os.environ.get("CLANG_TOOL_CHAIN_DEPLOY_DEPENDENCIES") == "1"
+
+        if not has_deploy_flag and not deploy_from_env:
+            return args
+
+        # Check if user disabled rpath
+        if os.environ.get("CLANG_TOOL_CHAIN_NO_RPATH") == "1":
+            logger.debug("Rpath injection disabled via CLANG_TOOL_CHAIN_NO_RPATH=1")
+            return args
+
+        # Check if rpath already present
+        for arg in args:
+            if "-rpath" in arg or "$ORIGIN" in arg:
+                return args
+
+        # Add rpath to look in executable's directory first
+        # $ORIGIN is resolved at runtime to the directory containing the executable
+        logger.info("Adding -Wl,-rpath,$ORIGIN for deployed library lookup on Linux")
+        return ["-Wl,-rpath,$ORIGIN"] + args
+
+
 class MSVCABITransformer(ArgumentTransformer):
     """
     Transformer for Windows MSVC ABI configuration.
@@ -444,8 +500,9 @@ def create_default_pipeline() -> ArgumentPipeline:
     2. MacOSSDKTransformer (priority=100)
     3. LLDLinkerTransformer (priority=200)
     4. ASANRuntimeTransformer (priority=250)
-    5. GNUABITransformer (priority=300)
-    6. MSVCABITransformer (priority=300)
+    5. RPathTransformer (priority=275)
+    6. GNUABITransformer (priority=300)
+    7. MSVCABITransformer (priority=300)
 
     Returns:
         Configured ArgumentPipeline ready for use
@@ -456,6 +513,7 @@ def create_default_pipeline() -> ArgumentPipeline:
             MacOSSDKTransformer(),
             LLDLinkerTransformer(),
             ASANRuntimeTransformer(),
+            RPathTransformer(),
             GNUABITransformer(),
             MSVCABITransformer(),
         ]

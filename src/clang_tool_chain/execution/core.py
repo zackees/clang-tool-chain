@@ -40,6 +40,9 @@ def _extract_deploy_dependencies_flag(args: list[str]) -> tuple[list[str], bool]
     This flag is specific to clang-tool-chain and must be stripped before
     passing arguments to clang, as clang doesn't recognize it.
 
+    When the flag is present, this also sets CLANG_TOOL_CHAIN_DEPLOY_DEPENDENCIES=1
+    environment variable so transformers (like RPathTransformer) can detect it.
+
     Args:
         args: Compiler/linker arguments
 
@@ -56,6 +59,8 @@ def _extract_deploy_dependencies_flag(args: list[str]) -> tuple[list[str], bool]
     """
     if "--deploy-dependencies" in args:
         filtered = [arg for arg in args if arg != "--deploy-dependencies"]
+        # Set env var so transformers can detect this flag (e.g., RPathTransformer)
+        os.environ["CLANG_TOOL_CHAIN_DEPLOY_DEPENDENCIES"] = "1"
         return (filtered, True)
     return (args, False)
 
@@ -155,6 +160,71 @@ def _extract_output_path(args: list[str], tool_name: str) -> Path | None:
     # No -o flag: default output is a.exe on Windows (only for linking, not compiling)
     # But we can't determine if it's a link operation without -o, so skip
     return None
+
+
+def _extract_executable_output_path(args: list[str], tool_name: str) -> Path | None:
+    """
+    Extract the output executable path from compiler/linker arguments.
+
+    This detects executable builds (not shared libraries, not compile-only)
+    and returns the output path on all platforms.
+
+    Args:
+        args: Compiler/linker arguments
+        tool_name: Name of the tool being executed
+
+    Returns:
+        Path to output executable, or None if not building an executable
+
+    Examples:
+        >>> _extract_executable_output_path(["test.cpp", "-o", "test"], "clang++")
+        Path('test')
+        >>> _extract_executable_output_path(["test.cpp", "-o", "test.exe"], "clang++")
+        Path('test.exe')
+        >>> _extract_executable_output_path(["-c", "test.cpp", "-o", "test.o"], "clang++")
+        None  # Compile-only
+        >>> _extract_executable_output_path(["-shared", "lib.cpp", "-o", "lib.so"], "clang++")
+        None  # Shared library, not executable
+    """
+    # Skip if compile-only flag present
+    if "-c" in args:
+        return None
+
+    # Only process clang/clang++ commands
+    if tool_name not in ("clang", "clang++"):
+        return None
+
+    # Skip if building shared library
+    if "-shared" in args:
+        return None
+
+    # Parse -o flag for output path
+    output_path = None
+    i = 0
+    while i < len(args):
+        arg = args[i]
+
+        # Format: -o output
+        if arg == "-o" and i + 1 < len(args):
+            output_path = Path(args[i + 1]).resolve()
+            break
+
+        # Format: -ooutput
+        if arg.startswith("-o") and len(arg) > 2:
+            output_path = Path(arg[2:]).resolve()
+            break
+
+        i += 1
+
+    if output_path is None:
+        return None
+
+    # Exclude object files and static libraries
+    suffix = output_path.suffix.lower()
+    if suffix in (".o", ".obj", ".a", ".lib"):
+        return None
+
+    return output_path
 
 
 def _extract_shared_library_output_path(args: list[str], tool_name: str) -> Path | None:
@@ -300,17 +370,29 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
                     except Exception as e:
                         logger.warning(f"DLL deployment failed: {e}")
 
-            # Shared library dependency deployment (opt-in via --deploy-dependencies, all platforms)
+            # Dependency deployment (opt-in via --deploy-dependencies, all platforms)
             if deploy_dependencies_requested:
+                use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+
+                # Try shared library first
                 shared_lib_path = _extract_shared_library_output_path(args, tool_name)
                 if shared_lib_path is not None:
-                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
                     try:
                         post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
                     except KeyboardInterrupt as ke:
                         handle_keyboard_interrupt_properly(ke)
                     except Exception as e:
                         logger.warning(f"Dependency deployment failed: {e}")
+                else:
+                    # Try executable
+                    exe_path = _extract_executable_output_path(args, tool_name)
+                    if exe_path is not None:
+                        try:
+                            post_link_dependency_deployment(exe_path, platform_name, use_gnu)
+                        except KeyboardInterrupt as ke:
+                            handle_keyboard_interrupt_properly(ke)
+                        except Exception as e:
+                            logger.warning(f"Dependency deployment failed: {e}")
 
         sys.exit(result.returncode)
     except FileNotFoundError:
@@ -408,17 +490,29 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
                     except Exception as e:
                         logger.warning(f"DLL deployment failed: {e}")
 
-            # Shared library dependency deployment (opt-in via --deploy-dependencies, all platforms)
+            # Dependency deployment (opt-in via --deploy-dependencies, all platforms)
             if deploy_dependencies_requested:
+                use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+
+                # Try shared library first
                 shared_lib_path = _extract_shared_library_output_path(args, tool_name)
                 if shared_lib_path is not None:
-                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
                     try:
                         post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
                     except KeyboardInterrupt as ke:
                         handle_keyboard_interrupt_properly(ke)
                     except Exception as e:
                         logger.warning(f"Dependency deployment failed: {e}")
+                else:
+                    # Try executable
+                    exe_path = _extract_executable_output_path(args, tool_name)
+                    if exe_path is not None:
+                        try:
+                            post_link_dependency_deployment(exe_path, platform_name, use_gnu)
+                        except KeyboardInterrupt as ke:
+                            handle_keyboard_interrupt_properly(ke)
+                        except Exception as e:
+                            logger.warning(f"Dependency deployment failed: {e}")
 
         return result.returncode
     except FileNotFoundError as err:
