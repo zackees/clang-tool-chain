@@ -43,6 +43,9 @@ def _get_download_config() -> DownloadConfig:
     - CLANG_TOOL_CHAIN_CHUNK_SIZE: Chunk size in MB (default: 8)
     - CLANG_TOOL_CHAIN_MAX_WORKERS: Number of parallel workers (default: 6)
     - CLANG_TOOL_CHAIN_MIN_SIZE: Minimum file size in MB for parallel download (default: 10)
+    - CLANG_TOOL_CHAIN_TIMEOUT: Inactivity timeout in seconds (default: 180)
+      Only triggers if no data is received for this duration. Active streams continue indefinitely.
+    - CLANG_TOOL_CHAIN_MAX_RETRIES: Max retries per chunk (default: 3)
 
     Returns:
         DownloadConfig with values from environment or defaults
@@ -75,6 +78,24 @@ def _get_download_config() -> DownloadConfig:
             logger.debug(f"Using min size from env: {min_size_mb} MB")
         except ValueError:
             logger.warning(f"Invalid CLANG_TOOL_CHAIN_MIN_SIZE: {min_size_mb}, using default")
+
+    # Inactivity timeout in seconds (only triggers if no data received)
+    timeout_seconds = os.environ.get("CLANG_TOOL_CHAIN_TIMEOUT")
+    if timeout_seconds:
+        try:
+            config.timeout = int(timeout_seconds)
+            logger.debug(f"Using inactivity timeout from env: {timeout_seconds} seconds")
+        except ValueError:
+            logger.warning(f"Invalid CLANG_TOOL_CHAIN_TIMEOUT: {timeout_seconds}, using default")
+
+    # Max retries per chunk
+    max_retries = os.environ.get("CLANG_TOOL_CHAIN_MAX_RETRIES")
+    if max_retries:
+        try:
+            config.max_retries = int(max_retries)
+            logger.debug(f"Using max retries from env: {max_retries}")
+        except ValueError:
+            logger.warning(f"Invalid CLANG_TOOL_CHAIN_MAX_RETRIES: {max_retries}, using default")
 
     return config
 

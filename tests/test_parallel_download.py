@@ -205,8 +205,9 @@ class TestDownloadConfig:
 
         assert config.chunk_size == 8 * 1024 * 1024  # 8 MB
         assert config.max_workers == 6
-        assert config.timeout == 60
+        assert config.timeout == 180  # 180 seconds per chunk (increased for reliability)
         assert config.min_size_for_parallel == 10 * 1024 * 1024  # 10 MB
+        assert config.max_retries == 3  # 3 retries per chunk
 
     def test_custom_config(self):
         """Test custom configuration values."""

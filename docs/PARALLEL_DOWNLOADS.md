@@ -65,6 +65,14 @@ export CLANG_TOOL_CHAIN_MAX_WORKERS=8
 
 # Configure minimum file size for parallel download in MB (default: 10)
 export CLANG_TOOL_CHAIN_MIN_SIZE=20
+
+# Configure inactivity timeout in seconds (default: 180)
+# Only triggers if NO data is received for this duration
+# As long as data is streaming in, the download continues indefinitely
+export CLANG_TOOL_CHAIN_TIMEOUT=300
+
+# Configure max retries per chunk (default: 3)
+export CLANG_TOOL_CHAIN_MAX_RETRIES=5
 ```
 
 **Windows PowerShell:**
@@ -91,6 +99,8 @@ export CLANG_TOOL_CHAIN_MAX_WORKERS=8     # 8 parallel workers
 ```bash
 export CLANG_TOOL_CHAIN_CHUNK_SIZE=4      # 4 MB chunks
 export CLANG_TOOL_CHAIN_MAX_WORKERS=4     # 4 parallel workers
+export CLANG_TOOL_CHAIN_TIMEOUT=300       # 5 minutes per chunk
+export CLANG_TOOL_CHAIN_MAX_RETRIES=5     # More retry attempts
 ```
 
 **Debugging issues:**
@@ -122,7 +132,9 @@ export CLANG_TOOL_CHAIN_DISABLE_PARALLEL=1  # Disable parallel downloads
    - Pre-allocated file with positioned writes
 
 4. **Error Handling**
-   - Automatic retry for failed chunks
+   - Automatic retry with exponential backoff (2s, 4s, 8s delays)
+   - Configurable retry count (default: 3 retries per chunk)
+   - Configurable timeout per chunk (default: 180 seconds)
    - Graceful fallback to single-threaded
    - Comprehensive error reporting
 
@@ -162,12 +174,16 @@ The parallel download feature is optimized for **GitHub LFS** (Large File Storag
 
 ### Connection errors or timeouts
 
-**Problem:** Downloads fail with connection errors
+**Problem:** Downloads fail with connection errors or timeout messages
 
 **Solutions:**
-1. Reduce workers: `export CLANG_TOOL_CHAIN_MAX_WORKERS=3`
-2. Reduce chunk size: `export CLANG_TOOL_CHAIN_CHUNK_SIZE=4`
-3. Disable parallel: `export CLANG_TOOL_CHAIN_DISABLE_PARALLEL=1`
+1. Increase timeout per chunk: `export CLANG_TOOL_CHAIN_TIMEOUT=300` (5 minutes)
+2. Increase retries: `export CLANG_TOOL_CHAIN_MAX_RETRIES=5`
+3. Reduce workers: `export CLANG_TOOL_CHAIN_MAX_WORKERS=3`
+4. Reduce chunk size: `export CLANG_TOOL_CHAIN_CHUNK_SIZE=4`
+5. Disable parallel: `export CLANG_TOOL_CHAIN_DISABLE_PARALLEL=1`
+
+**Note:** The timeout is activity-based: it only triggers if NO data is received for the timeout period (default: 180 seconds). As long as data is actively streaming, the download continues indefinitely regardless of total time. Failed chunks are automatically retried with exponential backoff (2s, 4s, 8s delays).
 
 ### Checksum verification failures
 

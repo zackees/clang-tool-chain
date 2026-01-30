@@ -36,14 +36,19 @@ DEFAULT_MAX_WORKERS = 6  # 6 concurrent workers (sweet spot for most connections
 MIN_FILE_SIZE_FOR_PARALLEL = 10 * 1024 * 1024  # 10 MB minimum for parallel download
 
 
+DEFAULT_TIMEOUT = 180  # 180 seconds per chunk (allows ~50 KB/s for 8 MB chunks)
+DEFAULT_MAX_RETRIES = 3  # Retry failed chunks up to 3 times
+
+
 @dataclass
 class DownloadConfig:
     """Configuration for parallel downloads."""
 
     chunk_size: int = DEFAULT_CHUNK_SIZE
     max_workers: int = DEFAULT_MAX_WORKERS
-    timeout: int = 60  # Timeout per chunk (seconds)
+    timeout: int = DEFAULT_TIMEOUT  # Inactivity timeout (seconds) - only triggers if no data received
     min_size_for_parallel: int = MIN_FILE_SIZE_FOR_PARALLEL
+    max_retries: int = DEFAULT_MAX_RETRIES  # Max retries per chunk
 
 
 @dataclass
@@ -111,17 +116,27 @@ def check_server_capabilities(url: str, timeout: int = 30) -> ServerCapabilities
 
 
 def download_chunk(
-    url: str, chunk: ChunkInfo, dest_path: Path, lock: threading.Lock, timeout: int = 60
+    url: str,
+    chunk: ChunkInfo,
+    dest_path: Path,
+    lock: threading.Lock,
+    timeout: int = DEFAULT_TIMEOUT,
+    max_retries: int = DEFAULT_MAX_RETRIES,
 ) -> tuple[int, int, bool]:
     """
-    Download a specific byte range chunk of a file.
+    Download a specific byte range chunk of a file with retry support.
+
+    Uses streaming reads with activity-based timeout: the timeout only triggers
+    if no data is received for `timeout` seconds. As long as data is streaming
+    in, the download continues regardless of total time.
 
     Args:
         url: URL to download from
         chunk: ChunkInfo describing the byte range
         dest_path: Destination file path (must be pre-allocated)
         lock: Threading lock for synchronized file writes
-        timeout: Request timeout in seconds
+        timeout: Inactivity timeout in seconds (only triggers if no data received)
+        max_retries: Maximum number of retry attempts
 
     Returns:
         Tuple of (chunk_index, bytes_downloaded, success)
@@ -129,38 +144,79 @@ def download_chunk(
     Raises:
         Exception: If download fails (caught by ThreadPoolExecutor)
     """
+    import time
+
     range_header = f"bytes={chunk.start}-{chunk.end}"
-    logger.debug(f"Downloading chunk {chunk.index + 1}/{chunk.total_chunks}: {range_header}")
+    last_error: Exception | None = None
 
-    try:
-        req = Request(url, headers={"User-Agent": "clang-tool-chain", "Range": range_header})
+    for attempt in range(max_retries + 1):
+        if attempt > 0:
+            # Exponential backoff: 2s, 4s, 8s...
+            delay = 2**attempt
+            logger.info(f"Chunk {chunk.index + 1}/{chunk.total_chunks}: retry {attempt}/{max_retries} after {delay}s")
+            time.sleep(delay)
 
-        with urlopen(req, timeout=timeout) as response:
-            # Verify we got a partial content response
-            if response.status not in (200, 206):
-                logger.warning(
-                    f"Chunk {chunk.index + 1}: unexpected status {response.status}, expected 206 (Partial Content)"
+        logger.debug(f"Downloading chunk {chunk.index + 1}/{chunk.total_chunks}: {range_header}")
+
+        try:
+            req = Request(url, headers={"User-Agent": "clang-tool-chain", "Range": range_header})
+
+            # Use a shorter socket timeout for individual reads - this allows us to
+            # detect stalls quickly while still allowing slow but steady streams
+            socket_timeout = min(timeout, 30)  # 30 second socket timeout max
+
+            with urlopen(req, timeout=socket_timeout) as response:
+                # Verify we got a partial content response
+                if response.status not in (200, 206):
+                    logger.warning(
+                        f"Chunk {chunk.index + 1}: unexpected status {response.status}, expected 206 (Partial Content)"
+                    )
+
+                # Stream the data in smaller pieces with activity tracking
+                # This ensures we only timeout if the connection truly stalls
+                chunk_data = bytearray()
+                read_size = 64 * 1024  # 64 KB reads
+                last_activity = time.monotonic()
+
+                while True:
+                    try:
+                        data = response.read(read_size)
+                        if not data:
+                            break  # End of stream
+                        chunk_data.extend(data)
+                        last_activity = time.monotonic()  # Reset activity timer
+                    except TimeoutError:
+                        # Check if we've exceeded inactivity timeout
+                        inactive_time = time.monotonic() - last_activity
+                        if inactive_time >= timeout:
+                            raise TimeoutError(
+                                f"No data received for {inactive_time:.1f}s (timeout: {timeout}s)"
+                            ) from None
+                        # Otherwise, just a slow read - continue waiting
+                        continue
+
+                bytes_downloaded = len(chunk_data)
+
+                # Write chunk to file at correct position
+                with lock, open(dest_path, "r+b") as f:
+                    f.seek(chunk.start)
+                    f.write(chunk_data)
+
+                logger.debug(
+                    f"Chunk {chunk.index + 1}/{chunk.total_chunks} complete: {bytes_downloaded / (1024 * 1024):.2f} MB"
                 )
 
-            chunk_data = response.read()
-            bytes_downloaded = len(chunk_data)
+                return (chunk.index, bytes_downloaded, True)
 
-            # Write chunk to file at correct position
-            with lock, open(dest_path, "r+b") as f:
-                f.seek(chunk.start)
-                f.write(chunk_data)
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Chunk {chunk.index + 1}/{chunk.total_chunks} attempt {attempt + 1} failed: {e}")
 
-            logger.debug(
-                f"Chunk {chunk.index + 1}/{chunk.total_chunks} complete: {bytes_downloaded / (1024 * 1024):.2f} MB"
-            )
-
-            return (chunk.index, bytes_downloaded, True)
-
-    except KeyboardInterrupt as ke:
-        handle_keyboard_interrupt_properly(ke)
-    except Exception as e:
-        logger.error(f"Chunk {chunk.index + 1}/{chunk.total_chunks} failed: {e}")
-        return (chunk.index, 0, False)
+    # All retries exhausted
+    logger.error(f"Chunk {chunk.index + 1}/{chunk.total_chunks} failed after {max_retries + 1} attempts: {last_error}")
+    return (chunk.index, 0, False)
 
 
 def download_file_parallel(
@@ -254,7 +310,9 @@ def download_file_parallel(
             with ThreadPoolExecutor(max_workers=config.max_workers) as executor:
                 # Submit all chunk download tasks
                 future_to_chunk = {
-                    executor.submit(download_chunk, url, chunk, tmp_path, lock, config.timeout): chunk
+                    executor.submit(
+                        download_chunk, url, chunk, tmp_path, lock, config.timeout, config.max_retries
+                    ): chunk
                     for chunk in chunks
                 }
 
