@@ -561,6 +561,26 @@ clang-tool-chain-cpp -fsanitize=address test.cpp -o test --deploy-dependencies
 **Environment Variables:**
 - `CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1` - Disable automatic `-shared-libasan` injection (use static ASAN)
 - `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` - Disable automatic library deployment
+- `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV=1` - Disable automatic `ASAN_OPTIONS`/`LSAN_OPTIONS` injection at runtime
+
+### Runtime Environment (ASAN_OPTIONS Injection)
+
+When running executables via `clang-tool-chain-build-run`, optimal sanitizer options are automatically injected to improve stack trace quality **only when the corresponding sanitizer was used during compilation**. This fixes `<unknown module>` entries in stack traces from `dlopen()`'d shared libraries.
+
+**Automatically injected based on compiler flags:**
+- `ASAN_OPTIONS=fast_unwind_on_malloc=0:symbolize=1:detect_leaks=1` (when `-fsanitize=address` is used)
+- `LSAN_OPTIONS=fast_unwind_on_malloc=0:symbolize=1` (when `-fsanitize=address` or `-fsanitize=leak` is used)
+
+**What these options do:**
+- `fast_unwind_on_malloc=0`: Use slow but accurate stack unwinding (fixes `<unknown module>` in dlopen'd libraries)
+- `symbolize=1`: Enable symbolization for readable function names in stack traces
+- `detect_leaks=1`: Enable leak detection (ASAN only)
+
+**Opt-out:** Set `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV=1` to disable automatic injection.
+
+**User options preserved:** If you set `ASAN_OPTIONS` or `LSAN_OPTIONS` yourself, your values are preserved (no automatic injection for that variable).
+
+**Note:** Options are only injected when the corresponding sanitizer is detected in the compiler flags. Regular builds without sanitizers are unaffected.
 
 **Implementation Details:**
 - **ASANRuntimeTransformer** (priority=250) automatically adds `-shared-libasan` when `-fsanitize=address` detected on Linux

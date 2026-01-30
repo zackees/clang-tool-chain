@@ -137,7 +137,7 @@ def _get_directive_args(source_path: Path) -> list[str]:
             print(f"  Effective args: {' '.join(all_args)}", file=sys.stderr)
 
         return all_args
-    except KeyboardInterrupt:  # noqa: KBI002
+    except KeyboardInterrupt:
         # Re-raise KeyboardInterrupt to allow clean exit
         raise
     except Exception as e:
@@ -249,6 +249,8 @@ class BuildPipeline(ABC):
         Raises:
             SystemExit: Always exits with the executable's return code
         """
+        from clang_tool_chain.execution.sanitizer_env import prepare_sanitizer_environment
+
         program_args = self.config.program_args or []
 
         print(f"\nRunning: {self.config.output_file}", file=sys.stderr)
@@ -256,11 +258,15 @@ class BuildPipeline(ABC):
             print(f"Program arguments: {' '.join(program_args)}", file=sys.stderr)
         print("=" * 60, file=sys.stderr)
 
+        # Prepare environment with sanitizer options for better stack traces
+        # Only inject options if the corresponding sanitizer was used during compilation
+        env = prepare_sanitizer_environment(compiler_flags=self.config.compiler_flags)
+
         # Run the compiled executable
         try:
             # Use absolute path for Windows compatibility
             abs_output = self.output_path.absolute()
-            result = subprocess.run([str(abs_output)] + program_args)
+            result = subprocess.run([str(abs_output)] + program_args, env=env)
             sys.exit(result.returncode)
         except FileNotFoundError:
             print(f"\n{'=' * 60}", file=sys.stderr)

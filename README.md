@@ -197,6 +197,7 @@ Comprehensive reference of all available commands organized by category.
 - [Inlined Build Directives](#-inlined-build-directives)
 - [Executable C++ Scripts](#-executable-c-scripts-shebang-support)
 - [Windows DLL Deployment](#-windows-dll-deployment)
+- [Address Sanitizer (ASAN)](#️-address-sanitizer-asan-support)
 - [sccache Integration](#-sccache-integration)
 
 ### Platform & Configuration
@@ -751,6 +752,7 @@ jobs:
 - `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE` - Enable verbose library deployment logging
 - `CLANG_TOOL_CHAIN_USE_SYSTEM_LD` - Use system linker instead of LLD
 - `CLANG_TOOL_CHAIN_NO_DIRECTIVES` - Disable inlined build directives
+- `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV` - Disable automatic ASAN/LSAN options injection at runtime
 - `SDKROOT` - Custom macOS SDK path (auto-detected by default)
 
 **📖 [Complete Documentation](docs/CONFIGURATION.md)** - All environment variables, macOS SDK, Windows DLL settings, sccache backends.
@@ -792,6 +794,56 @@ clang-tool-chain-cpp-msvc main.cpp -o program.exe
 Automatic MinGW runtime DLL deployment for Windows executables (GNU ABI). Programs run immediately without PATH setup.
 
 **📖 [Complete Documentation](docs/DLL_DEPLOYMENT.md)** - Environment variables, troubleshooting.
+
+---
+
+## 🛡️ Address Sanitizer (ASAN) Support
+
+Full ASAN support with automatic runtime configuration for better stack traces.
+
+### Compilation
+
+```bash
+# Compile with ASAN
+clang-tool-chain-cpp -fsanitize=address test.cpp -o test
+
+# With automatic library deployment (recommended)
+clang-tool-chain-cpp -fsanitize=address test.cpp -o test --deploy-dependencies
+
+# Run - ASAN errors will be detected
+./test
+```
+
+### Runtime Environment (Automatic)
+
+When running executables via `clang-tool-chain-build-run`, optimal sanitizer options are **automatically injected** to improve stack trace quality - but **only when the corresponding sanitizer was used during compilation**:
+
+- `ASAN_OPTIONS=fast_unwind_on_malloc=0:symbolize=1:detect_leaks=1` (when `-fsanitize=address` is used)
+- `LSAN_OPTIONS=fast_unwind_on_malloc=0:symbolize=1` (when `-fsanitize=address` or `-fsanitize=leak` is used)
+
+**What these options fix:**
+- `<unknown module>` entries in stack traces from `dlopen()`'d shared libraries
+- Missing function names in crash reports
+- Incomplete leak detection
+
+**Your options are always preserved** - if you set `ASAN_OPTIONS` or `LSAN_OPTIONS` yourself, clang-tool-chain won't override them.
+
+**Regular builds are unaffected** - sanitizer options are only injected when the compiler flags indicate sanitizers are being used.
+
+### Configuration
+
+```bash
+# Disable automatic sanitizer environment injection
+export CLANG_TOOL_CHAIN_NO_SANITIZER_ENV=1
+
+# Disable automatic -shared-libasan on Linux (use static ASAN)
+export CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1
+```
+
+**Platform Notes:**
+- **Linux**: Automatically uses `-shared-libasan` for proper runtime linking
+- **Windows**: Works with both GNU and MSVC ABIs
+- **macOS**: Uses bundled LLVM ASAN runtime
 
 ---
 
