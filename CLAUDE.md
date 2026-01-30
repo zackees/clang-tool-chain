@@ -519,6 +519,49 @@ uv run python -m build
 ./upload_package.sh
 ```
 
+## Address Sanitizer (ASAN) Support
+
+clang-tool-chain fully supports ASAN (Address Sanitizer) and other sanitizers on all platforms with automatic runtime library linking and deployment.
+
+### Linux ASAN Configuration
+
+On Linux, when using `-fsanitize=address`, clang-tool-chain automatically adds `-shared-libasan` to ensure the shared ASAN runtime library is used. This prevents undefined symbol errors during linking.
+
+**Example:**
+```bash
+# Compile with ASAN - runtime automatically linked
+clang-tool-chain-cpp -fsanitize=address test.cpp -o test
+
+# Deploy ASAN shared library alongside executable (optional)
+clang-tool-chain-cpp -fsanitize=address test.cpp -o test --deploy-dependencies
+
+# Run with ASAN enabled
+./test
+```
+
+**Environment Variables:**
+- `CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1` - Disable automatic `-shared-libasan` injection (use static ASAN)
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` - Disable automatic library deployment
+
+**Implementation Details:**
+- **ASANRuntimeTransformer** (priority=250) automatically adds `-shared-libasan` when `-fsanitize=address` detected on Linux
+- Shared library deployment now works on all platforms (previously Windows-only)
+- The `execute_tool()` function now uses `subprocess.run()` on all platforms to enable post-link deployment
+- ASAN runtime library (`libclang_rt.asan.so`) is automatically deployed when `--deploy-dependencies` flag is used
+
+**Files Modified:**
+- `src/clang_tool_chain/execution/arg_transformers.py` - Added ASANRuntimeTransformer
+- `src/clang_tool_chain/execution/core.py` - Replaced `os.execv()` with `subprocess.run()` for Linux/macOS deployment support
+- `tests/test_asan_linking.py` - Comprehensive ASAN linking tests
+
+### Windows ASAN Support
+
+Windows ASAN support works with both GNU and MSVC ABIs. Runtime DLLs are automatically deployed for GNU ABI builds.
+
+### macOS ASAN Support
+
+macOS ASAN support uses the bundled LLVM ASAN runtime with automatic deployment via `--deploy-dependencies`.
+
 ## Code Quality Standards
 
 ### Line Length

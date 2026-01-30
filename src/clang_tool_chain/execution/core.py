@@ -278,18 +278,18 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
     cmd = [str(tool_path)] + args
     logger.info(f"Executing command: {tool_path} (with {len(args)} args)")
 
-    # On Unix systems, we can use exec to replace the current process
-    # On Windows, we need to use subprocess and exit with the return code
-    platform_name, _ = get_platform_info()
+    # Use subprocess.run() on all platforms to enable post-link deployment
+    # Previously used os.execv() on Unix, but that prevented deployment code from running
+    platform_name, arch = get_platform_info()
+    logger.debug(f"Using subprocess execution on {platform_name}")
 
-    if platform_name == "win":
-        logger.debug("Using Windows subprocess execution")
-        # Windows: use subprocess
-        try:
-            result = subprocess.run(cmd)
+    try:
+        result = subprocess.run(cmd)
 
-            # Post-link DLL deployment (Windows GNU ABI only for .exe)
-            if result.returncode == 0:
+        # Post-link deployment (all platforms)
+        if result.returncode == 0:
+            # Windows GNU ABI .exe deployment (automatic)
+            if platform_name == "win":
                 output_exe = _extract_output_path(args, tool_name)
                 if output_exe is not None:
                     use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
@@ -300,78 +300,46 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
                     except Exception as e:
                         logger.warning(f"DLL deployment failed: {e}")
 
-                # Shared library dependency deployment (when --deploy-dependencies flag used)
-                if deploy_dependencies_requested:
-                    shared_lib_path = _extract_shared_library_output_path(args, tool_name)
-                    if shared_lib_path is not None:
-                        use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
-                        try:
-                            post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
-                        except KeyboardInterrupt as ke:
-                            handle_keyboard_interrupt_properly(ke)
-                        except Exception as e:
-                            logger.warning(f"Dependency deployment failed: {e}")
+            # Shared library dependency deployment (opt-in via --deploy-dependencies, all platforms)
+            if deploy_dependencies_requested:
+                shared_lib_path = _extract_shared_library_output_path(args, tool_name)
+                if shared_lib_path is not None:
+                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+                    try:
+                        post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
+                    except KeyboardInterrupt as ke:
+                        handle_keyboard_interrupt_properly(ke)
+                    except Exception as e:
+                        logger.warning(f"Dependency deployment failed: {e}")
 
-            sys.exit(result.returncode)
-        except FileNotFoundError:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'=' * 60}", file=sys.stderr)
-            print(f"Tool not found: {tool_path}", file=sys.stderr)
-            print("\nThe binary exists in the package but cannot be executed.", file=sys.stderr)
-            print("This may be a permission or compatibility issue.", file=sys.stderr)
-            print("\nTroubleshooting:", file=sys.stderr)
-            print("  - Verify the binary is compatible with your Windows version", file=sys.stderr)
-            print("  - Check Windows Defender or antivirus isn't blocking it", file=sys.stderr)
-            print("  - Report issue: https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-            print(f"{'=' * 60}\n", file=sys.stderr)
-            sys.exit(1)
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'=' * 60}", file=sys.stderr)
-            print(f"Error executing tool: {e}", file=sys.stderr)
-            print(f"\nUnexpected error while running: {tool_path}", file=sys.stderr)
-            print(f"Arguments: {args}", file=sys.stderr)
-            print("\nPlease report this issue at:", file=sys.stderr)
-            print("https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-            print(f"{'=' * 60}\n", file=sys.stderr)
-            sys.exit(1)
-    else:
-        logger.debug("Using Unix exec replacement")
-        # Unix: use exec to replace current process
-        try:
-            logger.info(f"Replacing process with: {tool_path}")
-            os.execv(str(tool_path), cmd)
-        except FileNotFoundError:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'=' * 60}", file=sys.stderr)
-            print(f"Tool not found: {tool_path}", file=sys.stderr)
-            print("\nThe binary exists in the package but cannot be executed.", file=sys.stderr)
-            print("This may be a permission or compatibility issue.", file=sys.stderr)
-            print("\nTroubleshooting:", file=sys.stderr)
-            print(f"  - Check file permissions: chmod +x {tool_path}", file=sys.stderr)
-            print("  - Verify the binary is compatible with your system", file=sys.stderr)
-            print("  - On macOS: Right-click > Open, then allow in Security settings", file=sys.stderr)
-            print("  - Report issue: https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-            print(f"{'=' * 60}\n", file=sys.stderr)
-            sys.exit(1)
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'=' * 60}", file=sys.stderr)
-            print(f"Error executing tool: {e}", file=sys.stderr)
-            print(f"\nUnexpected error while running: {tool_path}", file=sys.stderr)
-            print(f"Arguments: {args}", file=sys.stderr)
-            print("\nPlease report this issue at:", file=sys.stderr)
-            print("https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
-            print(f"{'=' * 60}\n", file=sys.stderr)
-            sys.exit(1)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        print(f"\n{'=' * 60}", file=sys.stderr)
+        print("clang-tool-chain Error", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
+        print(f"Tool not found: {tool_path}", file=sys.stderr)
+        print("\nThe binary exists in the package but cannot be executed.", file=sys.stderr)
+        print("This may be a permission or compatibility issue.", file=sys.stderr)
+        print("\nTroubleshooting:", file=sys.stderr)
+        print("  - Verify the binary is compatible with your system", file=sys.stderr)
+        print("  - Check file permissions: chmod +x {tool_path}", file=sys.stderr)
+        print("  - On macOS: Right-click > Open, then allow in Security settings", file=sys.stderr)
+        print("  - Report issue: https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        print(f"\n{'=' * 60}", file=sys.stderr)
+        print("clang-tool-chain Error", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
+        print(f"Error executing tool: {e}", file=sys.stderr)
+        print(f"\nUnexpected error while running: {tool_path}", file=sys.stderr)
+        print(f"Arguments: {args}", file=sys.stderr)
+        print("\nPlease report this issue at:", file=sys.stderr)
+        print("https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
+        sys.exit(1)
 
 
 def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = False) -> int:
@@ -426,19 +394,21 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
     try:
         result = subprocess.run(cmd)
 
-        # Post-link DLL deployment (Windows GNU ABI only for .exe)
-        if result.returncode == 0 and platform_name == "win":
-            output_exe = _extract_output_path(args, tool_name)
-            if output_exe is not None:
-                use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
-                try:
-                    post_link_dll_deployment(output_exe, platform_name, use_gnu)
-                except KeyboardInterrupt as ke:
-                    handle_keyboard_interrupt_properly(ke)
-                except Exception as e:
-                    logger.warning(f"DLL deployment failed: {e}")
+        # Post-link deployment (all platforms)
+        if result.returncode == 0:
+            # Windows GNU ABI .exe deployment (automatic)
+            if platform_name == "win":
+                output_exe = _extract_output_path(args, tool_name)
+                if output_exe is not None:
+                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+                    try:
+                        post_link_dll_deployment(output_exe, platform_name, use_gnu)
+                    except KeyboardInterrupt as ke:
+                        handle_keyboard_interrupt_properly(ke)
+                    except Exception as e:
+                        logger.warning(f"DLL deployment failed: {e}")
 
-            # Shared library dependency deployment (when --deploy-dependencies flag used)
+            # Shared library dependency deployment (opt-in via --deploy-dependencies, all platforms)
             if deploy_dependencies_requested:
                 shared_lib_path = _extract_shared_library_output_path(args, tool_name)
                 if shared_lib_path is not None:

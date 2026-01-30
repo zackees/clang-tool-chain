@@ -284,6 +284,53 @@ class GNUABITransformer(ArgumentTransformer):
         return args
 
 
+class ASANRuntimeTransformer(ArgumentTransformer):
+    """
+    Transformer for ASAN (Address Sanitizer) runtime library configuration.
+
+    Priority: 250 (runs after linker but before ABI)
+
+    This transformer ensures proper ASAN runtime linking on Linux:
+    - Detects -fsanitize=address flag
+    - Adds -shared-libasan to use shared runtime library
+    - Prevents undefined symbol errors during linking
+
+    The shared runtime library (libclang_rt.asan.so) contains the full
+    ASAN implementation, while the static wrapper library only contains stubs.
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_SHARED_ASAN: Set to '1' to disable shared ASAN
+    """
+
+    def priority(self) -> int:
+        return 250
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Add -shared-libasan when using ASAN on Linux."""
+        # Only applies to Linux clang/clang++
+        if context.platform_name != "linux" or context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Check if ASAN is enabled
+        has_asan = any("-fsanitize=address" in arg for arg in args)
+        if not has_asan:
+            return args
+
+        # Check if user disabled shared ASAN
+        if os.environ.get("CLANG_TOOL_CHAIN_NO_SHARED_ASAN") == "1":
+            logger.debug("Shared ASAN disabled via CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1")
+            return args
+
+        # Check if -shared-libasan already present
+        if "-shared-libasan" in args:
+            return args
+
+        # Add -shared-libasan to use shared runtime library
+        # This prevents undefined symbol errors during linking
+        logger.info("Adding -shared-libasan for ASAN runtime linking on Linux")
+        return ["-shared-libasan"] + args
+
+
 class MSVCABITransformer(ArgumentTransformer):
     """
     Transformer for Windows MSVC ABI configuration.
@@ -396,8 +443,9 @@ def create_default_pipeline() -> ArgumentPipeline:
     1. DirectivesTransformer (priority=50)
     2. MacOSSDKTransformer (priority=100)
     3. LLDLinkerTransformer (priority=200)
-    4. GNUABITransformer (priority=300)
-    5. MSVCABITransformer (priority=300)
+    4. ASANRuntimeTransformer (priority=250)
+    5. GNUABITransformer (priority=300)
+    6. MSVCABITransformer (priority=300)
 
     Returns:
         Configured ArgumentPipeline ready for use
@@ -407,6 +455,7 @@ def create_default_pipeline() -> ArgumentPipeline:
             DirectivesTransformer(),
             MacOSSDKTransformer(),
             LLDLinkerTransformer(),
+            ASANRuntimeTransformer(),
             GNUABITransformer(),
             MSVCABITransformer(),
         ]
