@@ -10,11 +10,7 @@ import sys
 from typing import Any, NoReturn
 
 from clang_tool_chain import sccache_runner, wrapper
-from clang_tool_chain.abi.windows_gnu import _get_gnu_target_args, _should_use_gnu_abi
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
-from clang_tool_chain.linker import _add_lld_linker_if_needed
-from clang_tool_chain.platform.detection import get_platform_info
-from clang_tool_chain.sdk import _add_macos_sysroot_if_needed
 
 try:
     from .__version__ import __version__
@@ -1252,96 +1248,24 @@ def sccache_main() -> int:
     return sccache_runner.run_sccache(args)
 
 
-def sccache_c_main() -> int:
+def sccache_c_main() -> NoReturn:
     """
     Entry point for sccache + clang C compiler wrapper.
 
     This command wraps the clang C compiler with sccache for compilation caching.
-    If sccache is not found in PATH, automatically uses iso-env to run it in an isolated environment.
+    Delegates to core.py for unified argument transformation and DLL deployment.
     """
-    args = sys.argv[1:]
-
-    # Find the clang binary from clang-tool-chain
-    try:
-        clang_path = wrapper.find_tool_binary("clang")
-    except RuntimeError as e:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: Failed to locate clang binary", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print(str(e), file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
-
-    # Add platform-specific arguments (same logic as execute_tool)
-    platform_name, arch = get_platform_info()
-
-    # Add macOS SDK path automatically if needed
-    if platform_name == "darwin":
-        args = _add_macos_sysroot_if_needed(args)
-
-    # Force lld linker on macOS and Linux for cross-platform consistency
-    args = _add_lld_linker_if_needed(platform_name, args)
-
-    # Add Windows GNU ABI target automatically (to force ld.lld instead of MSVC link.exe)
-    if _should_use_gnu_abi(platform_name, args):
-        try:
-            gnu_args = _get_gnu_target_args(platform_name, arch, args)
-            args = gnu_args + args
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
-            print("Continuing with default target (may use MSVC linker)...\n", file=sys.stderr)
-
-    return sccache_runner.run_sccache_with_compiler(str(clang_path), args)
+    wrapper.sccache_clang_main(use_msvc=False)
 
 
-def sccache_cpp_main() -> int:
+def sccache_cpp_main() -> NoReturn:
     """
     Entry point for sccache + clang++ C++ compiler wrapper.
 
     This command wraps the clang++ C++ compiler with sccache for compilation caching.
-    If sccache is not found in PATH, automatically uses iso-env to run it in an isolated environment.
+    Delegates to core.py for unified argument transformation and DLL deployment.
     """
-    args = sys.argv[1:]
-
-    # Find the clang++ binary from clang-tool-chain
-    try:
-        clang_cpp_path = wrapper.find_tool_binary("clang++")
-    except RuntimeError as e:
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: Failed to locate clang++ binary", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(file=sys.stderr)
-        print(str(e), file=sys.stderr)
-        print(file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        return 1
-
-    # Add platform-specific arguments (same logic as execute_tool)
-    platform_name, arch = get_platform_info()
-
-    # Add macOS SDK path automatically if needed
-    if platform_name == "darwin":
-        args = _add_macos_sysroot_if_needed(args)
-
-    # Force lld linker on macOS and Linux for cross-platform consistency
-    args = _add_lld_linker_if_needed(platform_name, args)
-
-    # Add Windows GNU ABI target automatically (to force ld.lld instead of MSVC link.exe)
-    if _should_use_gnu_abi(platform_name, args):
-        try:
-            gnu_args = _get_gnu_target_args(platform_name, arch, args)
-            args = gnu_args + args
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            print(f"\nWarning: Failed to set up Windows GNU ABI: {e}", file=sys.stderr)
-            print("Continuing with default target (may use MSVC linker)...\n", file=sys.stderr)
-
-    return sccache_runner.run_sccache_with_compiler(str(clang_cpp_path), args)
+    wrapper.sccache_clang_cpp_main(use_msvc=False)
 
 
 def sccache_c_msvc_main() -> NoReturn:
