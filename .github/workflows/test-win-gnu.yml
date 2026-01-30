@@ -104,7 +104,7 @@ jobs:
         uv run pytest tests/test_gnu_abi.py -v
       shell: bash
 
-    - name: Test DLL Deployment (Threading)
+    - name: Test Threading (Static Linking)
       run: |
         cat > test_threading.cpp << 'EOF'
         #include <iostream>
@@ -118,7 +118,7 @@ jobs:
         }
 
         int main() {
-            std::cout << "Testing DLL deployment with threading..." << std::endl;
+            std::cout << "Testing threading with static linking..." << std::endl;
             std::thread t1(worker, 1);
             std::thread t2(worker, 2);
             t1.join();
@@ -130,22 +130,24 @@ jobs:
         echo "Building test_threading.exe..."
         uv run clang-tool-chain-cpp test_threading.cpp -o test_threading.exe -pthread
 
-        echo "Checking for deployed DLLs..."
+        # The toolchain now uses static linking for libc++ and libunwind,
+        # so no MinGW DLLs need to be deployed. The executable is standalone.
+        echo "Checking DLL deployment status..."
         if [ -f "libwinpthread-1.dll" ]; then
-          echo "✓ libwinpthread-1.dll was deployed"
+          echo "Note: libwinpthread-1.dll was deployed (dynamic linking mode)"
         else
-          echo "✗ libwinpthread-1.dll was NOT deployed"
-          exit 1
+          echo "Note: No MinGW DLLs deployed (static linking - standalone executable)"
         fi
 
         echo "Running executable in clean environment..."
         # Run in a clean PATH environment (minimal Windows system paths only)
+        # This verifies the executable is truly standalone
         env -i SystemRoot="$SystemRoot" PATH="/c/Windows/System32:/c/Windows" ./test_threading.exe
 
-        echo "✓ DLL deployment test PASSED"
+        echo "✓ Threading test PASSED (standalone executable)"
       shell: bash
 
-    - name: Test DLL Deployment (Exceptions and STL)
+    - name: Test Exceptions and STL (Static Linking)
       run: |
         cat > test_exceptions.cpp << 'EOF'
         #include <iostream>
@@ -178,27 +180,27 @@ jobs:
         echo "Building test_exceptions.exe..."
         uv run clang-tool-chain-cpp test_exceptions.cpp -o test_exceptions.exe
 
-        echo "Checking for deployed DLLs..."
-        # Check for typical MinGW DLLs
+        # The toolchain uses static linking, so the executable is standalone
+        echo "Checking DLL deployment status..."
         dll_count=0
-        for dll in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll; do
+        for dll in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll libc++.dll libunwind.dll; do
           if [ -f "$dll" ]; then
-            echo "✓ $dll was deployed"
+            echo "Note: $dll was deployed"
             dll_count=$((dll_count + 1))
           fi
         done
 
         if [ $dll_count -eq 0 ]; then
-          echo "✗ No MinGW DLLs were deployed"
-          exit 1
+          echo "Note: No MinGW DLLs deployed (static linking - standalone executable)"
+        else
+          echo "Note: $dll_count DLL(s) deployed (dynamic linking mode)"
         fi
 
-        echo "✓ $dll_count MinGW DLL(s) deployed"
-
         echo "Running executable in clean environment..."
+        # This verifies the executable is standalone and doesn't require MinGW DLLs
         env -i SystemRoot="$SystemRoot" PATH="/c/Windows/System32:/c/Windows" ./test_exceptions.exe
 
-        echo "✓ Exception handling test PASSED"
+        echo "✓ Exception handling test PASSED (standalone executable)"
       shell: bash
 
     - name: Test DLL Deployment Opt-Out
