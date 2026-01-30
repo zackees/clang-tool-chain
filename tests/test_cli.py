@@ -453,7 +453,8 @@ class TestSccacheWrappers(unittest.TestCase):
 
         self.assertEqual(cm.exception.code, 1)
         error_output = mock_stderr.getvalue()
-        self.assertIn("Error executing sccache", error_output)
+        # The unified implementation produces "Tool not found" for FileNotFoundError
+        self.assertIn("Tool not found", error_output)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-cpp", "main.cpp", "-o", "main", "-std=c++17"])
     @patch("clang_tool_chain.sccache_runner.subprocess.run")

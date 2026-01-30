@@ -107,6 +107,96 @@ def _transform_arguments(args: list[str], tool_name: str, platform_name: str, ar
     return pipeline.transform(args, context)
 
 
+def _transform_args_with_error_handling(
+    args: list[str], tool_name: str, platform_name: str, arch: str, use_msvc: bool
+) -> list[str]:
+    """
+    Apply argument transformation with standard error handling.
+
+    Wraps _transform_arguments with error handling that prints warnings
+    but allows continuation with original arguments if transformation fails.
+
+    Args:
+        args: Original compiler/linker arguments
+        tool_name: Name of the tool being executed
+        platform_name: Platform name (e.g., "win", "darwin", "linux")
+        arch: Architecture (e.g., "x86_64", "arm64")
+        use_msvc: True if using MSVC ABI
+
+    Returns:
+        Transformed arguments, or original arguments if transformation fails
+    """
+    try:
+        transformed = _transform_arguments(args, tool_name, platform_name, arch, use_msvc)
+        logger.debug(f"Transformed arguments: {len(transformed)} args")
+        return transformed
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        # If transformation fails, let the tool try anyway (may fail at compile time)
+        logger.error(f"Failed to transform arguments: {e}")
+        print(f"\nWarning: Failed to apply platform-specific transformations: {e}", file=sys.stderr)
+        print("Continuing with original arguments (may fail)...\n", file=sys.stderr)
+        return args
+
+
+def _handle_post_link_deployment(
+    args: list[str],
+    tool_name: str,
+    platform_name: str,
+    use_msvc: bool,
+    deploy_dependencies_requested: bool,
+) -> None:
+    """
+    Handle post-link deployment for Windows DLLs and cross-platform dependencies.
+
+    This function encapsulates all post-link deployment logic:
+    1. Windows GNU ABI automatic DLL deployment (for .exe and .dll outputs)
+    2. Opt-in dependency deployment via --deploy-dependencies flag (all platforms)
+
+    Args:
+        args: Compiler/linker arguments (used to extract output paths)
+        tool_name: Name of the tool ("clang" or "clang++")
+        platform_name: Platform name (e.g., "win", "darwin", "linux")
+        use_msvc: True if using MSVC ABI
+        deploy_dependencies_requested: True if --deploy-dependencies flag was used
+    """
+    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
+
+    # Windows GNU ABI .exe/.dll deployment (automatic)
+    if platform_name == "win":
+        output_exe = _extract_output_path(args, tool_name)
+        if output_exe is not None:
+            try:
+                post_link_dll_deployment(output_exe, platform_name, use_gnu)
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
+            except Exception as e:
+                logger.warning(f"DLL deployment failed: {e}")
+
+    # Dependency deployment (opt-in via --deploy-dependencies, all platforms)
+    if deploy_dependencies_requested:
+        # Try shared library first
+        shared_lib_path = _extract_shared_library_output_path(args, tool_name)
+        if shared_lib_path is not None:
+            try:
+                post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
+            except KeyboardInterrupt as ke:
+                handle_keyboard_interrupt_properly(ke)
+            except Exception as e:
+                logger.warning(f"Dependency deployment failed: {e}")
+        else:
+            # Try executable
+            exe_path = _extract_executable_output_path(args, tool_name)
+            if exe_path is not None:
+                try:
+                    post_link_dependency_deployment(exe_path, platform_name, use_gnu)
+                except KeyboardInterrupt as ke:
+                    handle_keyboard_interrupt_properly(ke)
+                except Exception as e:
+                    logger.warning(f"Dependency deployment failed: {e}")
+
+
 def _extract_output_path(args: list[str], tool_name: str) -> Path | None:
     """
     Extract the output binary path from compiler/linker arguments.
@@ -291,6 +381,124 @@ def _extract_shared_library_output_path(args: list[str], tool_name: str) -> Path
     return None
 
 
+# ============================================================================
+# Unified clang execution implementation
+# ============================================================================
+
+
+def _execute_clang_impl(
+    tool_name: str,
+    args: list[str],
+    use_msvc: bool = False,
+    use_sccache: bool = False,
+    return_code: bool = False,
+) -> int:
+    """
+    Unified implementation for executing clang/clang++ with or without sccache.
+
+    This function consolidates the shared logic between direct clang execution
+    and sccache-wrapped execution, handling:
+    - Argument extraction and transformation
+    - Environment setup (SCCACHE_IDLE_TIMEOUT)
+    - Tool binary discovery
+    - Command execution (with or without sccache, with or without retry)
+    - Post-link deployment (DLLs, dependencies)
+    - Error handling and exit
+
+    Args:
+        tool_name: Name of the tool ("clang" or "clang++")
+        args: Arguments to pass to the tool
+        use_msvc: If True on Windows, skip GNU ABI injection (use MSVC target)
+        use_sccache: If True, wrap command with sccache and use retry logic
+        return_code: If True, return the exit code; if False, call sys.exit()
+
+    Returns:
+        Exit code from the tool (only if return_code=True)
+
+    Raises:
+        RuntimeError: If the tool cannot be found (only if return_code=True)
+    """
+    # Extract --deploy-dependencies flag (must be stripped before passing to clang)
+    args, deploy_dependencies_requested = _extract_deploy_dependencies_flag(args)
+
+    # Set sccache idle timeout to minimize file locking window
+    if use_sccache and "SCCACHE_IDLE_TIMEOUT" not in os.environ:
+        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
+
+    # Find tool binaries
+    try:
+        tool_path = find_tool_binary(tool_name)
+        sccache_path = find_sccache_binary() if use_sccache else None
+    except RuntimeError as e:
+        if return_code:
+            raise
+        logger.error(f"Failed to find tool binary: {e}")
+        print(f"\n{'=' * 60}", file=sys.stderr)
+        print("clang-tool-chain Error", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
+        print(f"{e}", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
+        sys.exit(1)
+
+    # Apply platform-specific argument transformations
+    platform_name, arch = get_platform_info()
+    args = _transform_args_with_error_handling(args, tool_name, platform_name, arch, use_msvc)
+
+    # Build command
+    cmd = [sccache_path, str(tool_path)] + args if use_sccache and sccache_path else [str(tool_path)] + args
+
+    logger.info(f"Executing {'sccache + ' if use_sccache else ''}{tool_name} (with {len(args)} args)")
+
+    # Execute command
+    try:
+        result = _run_with_retry(cmd) if use_sccache else subprocess.run(cmd)
+
+        # Post-link deployment (all platforms)
+        if result.returncode == 0:
+            _handle_post_link_deployment(args, tool_name, platform_name, use_msvc, deploy_dependencies_requested)
+
+        if return_code:
+            return result.returncode
+        sys.exit(result.returncode)
+
+    except FileNotFoundError as err:
+        if return_code:
+            raise RuntimeError(f"Tool not found: {tool_path}") from err
+        print(f"\n{'=' * 60}", file=sys.stderr)
+        print("clang-tool-chain Error", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
+        print(f"Tool not found: {tool_path}", file=sys.stderr)
+        print("\nThe binary exists in the package but cannot be executed.", file=sys.stderr)
+        print("This may be a permission or compatibility issue.", file=sys.stderr)
+        print("\nTroubleshooting:", file=sys.stderr)
+        print("  - Verify the binary is compatible with your system", file=sys.stderr)
+        print("  - Check file permissions: chmod +x {tool_path}", file=sys.stderr)
+        print("  - On macOS: Right-click > Open, then allow in Security settings", file=sys.stderr)
+        print("  - Report issue: https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        if return_code:
+            raise RuntimeError(f"Error executing tool: {e}") from e
+        error_type = "sccache" if use_sccache else "tool"
+        print(f"\n{'=' * 60}", file=sys.stderr)
+        print("clang-tool-chain Error", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
+        print(f"Error executing {error_type}: {e}", file=sys.stderr)
+        if not use_sccache:
+            print(f"\nUnexpected error while running: {tool_path}", file=sys.stderr)
+            print(f"Arguments: {args}", file=sys.stderr)
+            print("\nPlease report this issue at:", file=sys.stderr)
+            print("https://github.com/zackees/clang-tool-chain/issues", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
+        sys.exit(1)
+
+    # This should never be reached, but satisfies type checker
+    return 1  # pragma: no cover
+
+
 def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = False) -> NoReturn:
     """
     Execute a tool with the given arguments and exit with its return code.
@@ -314,9 +522,13 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
     if args is None:
         args = sys.argv[1:]
 
-    # Extract --deploy-dependencies flag (must be stripped before passing to clang)
-    args, deploy_dependencies_requested = _extract_deploy_dependencies_flag(args)
+    # Use unified implementation for clang/clang++
+    if tool_name in ("clang", "clang++"):
+        _execute_clang_impl(tool_name, args, use_msvc, use_sccache=False, return_code=False)
+        # _execute_clang_impl calls sys.exit(), so this line is never reached
+        raise AssertionError("Unreachable")  # pragma: no cover
 
+    # Non-clang tools: simple execution without transformation or deployment
     logger.info(f"Executing tool: {tool_name} with {len(args)} arguments")
     logger.debug(f"Arguments: {args}")
 
@@ -331,70 +543,11 @@ def execute_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool =
         print(f"{'=' * 60}\n", file=sys.stderr)
         sys.exit(1)
 
-    # Apply platform-specific argument transformations using pipeline
-    platform_name, arch = get_platform_info()
-    if tool_name in ("clang", "clang++"):
-        try:
-            args = _transform_arguments(args, tool_name, platform_name, arch, use_msvc)
-            logger.debug(f"Transformed arguments: {len(args)} args")
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            # If transformation fails, let the tool try anyway (may fail at compile time)
-            logger.error(f"Failed to transform arguments: {e}")
-            print(f"\nWarning: Failed to apply platform-specific transformations: {e}", file=sys.stderr)
-            print("Continuing with original arguments (may fail)...\n", file=sys.stderr)
-
-    # Build command
     cmd = [str(tool_path)] + args
     logger.info(f"Executing command: {tool_path} (with {len(args)} args)")
 
-    # Use subprocess.run() on all platforms to enable post-link deployment
-    # Previously used os.execv() on Unix, but that prevented deployment code from running
-    platform_name, arch = get_platform_info()
-    logger.debug(f"Using subprocess execution on {platform_name}")
-
     try:
         result = subprocess.run(cmd)
-
-        # Post-link deployment (all platforms)
-        if result.returncode == 0:
-            # Windows GNU ABI .exe deployment (automatic)
-            if platform_name == "win":
-                output_exe = _extract_output_path(args, tool_name)
-                if output_exe is not None:
-                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
-                    try:
-                        post_link_dll_deployment(output_exe, platform_name, use_gnu)
-                    except KeyboardInterrupt as ke:
-                        handle_keyboard_interrupt_properly(ke)
-                    except Exception as e:
-                        logger.warning(f"DLL deployment failed: {e}")
-
-            # Dependency deployment (opt-in via --deploy-dependencies, all platforms)
-            if deploy_dependencies_requested:
-                use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
-
-                # Try shared library first
-                shared_lib_path = _extract_shared_library_output_path(args, tool_name)
-                if shared_lib_path is not None:
-                    try:
-                        post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
-                    except KeyboardInterrupt as ke:
-                        handle_keyboard_interrupt_properly(ke)
-                    except Exception as e:
-                        logger.warning(f"Dependency deployment failed: {e}")
-                else:
-                    # Try executable
-                    exe_path = _extract_executable_output_path(args, tool_name)
-                    if exe_path is not None:
-                        try:
-                            post_link_dependency_deployment(exe_path, platform_name, use_gnu)
-                        except KeyboardInterrupt as ke:
-                            handle_keyboard_interrupt_properly(ke)
-                        except Exception as e:
-                            logger.warning(f"Dependency deployment failed: {e}")
-
         sys.exit(result.returncode)
     except FileNotFoundError:
         print(f"\n{'=' * 60}", file=sys.stderr)
@@ -451,70 +604,16 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
     if args is None:
         args = sys.argv[1:]
 
-    # Extract --deploy-dependencies flag (must be stripped before passing to clang)
-    args, deploy_dependencies_requested = _extract_deploy_dependencies_flag(args)
-
-    tool_path = find_tool_binary(tool_name)
-
-    # Apply platform-specific argument transformations using pipeline
-    platform_name, arch = get_platform_info()
+    # Use unified implementation for clang/clang++
     if tool_name in ("clang", "clang++"):
-        try:
-            args = _transform_arguments(args, tool_name, platform_name, arch, use_msvc)
-            logger.debug(f"Transformed arguments: {len(args)} args")
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            # If transformation fails, let the tool try anyway (may fail at compile time)
-            logger.error(f"Failed to transform arguments: {e}")
-            print(f"\nWarning: Failed to apply platform-specific transformations: {e}", file=sys.stderr)
-            print("Continuing with original arguments (may fail)...\n", file=sys.stderr)
+        return _execute_clang_impl(tool_name, args, use_msvc, use_sccache=False, return_code=True)
 
-    # Build command
+    # Non-clang tools: simple execution without transformation or deployment
+    tool_path = find_tool_binary(tool_name)
     cmd = [str(tool_path)] + args
 
-    # Run the tool
     try:
         result = subprocess.run(cmd)
-
-        # Post-link deployment (all platforms)
-        if result.returncode == 0:
-            # Windows GNU ABI .exe deployment (automatic)
-            if platform_name == "win":
-                output_exe = _extract_output_path(args, tool_name)
-                if output_exe is not None:
-                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
-                    try:
-                        post_link_dll_deployment(output_exe, platform_name, use_gnu)
-                    except KeyboardInterrupt as ke:
-                        handle_keyboard_interrupt_properly(ke)
-                    except Exception as e:
-                        logger.warning(f"DLL deployment failed: {e}")
-
-            # Dependency deployment (opt-in via --deploy-dependencies, all platforms)
-            if deploy_dependencies_requested:
-                use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
-
-                # Try shared library first
-                shared_lib_path = _extract_shared_library_output_path(args, tool_name)
-                if shared_lib_path is not None:
-                    try:
-                        post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
-                    except KeyboardInterrupt as ke:
-                        handle_keyboard_interrupt_properly(ke)
-                    except Exception as e:
-                        logger.warning(f"Dependency deployment failed: {e}")
-                else:
-                    # Try executable
-                    exe_path = _extract_executable_output_path(args, tool_name)
-                    if exe_path is not None:
-                        try:
-                            post_link_dependency_deployment(exe_path, platform_name, use_gnu)
-                        except KeyboardInterrupt as ke:
-                            handle_keyboard_interrupt_properly(ke)
-                        except Exception as e:
-                            logger.warning(f"Dependency deployment failed: {e}")
-
         return result.returncode
     except FileNotFoundError as err:
         raise RuntimeError(f"Tool not found: {tool_path}") from err
@@ -522,6 +621,9 @@ def run_tool(tool_name: str, args: list[str] | None = None, use_msvc: bool = Fal
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         raise RuntimeError(f"Error executing tool: {e}") from e
+
+    # This should never be reached (handle_keyboard_interrupt_properly doesn't return)
+    return 1  # pragma: no cover
 
 
 # ============================================================================
@@ -539,123 +641,9 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
     Environment Variables:
         SCCACHE_IDLE_TIMEOUT: Set to 5 seconds to minimize file locking window
     """
-    # Set sccache idle timeout to 5 seconds to minimize file locking window
-    # This prevents sccache daemon from holding .venv/Scripts/sccache.exe locked
-    # for extended periods, which blocks pip/uv package updates
-    if "SCCACHE_IDLE_TIMEOUT" not in os.environ:
-        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
-
-    args = sys.argv[1:]
-
-    # Extract --deploy-dependencies flag (must be stripped before passing to clang)
-    args, deploy_dependencies_requested = _extract_deploy_dependencies_flag(args)
-
-    try:
-        sccache_path = find_sccache_binary()
-        clang_path = find_tool_binary("clang")
-    except RuntimeError as e:
-        print(f"\n{'=' * 60}", file=sys.stderr)
-        print("clang-tool-chain Error", file=sys.stderr)
-        print(f"{'=' * 60}", file=sys.stderr)
-        print(f"{e}", file=sys.stderr)
-        print(f"{'=' * 60}\n", file=sys.stderr)
-        sys.exit(1)
-
-    # Apply platform-specific argument transformations using pipeline
-    platform_name, arch = get_platform_info()
-    try:
-        args = _transform_arguments(args, "clang", platform_name, arch, use_msvc)
-        logger.debug(f"Transformed arguments for sccache: {len(args)} args")
-    except KeyboardInterrupt as ke:
-        handle_keyboard_interrupt_properly(ke)
-    except Exception as e:
-        # If transformation fails, let the tool try anyway (may fail at compile time)
-        logger.error(f"Failed to transform arguments: {e}")
-        print(f"\nWarning: Failed to apply platform-specific transformations: {e}", file=sys.stderr)
-        print("Continuing with original arguments (may fail)...\n", file=sys.stderr)
-
-    # Build command: sccache <clang_path> <args>
-    cmd = [sccache_path, str(clang_path)] + args
-
-    # Execute with platform-appropriate method
-    platform_name, _ = get_platform_info()
-
-    if platform_name == "win":
-        # Windows: use subprocess with retry for sccache server timeout
-        try:
-            result = _run_with_retry(cmd)
-
-            # Post-link DLL deployment (Windows GNU ABI only for .exe)
-            if result.returncode == 0:
-                output_exe = _extract_output_path(args, "clang")
-                if output_exe is not None:
-                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
-                    try:
-                        post_link_dll_deployment(output_exe, platform_name, use_gnu)
-                    except KeyboardInterrupt as ke:
-                        handle_keyboard_interrupt_properly(ke)
-                    except Exception as e:
-                        logger.warning(f"DLL deployment failed: {e}")
-
-                # Shared library dependency deployment (when --deploy-dependencies flag used)
-                if deploy_dependencies_requested:
-                    shared_lib_path = _extract_shared_library_output_path(args, "clang")
-                    if shared_lib_path is not None:
-                        use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
-                        try:
-                            post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
-                        except KeyboardInterrupt as ke:
-                            handle_keyboard_interrupt_properly(ke)
-                        except Exception as e:
-                            logger.warning(f"Dependency deployment failed: {e}")
-
-            sys.exit(result.returncode)
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'=' * 60}", file=sys.stderr)
-            print(f"Error executing sccache: {e}", file=sys.stderr)
-            print(f"{'=' * 60}\n", file=sys.stderr)
-            sys.exit(1)
-    else:
-        # Unix: use subprocess to allow post-link deployment
-        try:
-            result = _run_with_retry(cmd)
-
-            # Post-link dependency deployment (when --deploy-dependencies flag used)
-            if result.returncode == 0 and deploy_dependencies_requested:
-                # Try shared library first
-                shared_lib_path = _extract_shared_library_output_path(args, "clang")
-                if shared_lib_path is not None:
-                    try:
-                        post_link_dependency_deployment(shared_lib_path, platform_name, False)
-                    except KeyboardInterrupt as ke:
-                        handle_keyboard_interrupt_properly(ke)
-                    except Exception as e:
-                        logger.warning(f"Dependency deployment failed: {e}")
-                else:
-                    # Try executable
-                    exe_path = _extract_executable_output_path(args, "clang")
-                    if exe_path is not None:
-                        try:
-                            post_link_dependency_deployment(exe_path, platform_name, False)
-                        except KeyboardInterrupt as ke:
-                            handle_keyboard_interrupt_properly(ke)
-                        except Exception as e:
-                            logger.warning(f"Dependency deployment failed: {e}")
-
-            sys.exit(result.returncode)
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'=' * 60}", file=sys.stderr)
-            print(f"Error executing sccache: {e}", file=sys.stderr)
-            print(f"{'=' * 60}\n", file=sys.stderr)
-            sys.exit(1)
+    _execute_clang_impl("clang", sys.argv[1:], use_msvc, use_sccache=True, return_code=False)
+    # _execute_clang_impl calls sys.exit(), so this line is never reached
+    raise AssertionError("Unreachable")  # pragma: no cover
 
 
 def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
@@ -668,120 +656,6 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
     Environment Variables:
         SCCACHE_IDLE_TIMEOUT: Set to 5 seconds to minimize file locking window
     """
-    # Set sccache idle timeout to 5 seconds to minimize file locking window
-    # This prevents sccache daemon from holding .venv/Scripts/sccache.exe locked
-    # for extended periods, which blocks pip/uv package updates
-    if "SCCACHE_IDLE_TIMEOUT" not in os.environ:
-        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
-
-    args = sys.argv[1:]
-
-    # Extract --deploy-dependencies flag (must be stripped before passing to clang)
-    args, deploy_dependencies_requested = _extract_deploy_dependencies_flag(args)
-
-    try:
-        sccache_path = find_sccache_binary()
-        clang_cpp_path = find_tool_binary("clang++")
-    except RuntimeError as e:
-        print(f"\n{'=' * 60}", file=sys.stderr)
-        print("clang-tool-chain Error", file=sys.stderr)
-        print(f"{'=' * 60}", file=sys.stderr)
-        print(f"{e}", file=sys.stderr)
-        print(f"{'=' * 60}\n", file=sys.stderr)
-        sys.exit(1)
-
-    # Apply platform-specific argument transformations using pipeline
-    platform_name, arch = get_platform_info()
-    try:
-        args = _transform_arguments(args, "clang++", platform_name, arch, use_msvc)
-        logger.debug(f"Transformed arguments for sccache: {len(args)} args")
-    except KeyboardInterrupt as ke:
-        handle_keyboard_interrupt_properly(ke)
-    except Exception as e:
-        # If transformation fails, let the tool try anyway (may fail at compile time)
-        logger.error(f"Failed to transform arguments: {e}")
-        print(f"\nWarning: Failed to apply platform-specific transformations: {e}", file=sys.stderr)
-        print("Continuing with original arguments (may fail)...\n", file=sys.stderr)
-
-    # Build command: sccache <clang++_path> <args>
-    cmd = [sccache_path, str(clang_cpp_path)] + args
-
-    # Execute with platform-appropriate method
-    platform_name, _ = get_platform_info()
-
-    if platform_name == "win":
-        # Windows: use subprocess with retry for sccache server timeout
-        try:
-            result = _run_with_retry(cmd)
-
-            # Post-link DLL deployment (Windows GNU ABI only for .exe)
-            if result.returncode == 0:
-                output_exe = _extract_output_path(args, "clang++")
-                if output_exe is not None:
-                    use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
-                    try:
-                        post_link_dll_deployment(output_exe, platform_name, use_gnu)
-                    except KeyboardInterrupt as ke:
-                        handle_keyboard_interrupt_properly(ke)
-                    except Exception as e:
-                        logger.warning(f"DLL deployment failed: {e}")
-
-                # Shared library dependency deployment (when --deploy-dependencies flag used)
-                if deploy_dependencies_requested:
-                    shared_lib_path = _extract_shared_library_output_path(args, "clang++")
-                    if shared_lib_path is not None:
-                        use_gnu = _should_use_gnu_abi(platform_name, args) and not use_msvc
-                        try:
-                            post_link_dependency_deployment(shared_lib_path, platform_name, use_gnu)
-                        except KeyboardInterrupt as ke:
-                            handle_keyboard_interrupt_properly(ke)
-                        except Exception as e:
-                            logger.warning(f"Dependency deployment failed: {e}")
-
-            sys.exit(result.returncode)
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'=' * 60}", file=sys.stderr)
-            print(f"Error executing sccache: {e}", file=sys.stderr)
-            print(f"{'=' * 60}\n", file=sys.stderr)
-            sys.exit(1)
-    else:
-        # Unix: use subprocess to allow post-link deployment
-        try:
-            result = _run_with_retry(cmd)
-
-            # Post-link dependency deployment (when --deploy-dependencies flag used)
-            if result.returncode == 0 and deploy_dependencies_requested:
-                # Try shared library first
-                shared_lib_path = _extract_shared_library_output_path(args, "clang++")
-                if shared_lib_path is not None:
-                    try:
-                        post_link_dependency_deployment(shared_lib_path, platform_name, False)
-                    except KeyboardInterrupt as ke:
-                        handle_keyboard_interrupt_properly(ke)
-                    except Exception as e:
-                        logger.warning(f"Dependency deployment failed: {e}")
-                else:
-                    # Try executable
-                    exe_path = _extract_executable_output_path(args, "clang++")
-                    if exe_path is not None:
-                        try:
-                            post_link_dependency_deployment(exe_path, platform_name, False)
-                        except KeyboardInterrupt as ke:
-                            handle_keyboard_interrupt_properly(ke)
-                        except Exception as e:
-                            logger.warning(f"Dependency deployment failed: {e}")
-
-            sys.exit(result.returncode)
-        except KeyboardInterrupt as ke:
-            handle_keyboard_interrupt_properly(ke)
-        except Exception as e:
-            print(f"\n{'=' * 60}", file=sys.stderr)
-            print("clang-tool-chain Error", file=sys.stderr)
-            print(f"{'=' * 60}", file=sys.stderr)
-            print(f"Error executing sccache: {e}", file=sys.stderr)
-            print(f"{'=' * 60}\n", file=sys.stderr)
-            sys.exit(1)
+    _execute_clang_impl("clang++", sys.argv[1:], use_msvc, use_sccache=True, return_code=False)
+    # _execute_clang_impl calls sys.exit(), so this line is never reached
+    raise AssertionError("Unreachable")  # pragma: no cover
