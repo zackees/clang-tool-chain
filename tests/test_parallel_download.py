@@ -4,9 +4,9 @@ import hashlib
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
-from urllib.error import HTTPError
+from unittest.mock import MagicMock, Mock, patch
 
+import httpx
 import pytest
 
 from clang_tool_chain.parallel_download import (
@@ -19,18 +19,42 @@ from clang_tool_chain.parallel_download import (
 )
 
 
+def create_mock_httpx_response(headers: dict, status_code: int = 200, content: bytes = b"") -> MagicMock:
+    """Create a mock httpx response for testing."""
+    mock_response = MagicMock()
+    mock_response.headers = httpx.Headers(headers)
+    mock_response.status_code = status_code
+    mock_response.content = content
+
+    # Make it work as a context manager
+    mock_response.__enter__ = Mock(return_value=mock_response)
+    mock_response.__exit__ = Mock(return_value=False)
+
+    return mock_response
+
+
+def create_mock_httpx_client(response: MagicMock) -> MagicMock:
+    """Create a mock httpx.Client for testing."""
+    mock_client = MagicMock()
+    mock_client.head.return_value = response
+    mock_client.stream.return_value = response
+    mock_client.__enter__ = Mock(return_value=mock_client)
+    mock_client.__exit__ = Mock(return_value=False)
+    return mock_client
+
+
 class TestServerCapabilities:
     """Test server capability detection."""
 
     def test_check_server_capabilities_with_range_support(self):
         """Test detection of server that supports range requests."""
-        mock_response = Mock()
-        mock_response.headers = {"Content-Length": "104857600", "Accept-Ranges": "bytes"}
-        mock_response.status = 200
-        mock_response.__enter__ = Mock(return_value=mock_response)
-        mock_response.__exit__ = Mock(return_value=False)
+        mock_response = create_mock_httpx_response(
+            headers={"Content-Length": "104857600", "Accept-Ranges": "bytes"},
+            status_code=200,
+        )
+        mock_client = create_mock_httpx_client(mock_response)
 
-        with patch("clang_tool_chain.parallel_download.urlopen", return_value=mock_response):
+        with patch("clang_tool_chain.parallel_download.httpx.Client", return_value=mock_client):
             caps = check_server_capabilities("https://example.com/file.tar.zst")
 
             assert caps.supports_ranges is True
@@ -39,13 +63,13 @@ class TestServerCapabilities:
 
     def test_check_server_capabilities_without_range_support(self):
         """Test detection of server that doesn't support range requests."""
-        mock_response = Mock()
-        mock_response.headers = {"Content-Length": "104857600", "Accept-Ranges": "none"}
-        mock_response.status = 200
-        mock_response.__enter__ = Mock(return_value=mock_response)
-        mock_response.__exit__ = Mock(return_value=False)
+        mock_response = create_mock_httpx_response(
+            headers={"Content-Length": "104857600", "Accept-Ranges": "none"},
+            status_code=200,
+        )
+        mock_client = create_mock_httpx_client(mock_response)
 
-        with patch("clang_tool_chain.parallel_download.urlopen", return_value=mock_response):
+        with patch("clang_tool_chain.parallel_download.httpx.Client", return_value=mock_client):
             caps = check_server_capabilities("https://example.com/file.tar.zst")
 
             assert caps.supports_ranges is False
@@ -53,13 +77,13 @@ class TestServerCapabilities:
 
     def test_check_server_capabilities_no_content_length(self):
         """Test detection when server doesn't provide Content-Length."""
-        mock_response = Mock()
-        mock_response.headers = {"Accept-Ranges": "bytes"}
-        mock_response.status = 200
-        mock_response.__enter__ = Mock(return_value=mock_response)
-        mock_response.__exit__ = Mock(return_value=False)
+        mock_response = create_mock_httpx_response(
+            headers={"Accept-Ranges": "bytes"},
+            status_code=200,
+        )
+        mock_client = create_mock_httpx_client(mock_response)
 
-        with patch("clang_tool_chain.parallel_download.urlopen", return_value=mock_response):
+        with patch("clang_tool_chain.parallel_download.httpx.Client", return_value=mock_client):
             caps = check_server_capabilities("https://example.com/file.tar.zst")
 
             assert caps.supports_ranges is True
@@ -67,12 +91,12 @@ class TestServerCapabilities:
 
     def test_check_server_capabilities_network_error(self):
         """Test handling of network errors during capability check."""
-        from email.message import Message
+        mock_client = MagicMock()
+        mock_client.head.side_effect = httpx.ConnectError("Connection failed")
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
 
-        headers = Message()
-        with patch(
-            "clang_tool_chain.parallel_download.urlopen", side_effect=HTTPError("url", 500, "msg", headers, None)
-        ):
+        with patch("clang_tool_chain.parallel_download.httpx.Client", return_value=mock_client):
             caps = check_server_capabilities("https://example.com/file.tar.zst")
 
             # Should return conservative defaults
@@ -205,20 +229,37 @@ class TestDownloadConfig:
 
         assert config.chunk_size == 8 * 1024 * 1024  # 8 MB
         assert config.max_workers == 6
-        assert config.timeout == 180  # 180 seconds per chunk (increased for reliability)
+        assert config.connect_timeout == 30.0  # 30 seconds to connect
+        assert config.read_timeout == 60.0  # 60 seconds per read
         assert config.min_size_for_parallel == 10 * 1024 * 1024  # 10 MB
         assert config.max_retries == 3  # 3 retries per chunk
 
     def test_custom_config(self):
         """Test custom configuration values."""
         config = DownloadConfig(
-            chunk_size=4 * 1024 * 1024, max_workers=8, timeout=120, min_size_for_parallel=5 * 1024 * 1024
+            chunk_size=4 * 1024 * 1024,
+            max_workers=8,
+            connect_timeout=15.0,
+            read_timeout=120.0,
+            min_size_for_parallel=5 * 1024 * 1024,
         )
 
         assert config.chunk_size == 4 * 1024 * 1024
         assert config.max_workers == 8
-        assert config.timeout == 120
+        assert config.connect_timeout == 15.0
+        assert config.read_timeout == 120.0
         assert config.min_size_for_parallel == 5 * 1024 * 1024
+
+    def test_timeout_property(self):
+        """Test that timeout property returns correct httpx.Timeout object."""
+        config = DownloadConfig(connect_timeout=10.0, read_timeout=45.0)
+        timeout = config.timeout
+
+        assert isinstance(timeout, httpx.Timeout)
+        assert timeout.connect == 10.0
+        assert timeout.read == 45.0
+        assert timeout.write == 30.0
+        assert timeout.pool == 30.0
 
 
 class TestParallelDownload:
@@ -232,18 +273,26 @@ class TestParallelDownload:
         test_data = b"Test file content"
         expected_hash = hashlib.sha256(test_data).hexdigest()
 
-        mock_response = Mock()
-        mock_response.getheader.return_value = str(len(test_data))
-        mock_response.read.side_effect = [test_data, b""]  # Simulate chunked read
+        # Create a mock streaming response
+        mock_response = MagicMock()
+        mock_response.headers = httpx.Headers({"Content-Length": str(len(test_data))})
+        mock_response.status_code = 200
+        mock_response.iter_bytes.return_value = iter([test_data])
+        mock_response.raise_for_status = Mock()
         mock_response.__enter__ = Mock(return_value=mock_response)
         mock_response.__exit__ = Mock(return_value=False)
+
+        mock_client = MagicMock()
+        mock_client.stream.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             dest_path = Path(tmpdir) / "test.tar.zst"
 
             with (
                 patch("clang_tool_chain.parallel_download.check_server_capabilities", return_value=mock_caps),
-                patch("clang_tool_chain.parallel_download.urlopen", return_value=mock_response),
+                patch("clang_tool_chain.parallel_download.httpx.Client", return_value=mock_client),
             ):
                 download_file_parallel("https://example.com/file.tar.zst", dest_path, expected_hash)
 
@@ -258,18 +307,26 @@ class TestParallelDownload:
         test_data = b"Small file content"
         expected_hash = hashlib.sha256(test_data).hexdigest()
 
-        mock_response = Mock()
-        mock_response.getheader.return_value = str(len(test_data))
-        mock_response.read.side_effect = [test_data, b""]
+        # Create a mock streaming response
+        mock_response = MagicMock()
+        mock_response.headers = httpx.Headers({"Content-Length": str(len(test_data))})
+        mock_response.status_code = 200
+        mock_response.iter_bytes.return_value = iter([test_data])
+        mock_response.raise_for_status = Mock()
         mock_response.__enter__ = Mock(return_value=mock_response)
         mock_response.__exit__ = Mock(return_value=False)
+
+        mock_client = MagicMock()
+        mock_client.stream.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             dest_path = Path(tmpdir) / "test.tar.zst"
 
             with (
                 patch("clang_tool_chain.parallel_download.check_server_capabilities", return_value=mock_caps),
-                patch("clang_tool_chain.parallel_download.urlopen", return_value=mock_response),
+                patch("clang_tool_chain.parallel_download.httpx.Client", return_value=mock_client),
             ):
                 download_file_parallel("https://example.com/file.tar.zst", dest_path, expected_hash)
 
@@ -284,18 +341,26 @@ class TestParallelDownload:
         test_data = b"Test data"
         wrong_hash = "0" * 64
 
-        mock_response = Mock()
-        mock_response.getheader.return_value = str(len(test_data))
-        mock_response.read.side_effect = [test_data, b""]
+        # Create a mock streaming response
+        mock_response = MagicMock()
+        mock_response.headers = httpx.Headers({"Content-Length": str(len(test_data))})
+        mock_response.status_code = 200
+        mock_response.iter_bytes.return_value = iter([test_data])
+        mock_response.raise_for_status = Mock()
         mock_response.__enter__ = Mock(return_value=mock_response)
         mock_response.__exit__ = Mock(return_value=False)
+
+        mock_client = MagicMock()
+        mock_client.stream.return_value = mock_response
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             dest_path = Path(tmpdir) / "test.tar.zst"
 
             with (
                 patch("clang_tool_chain.parallel_download.check_server_capabilities", return_value=mock_caps),
-                patch("clang_tool_chain.parallel_download.urlopen", return_value=mock_response),
+                patch("clang_tool_chain.parallel_download.httpx.Client", return_value=mock_client),
             ):
                 with pytest.raises(ToolchainInfrastructureError, match="Checksum verification failed"):
                     download_file_parallel("https://example.com/file.tar.zst", dest_path, wrong_hash)

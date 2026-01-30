@@ -83,7 +83,7 @@ def _get_download_config() -> DownloadConfig:
     timeout_seconds = os.environ.get("CLANG_TOOL_CHAIN_TIMEOUT")
     if timeout_seconds:
         try:
-            config.timeout = int(timeout_seconds)
+            config.read_timeout = int(timeout_seconds)
             logger.debug(f"Using inactivity timeout from env: {timeout_seconds} seconds")
         except ValueError:
             logger.warning(f"Invalid CLANG_TOOL_CHAIN_TIMEOUT: {timeout_seconds}, using default")
