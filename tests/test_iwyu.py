@@ -58,9 +58,9 @@ class TestIWYUInstallation(unittest.TestCase):
             self.assertTrue(fix_includes_path.exists(), f"fix_includes.py should exist at {fix_includes_path}")
             self.assertTrue(fix_includes_path.is_file(), f"fix_includes.py should be a file: {fix_includes_path}")
         except RuntimeError as e:
-            # fix_includes.py is not included in some IWYU distributions (e.g., Windows)
+            # fix_includes.py may be missing from outdated IWYU archives
             if "not found" in str(e):
-                pytest.skip(f"fix_includes.py not available in this IWYU distribution: {e}")
+                pytest.skip(f"fix_includes.py not available (archive may need rebuild): {e}")
             raise
         except ToolchainInfrastructureError:
             raise
@@ -421,9 +421,9 @@ class TestIWYUHelperScripts(unittest.TestCase):
                 "fix_includes.py help should contain usage information",
             )
         except RuntimeError as e:
-            # fix_includes.py is not included in some IWYU distributions (e.g., Windows)
+            # fix_includes.py may be missing from outdated IWYU archives
             if "not found" in str(e):
-                pytest.skip(f"fix_includes.py not available in this IWYU distribution: {e}")
+                pytest.skip(f"fix_includes.py not available (archive may need rebuild): {e}")
             raise
         except ToolchainInfrastructureError:
             raise
@@ -461,7 +461,8 @@ class TestIWYUWrapperEntryPoints(unittest.TestCase):
                 except ToolchainInfrastructureError:
                     raise
                 except RuntimeError as e:
-                    self.skipTest(f"IWYU binaries not installed: {e}")
+                    # Tool may be missing from outdated archives
+                    self.skipTest(f"IWYU tool not available (archive may need rebuild): {e}")
 
 
 if __name__ == "__main__":
