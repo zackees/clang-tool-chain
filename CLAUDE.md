@@ -544,12 +544,22 @@ clang-tool-chain fully supports ASAN (Address Sanitizer) and other sanitizers on
 
 ### Linux ASAN Configuration
 
-On Linux, when using `-fsanitize=address`, clang-tool-chain automatically adds `-shared-libasan` to ensure the shared ASAN runtime library is used. This prevents undefined symbol errors during linking.
+On Linux, when using `-fsanitize=address`, clang-tool-chain automatically injects the following flags:
+- `-shared-libasan` - Uses the shared ASAN runtime library (prevents undefined symbol errors during linking)
+- `-Wl,--allow-shlib-undefined` - When building shared libraries (`-shared`), allows undefined symbols that will be provided by the sanitizer runtime at load time
+
+A warning is printed to stderr when flags are automatically injected:
+```
+clang-tool-chain: note: automatically injected sanitizer flags: -shared-libasan -Wl,--allow-shlib-undefined
+```
 
 **Example:**
 ```bash
 # Compile with ASAN - runtime automatically linked
 clang-tool-chain-cpp -fsanitize=address test.cpp -o test
+
+# Build shared library with ASAN - allows undefined sanitizer symbols
+clang-tool-chain-cpp -fsanitize=address -shared -fPIC mylib.cpp -o mylib.so
 
 # Deploy ASAN shared library alongside executable (optional)
 clang-tool-chain-cpp -fsanitize=address test.cpp -o test --deploy-dependencies
@@ -584,6 +594,8 @@ When running executables via `clang-tool-chain-build-run`, optimal sanitizer opt
 
 **Implementation Details:**
 - **ASANRuntimeTransformer** (priority=250) automatically adds `-shared-libasan` when `-fsanitize=address` detected on Linux
+- **ASANRuntimeTransformer** also adds `-Wl,--allow-shlib-undefined` when building shared libraries (`-shared`) with ASAN
+- A warning is printed to stderr when sanitizer flags are automatically injected
 - Shared library deployment now works on all platforms (previously Windows-only)
 - The `execute_tool()` function now uses `subprocess.run()` on all platforms to enable post-link deployment
 - ASAN runtime library (`libclang_rt.asan.so`) is automatically deployed when `--deploy-dependencies` flag is used
@@ -600,6 +612,58 @@ Windows ASAN support works with both GNU and MSVC ABIs. Runtime DLLs are automat
 ### macOS ASAN Support
 
 macOS ASAN support uses the bundled LLVM ASAN runtime with automatic deployment via `--deploy-dependencies`.
+
+### ASAN Best Practices for Dynamically Loaded Libraries
+
+When using ASAN with applications that load shared libraries at runtime (via `dlopen`/`LoadLibrary`), follow these guidelines:
+
+**1. Use Shared ASAN Runtime (`-shared-libasan`)**
+
+Required for DLL/shared library architectures. clang-tool-chain injects this automatically on Linux.
+
+**2. Allow Undefined Symbols in Shared Libraries (`-Wl,--allow-shlib-undefined`)**
+
+Shared libraries compiled with ASAN have symbols that are resolved at runtime by the sanitizer. LLD by default enforces no undefined symbols, so this flag is required. clang-tool-chain injects this automatically when building shared libraries with ASAN.
+
+**3. Use `RTLD_NOW | RTLD_GLOBAL` When Loading Libraries**
+
+Use immediate symbol resolution to help ASAN properly track symbols from loaded libraries:
+
+```cpp
+// Good: Immediate resolution helps ASAN track symbols
+void* handle = dlopen(so_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
+
+// Avoid: Lazy loading can cause ASAN tracking issues
+void* handle = dlopen(so_path.c_str(), RTLD_LAZY);
+```
+
+**4. Skip `dlclose()`/`FreeLibrary()` When ASAN is Active**
+
+ASAN runs leak detection at program exit. If you unload the shared library before that, ASAN cannot symbolize addresses from the unloaded library, resulting in `<unknown module>` in stack traces.
+
+See: https://github.com/google/sanitizers/issues/899
+
+```cpp
+// Conditionally skip dlclose when ASAN is active
+#if !defined(__SANITIZE_ADDRESS__) && !defined(__has_feature)
+    dlclose(handle);
+#elif defined(__has_feature)
+#if !__has_feature(address_sanitizer)
+    dlclose(handle);
+#endif
+#endif
+```
+
+On Windows:
+```cpp
+#if !defined(__SANITIZE_ADDRESS__)
+    FreeLibrary(dll);
+#endif
+```
+
+**Detection Macros:**
+- `__SANITIZE_ADDRESS__` - Defined by GCC and Clang when ASAN is enabled
+- `__has_feature(address_sanitizer)` - Clang-specific feature check
 
 ## Code Quality Standards
 

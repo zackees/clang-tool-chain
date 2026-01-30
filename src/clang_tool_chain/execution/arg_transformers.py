@@ -294,10 +294,15 @@ class ASANRuntimeTransformer(ArgumentTransformer):
     This transformer ensures proper ASAN runtime linking on Linux:
     - Detects -fsanitize=address flag
     - Adds -shared-libasan to use shared runtime library
+    - Adds -Wl,--allow-shlib-undefined when building shared libraries with ASAN
     - Prevents undefined symbol errors during linking
 
     The shared runtime library (libclang_rt.asan.so) contains the full
     ASAN implementation, while the static wrapper library only contains stubs.
+
+    When building shared libraries with sanitizers, the library may have undefined
+    symbols that will be provided by the sanitizer runtime when loaded. LLD by
+    default enforces no undefined symbols, so we need to allow them explicitly.
 
     Environment Variables:
         CLANG_TOOL_CHAIN_NO_SHARED_ASAN: Set to '1' to disable shared ASAN
@@ -307,7 +312,9 @@ class ASANRuntimeTransformer(ArgumentTransformer):
         return 250
 
     def transform(self, args: list[str], context: ToolContext) -> list[str]:
-        """Add -shared-libasan when using ASAN on Linux."""
+        """Add -shared-libasan and --allow-shlib-undefined when using ASAN on Linux."""
+        import sys
+
         # Only applies to Linux clang/clang++
         if context.platform_name != "linux" or context.tool_name not in ("clang", "clang++"):
             return args
@@ -317,19 +324,41 @@ class ASANRuntimeTransformer(ArgumentTransformer):
         if not has_asan:
             return args
 
+        result = list(args)
+        injected_flags = []
+
         # Check if user disabled shared ASAN
-        if os.environ.get("CLANG_TOOL_CHAIN_NO_SHARED_ASAN") == "1":
+        if os.environ.get("CLANG_TOOL_CHAIN_NO_SHARED_ASAN") != "1":
+            # Check if -shared-libasan already present
+            if "-shared-libasan" not in args:
+                # Add -shared-libasan to use shared runtime library
+                # This prevents undefined symbol errors during linking
+                logger.info("Adding -shared-libasan for ASAN runtime linking on Linux")
+                result = ["-shared-libasan"] + result
+                injected_flags.append("-shared-libasan")
+        else:
             logger.debug("Shared ASAN disabled via CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1")
-            return args
 
-        # Check if -shared-libasan already present
-        if "-shared-libasan" in args:
-            return args
+        # Check if building a shared library with ASAN
+        # Shared libraries need to allow undefined symbols that will be provided
+        # by the sanitizer runtime when the runner loads them
+        is_shared_lib = "-shared" in args
+        if is_shared_lib:
+            # Check if --allow-shlib-undefined already present
+            has_allow_shlib_undefined = any("--allow-shlib-undefined" in arg for arg in args)
+            if not has_allow_shlib_undefined:
+                logger.info("Adding -Wl,--allow-shlib-undefined for shared library with ASAN")
+                result = ["-Wl,--allow-shlib-undefined"] + result
+                injected_flags.append("-Wl,--allow-shlib-undefined")
 
-        # Add -shared-libasan to use shared runtime library
-        # This prevents undefined symbol errors during linking
-        logger.info("Adding -shared-libasan for ASAN runtime linking on Linux")
-        return ["-shared-libasan"] + args
+        # Warn on stderr if we injected flags
+        if injected_flags:
+            print(
+                f"clang-tool-chain: note: automatically injected sanitizer flags: {' '.join(injected_flags)}",
+                file=sys.stderr,
+            )
+
+        return result
 
 
 class RPathTransformer(ArgumentTransformer):
