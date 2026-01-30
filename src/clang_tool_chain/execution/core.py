@@ -25,6 +25,7 @@ from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 from clang_tool_chain.logging_config import configure_logging
 from clang_tool_chain.platform.detection import get_platform_info
 from clang_tool_chain.platform.paths import find_sccache_binary, find_tool_binary
+from clang_tool_chain.sccache_runner import _run_with_retry
 
 # Configure logging using centralized configuration
 logger = configure_logging(__name__)
@@ -580,9 +581,9 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
     platform_name, _ = get_platform_info()
 
     if platform_name == "win":
-        # Windows: use subprocess
+        # Windows: use subprocess with retry for sccache server timeout
         try:
-            result = subprocess.run(cmd)
+            result = _run_with_retry(cmd)
 
             # Post-link DLL deployment (Windows GNU ABI only for .exe)
             if result.returncode == 0:
@@ -685,9 +686,9 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
     platform_name, _ = get_platform_info()
 
     if platform_name == "win":
-        # Windows: use subprocess
+        # Windows: use subprocess with retry for sccache server timeout
         try:
-            result = subprocess.run(cmd)
+            result = _run_with_retry(cmd)
 
             # Post-link DLL deployment (Windows GNU ABI only for .exe)
             if result.returncode == 0:

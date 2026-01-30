@@ -3,14 +3,108 @@ sccache runner using iso-env for isolated execution.
 
 This module provides fallback functionality to run sccache via iso-env
 when sccache is not found in the system PATH.
+
+Includes automatic retry logic for Windows when sccache server times out.
 """
 
+import platform
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
+
+# Error patterns that indicate sccache server timeout/disconnection
+SCCACHE_SERVER_ERROR_PATTERNS = [
+    "Failed to send data to or receive data from server",
+    "failed to execute compile",
+    "Connection refused",
+    "server returned an error",
+]
+
+# Retry configuration for Windows sccache server timeout
+SCCACHE_RETRY_COUNT = 3
+SCCACHE_RETRY_DELAY_SECONDS = 2.0
+
+
+def _is_sccache_server_error(output: str) -> bool:
+    """
+    Check if the output contains sccache server timeout/disconnection errors.
+
+    Args:
+        output: Combined stdout/stderr output from sccache command
+
+    Returns:
+        True if the output contains known sccache server error patterns
+    """
+    output_lower = output.lower()
+    return any(pattern.lower() in output_lower for pattern in SCCACHE_SERVER_ERROR_PATTERNS)
+
+
+def _run_with_retry(
+    cmd: list[str],
+    max_retries: int = SCCACHE_RETRY_COUNT,
+    retry_delay: float = SCCACHE_RETRY_DELAY_SECONDS,
+) -> subprocess.CompletedProcess[bytes]:
+    """
+    Run a command with automatic retry on sccache server errors (Windows only).
+
+    On Windows, sccache server can time out during idle periods, causing
+    compilation failures with errors like "Failed to send data to server".
+    This function detects these errors and retries after a short delay,
+    allowing the sccache server to restart automatically.
+
+    Args:
+        cmd: Command to execute
+        max_retries: Maximum number of retry attempts (default: 3)
+        retry_delay: Delay in seconds between retries (default: 2.0)
+
+    Returns:
+        CompletedProcess result from subprocess.run()
+
+    Note:
+        On non-Windows platforms, this function runs the command once without retry.
+    """
+    is_windows = platform.system() == "Windows"
+
+    for attempt in range(max_retries + 1):
+        # Capture output to check for sccache errors
+        result = subprocess.run(cmd, capture_output=True)
+
+        # If successful, return immediately
+        if result.returncode == 0:
+            # Print captured output to maintain expected behavior
+            if result.stdout:
+                sys.stdout.buffer.write(result.stdout)
+            if result.stderr:
+                sys.stderr.buffer.write(result.stderr)
+            return result
+
+        # Check for sccache server errors (Windows only)
+        if is_windows and attempt < max_retries:
+            combined_output = (result.stdout or b"").decode("utf-8", errors="replace")
+            combined_output += (result.stderr or b"").decode("utf-8", errors="replace")
+
+            if _is_sccache_server_error(combined_output):
+                print(
+                    f"[sccache] Server connection error detected, retrying in {retry_delay}s "
+                    f"(attempt {attempt + 1}/{max_retries})...",
+                    file=sys.stderr,
+                )
+                time.sleep(retry_delay)
+                continue
+
+        # Not a retryable error or max retries reached, print output and return
+        if result.stdout:
+            sys.stdout.buffer.write(result.stdout)
+        if result.stderr:
+            sys.stderr.buffer.write(result.stderr)
+        return result
+
+    # Should not reach here, but return last result if we do
+    return result  # type: ignore[possibly-undefined]
 
 
 def get_sccache_path() -> str | None:
@@ -50,7 +144,7 @@ def run_sccache_via_isoenv(args: list[str]) -> int:
         Exit code from sccache execution
 
     Environment Variables:
-        SCCACHE_IDLE_TIMEOUT: Set to 5 seconds to minimize file locking window
+        SCCACHE_IDLE_TIMEOUT: Set to 60 seconds to prevent server shutdown during parallel builds
     """
     try:
         from iso_env import IsoEnv, IsoEnvArgs, Requirements
@@ -71,13 +165,13 @@ def run_sccache_via_isoenv(args: list[str]) -> int:
 
     cache_dir = get_iso_env_cache_dir()
 
-    # Set sccache idle timeout to 5 seconds to minimize file locking window
-    # This prevents sccache daemon from holding .venv/Scripts/sccache.exe locked
-    # for extended periods, which blocks pip/uv package updates
+    # Set sccache idle timeout to 60 seconds to prevent server shutdown during parallel builds
+    # A short timeout (e.g., 5 seconds) causes "Failed to send data to server" errors
+    # when the server shuts down mid-build during gaps in compilation
     import os
 
     if "SCCACHE_IDLE_TIMEOUT" not in os.environ:
-        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
+        os.environ["SCCACHE_IDLE_TIMEOUT"] = "60"
 
     # Create iso-env configuration for sccache
     try:
@@ -128,15 +222,15 @@ def run_sccache(args: list[str]) -> int:
         Exit code from sccache execution
 
     Environment Variables:
-        SCCACHE_IDLE_TIMEOUT: Set to 5 seconds to minimize file locking window
+        SCCACHE_IDLE_TIMEOUT: Set to 60 seconds to prevent server shutdown during parallel builds
     """
     import os
 
-    # Set sccache idle timeout to 5 seconds to minimize file locking window
-    # This prevents sccache daemon from holding .venv/Scripts/sccache.exe locked
-    # for extended periods, which blocks pip/uv package updates
+    # Set sccache idle timeout to 60 seconds to prevent server shutdown during parallel builds
+    # A short timeout (e.g., 5 seconds) causes "Failed to send data to server" errors
+    # when the server shuts down mid-build during gaps in compilation
     if "SCCACHE_IDLE_TIMEOUT" not in os.environ:
-        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
+        os.environ["SCCACHE_IDLE_TIMEOUT"] = "60"
 
     sccache_path = get_sccache_path()
 
@@ -145,7 +239,7 @@ def run_sccache(args: list[str]) -> int:
         cmd = [sccache_path] + args
 
         try:
-            result = subprocess.run(cmd)
+            result = _run_with_retry(cmd)
             return result.returncode
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
@@ -171,15 +265,15 @@ def run_sccache_with_compiler(compiler_path: str, args: list[str]) -> int:
         Exit code from sccache execution
 
     Environment Variables:
-        SCCACHE_IDLE_TIMEOUT: Set to 5 seconds to minimize file locking window
+        SCCACHE_IDLE_TIMEOUT: Set to 60 seconds to prevent server shutdown during parallel builds
     """
     import os
 
-    # Set sccache idle timeout to 5 seconds to minimize file locking window
-    # This prevents sccache daemon from holding .venv/Scripts/sccache.exe locked
-    # for extended periods, which blocks pip/uv package updates
+    # Set sccache idle timeout to 60 seconds to prevent server shutdown during parallel builds
+    # A short timeout (e.g., 5 seconds) causes "Failed to send data to server" errors
+    # when the server shuts down mid-build during gaps in compilation
     if "SCCACHE_IDLE_TIMEOUT" not in os.environ:
-        os.environ["SCCACHE_IDLE_TIMEOUT"] = "5"
+        os.environ["SCCACHE_IDLE_TIMEOUT"] = "60"
 
     sccache_path = get_sccache_path()
 
@@ -188,7 +282,7 @@ def run_sccache_with_compiler(compiler_path: str, args: list[str]) -> int:
         cmd = [sccache_path, compiler_path] + args
 
         try:
-            result = subprocess.run(cmd)
+            result = _run_with_retry(cmd)
             exit_code = result.returncode
 
             # Post-link DLL deployment (Windows GNU ABI only)
