@@ -215,6 +215,7 @@ Detailed documentation is organized into focused sub-documents:
 - **[Parallel Downloads](docs/PARALLEL_DOWNLOADS.md)** - High-speed downloads with multi-threaded range requests
 - **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture, manifest system, multi-part archives
 - **[Maintainer Tools](docs/MAINTAINER.md)** - Binary packaging, archive creation, troubleshooting
+- **[Binary Archive Building](downloads-bins/CLAUDE.md)** - Building IWYU/Clang/LLVM archives for distribution (submodule)
 - **[Testing Guide](docs/TESTING.md)** - Test infrastructure, running tests, CI/CD
 
 ## Automatic Library Dependency Deployment
@@ -627,3 +628,47 @@ uv run pytest tests/test_gnu_abi.py -v
 # Run all Windows-specific tests
 uv run pytest -k "windows or gnu or msvc" -v
 ```
+
+## Maintainer: Building IWYU Archives
+
+When rebuilding the Windows IWYU archive, runtime DLLs must be included in the `bin/` directory for the executable to run standalone.
+
+**Required DLLs for Windows IWYU** (copy to `downloads-bins/assets/iwyu/win/x86_64/bin/`):
+
+| DLL | Size | Source | Purpose |
+|-----|------|--------|---------|
+| `libclang-cpp.dll` | ~45-57 MB | llvm-mingw | Clang C++ library |
+| `libLLVM-21.dll` | ~73-136 MB | llvm-mingw | LLVM core library |
+| `libgcc_s_seh-1.dll` | ~143-150 KB | mingw64 | GCC support library |
+| `libstdc++-6.dll` | ~2.3-2.5 MB | mingw64 | C++ standard library |
+| `libwinpthread-1.dll` | ~65 KB | mingw64/llvm-mingw | POSIX threads |
+| `libffi-8.dll` | ~34-87 KB | llvm-mingw | Foreign function interface |
+| `libiconv-2.dll` | ~1.1 MB | MSYS2 | Character encoding |
+| `liblzma-5.dll` | ~189 KB | MSYS2 | LZMA compression |
+| `libxml2-16.dll` | ~1.3 MB | MSYS2 | XML parsing |
+| `libzstd.dll` | ~1.2 MB | MSYS2 | Zstd compression |
+| `zlib1.dll` | ~121 KB | MSYS2 | Zlib compression |
+
+**DLL Source Locations** (in `downloads-bins/tools/work/x86_64/`):
+- `llvm-mingw-*/bin/` - LLVM DLLs (libclang-cpp.dll, libLLVM-21.dll, libffi-8.dll)
+- `mingw64/bin/` - MinGW GCC runtime DLLs (libgcc_s_seh-1.dll, libstdc++-6.dll)
+- MSYS2 packages for additional dependencies
+
+**Steps to rebuild Windows IWYU archive:**
+```bash
+cd downloads-bins
+
+# 1. Copy DLLs to bin/ directory (see sources above)
+cp tools/work/x86_64/llvm-mingw-*/bin/libclang-cpp.dll assets/iwyu/win/x86_64/bin/
+cp tools/work/x86_64/llvm-mingw-*/bin/libLLVM-21.dll assets/iwyu/win/x86_64/bin/
+# ... copy remaining DLLs
+
+# 2. Create the archive
+uv run create-iwyu-archives --platform win --arch x86_64
+
+# 3. Commit changes (DLLs tracked via Git LFS)
+git add assets/iwyu/win/x86_64/
+git commit -m "feat: Update Windows IWYU archive with DLL dependencies"
+```
+
+See `downloads-bins/CLAUDE.md` for complete documentation.
