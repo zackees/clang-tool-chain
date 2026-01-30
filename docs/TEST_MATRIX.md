@@ -6,8 +6,8 @@ Comprehensive test coverage across all platforms and tool categories ensures rel
 
 clang-tool-chain is tested on:
 - **5 platforms:** Windows x64, Linux x86_64, Linux ARM64, macOS x86_64, macOS ARM64
-- **8 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, lldb, format-lint, binary-utils, cosmocc
-- **40 GitHub Actions workflows** covering all platform+tool combinations
+- **9 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, lldb, format-lint, binary-utils, cosmocc, lib-deploy
+- **45 GitHub Actions workflows** covering all platform+tool combinations
 
 ## Test Matrix by Platform
 
@@ -22,6 +22,7 @@ clang-tool-chain is tested on:
 | **binary-utils** | [![binary-utils-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-win.yml) | [![binary-utils-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-x86.yml) | [![binary-utils-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-linux-arm.yml) | [![binary-utils-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-x86.yml) | [![binary-utils-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-binary-utils-macos-arm.yml) |
 | **lldb** | [![lldb-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-win.yml) | [![lldb-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-x86.yml) | [![lldb-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-arm.yml) | [![lldb-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-x86.yml) | [![lldb-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-arm.yml) |
 | **cosmocc** | [![cosmocc-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-win.yml) | [![cosmocc-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-x86.yml) | [![cosmocc-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-arm.yml) | [![cosmocc-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-x86.yml) | [![cosmocc-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-arm.yml) |
+| **lib-deploy** | [![lib-deploy-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-win.yml) | [![lib-deploy-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-x86.yml) | [![lib-deploy-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-arm.yml) | [![lib-deploy-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-x86.yml) | [![lib-deploy-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-arm.yml) |
 
 ## Tool Category Descriptions
 
@@ -88,6 +89,15 @@ Cosmopolitan Libc for Actually Portable Executables. Tests verify:
 - Cross-platform binary execution
 - No runtime dependencies
 
+### lib-deploy
+Automatic shared library deployment for executables. Tests verify:
+- Windows DLL detection and deployment (MinGW runtime)
+- Linux .so detection and deployment (libc++, libunwind, sanitizers)
+- macOS .dylib detection and deployment (@rpath resolution)
+- Symlink handling for versioned libraries
+- Environment variable controls
+- Cross-platform factory pattern
+
 ## Test Organization
 
 ### Test Files by Category
@@ -103,6 +113,10 @@ Tests are organized in the `tests/` directory by tool category:
 - **tests/test_binary_utils.py** - LLVM binary utilities tests
 - **tests/test_build_run_cached_integration.py** - sccache integration tests
 - **tests/test_cosmocc.py** - Cosmopolitan Libc tests
+- **tests/test_dll_deployment.py** - Windows DLL deployment tests
+- **tests/test_so_deployment.py** - Linux .so deployment tests
+- **tests/test_dylib_deployment.py** - macOS .dylib deployment tests
+- **tests/test_deployment_factory.py** - Cross-platform deployment factory tests
 
 ### Running Tests Locally
 
