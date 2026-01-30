@@ -620,9 +620,25 @@ def sccache_clang_main(use_msvc: bool = False) -> NoReturn:
             print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)
     else:
-        # Unix: use exec to replace current process
+        # Unix: use subprocess to allow post-link deployment
         try:
-            os.execv(sccache_path, cmd)
+            result = _run_with_retry(cmd)
+
+            # Post-link dependency deployment (when --deploy-dependencies flag used)
+            if result.returncode == 0:
+                output_path = _extract_output_path(args, "clang")
+                if output_path is not None and deploy_dependencies_requested:
+                    # Dependency deployment for shared libraries
+                    shared_lib_path = _extract_shared_library_output_path(args, "clang")
+                    if shared_lib_path is not None:
+                        try:
+                            post_link_dependency_deployment(shared_lib_path, platform_name, False)
+                        except KeyboardInterrupt as ke:
+                            handle_keyboard_interrupt_properly(ke)
+                        except Exception as e:
+                            logger.warning(f"Dependency deployment failed: {e}")
+
+            sys.exit(result.returncode)
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
@@ -725,9 +741,25 @@ def sccache_clang_cpp_main(use_msvc: bool = False) -> NoReturn:
             print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)
     else:
-        # Unix: use exec to replace current process
+        # Unix: use subprocess to allow post-link deployment
         try:
-            os.execv(sccache_path, cmd)
+            result = _run_with_retry(cmd)
+
+            # Post-link dependency deployment (when --deploy-dependencies flag used)
+            if result.returncode == 0:
+                output_path = _extract_output_path(args, "clang++")
+                if output_path is not None and deploy_dependencies_requested:
+                    # Dependency deployment for shared libraries
+                    shared_lib_path = _extract_shared_library_output_path(args, "clang++")
+                    if shared_lib_path is not None:
+                        try:
+                            post_link_dependency_deployment(shared_lib_path, platform_name, False)
+                        except KeyboardInterrupt as ke:
+                            handle_keyboard_interrupt_properly(ke)
+                        except Exception as e:
+                            logger.warning(f"Dependency deployment failed: {e}")
+
+            sys.exit(result.returncode)
         except KeyboardInterrupt as ke:
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:

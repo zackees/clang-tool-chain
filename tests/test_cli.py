@@ -372,29 +372,30 @@ class TestSccacheWrappers(unittest.TestCase):
         self.assertIn("main", args_list)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-c", "main.c", "-o", "main"])
-    @patch("os.execv")
+    @patch("clang_tool_chain.sccache_runner.subprocess.run")
     @patch("clang_tool_chain.execution.core.find_tool_binary")
     @patch("clang_tool_chain.execution.core.find_sccache_binary")
     @patch("clang_tool_chain.execution.core.get_platform_info")
     def test_sccache_c_main_success_unix(
-        self, mock_platform: Mock, mock_sccache: Mock, mock_find: Mock, mock_execv: Mock
+        self, mock_platform: Mock, mock_sccache: Mock, mock_find: Mock, mock_run: Mock
     ) -> None:
         """Test sccache_c_main on Unix with successful execution."""
         mock_platform.return_value = ("linux", "x86_64")
         mock_sccache.return_value = "/usr/bin/sccache"
         mock_find.return_value = Path("/home/.clang-tool-chain/clang/linux/x86_64/bin/clang")
+        mock_run.return_value = MagicMock(returncode=0, stdout=b"", stderr=b"")
 
-        cli.sccache_c_main()
+        with self.assertRaises(SystemExit) as cm:
+            cli.sccache_c_main()
 
-        mock_execv.assert_called_once()
-        call_args = mock_execv.call_args[0]
-        # First arg is sccache path, second is full command list
+        self.assertEqual(cm.exception.code, 0)
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args[0][0]
+        # First arg is sccache path
         self.assertEqual(call_args[0], "/usr/bin/sccache")
-        cmd_list = call_args[1]
-        self.assertEqual(cmd_list[0], "/usr/bin/sccache")
-        self.assertIn("clang", str(cmd_list[1]))
+        self.assertIn("clang", str(call_args[1]))
         # On Linux, lld linker flags are added
-        args_list = list(cmd_list[2:])
+        args_list = list(call_args[2:])
         self.assertIn("-fuse-ld=lld", args_list)
         self.assertIn("main.c", args_list)
         self.assertIn("-o", args_list)
@@ -485,29 +486,30 @@ class TestSccacheWrappers(unittest.TestCase):
         self.assertIn("-std=c++17", args_list)
 
     @patch("sys.argv", ["clang-tool-chain-sccache-cpp", "main.cpp"])
-    @patch("os.execv")
+    @patch("clang_tool_chain.sccache_runner.subprocess.run")
     @patch("clang_tool_chain.execution.core.find_tool_binary")
     @patch("clang_tool_chain.execution.core.find_sccache_binary")
     @patch("clang_tool_chain.execution.core.get_platform_info")
     def test_sccache_cpp_main_success_unix(
-        self, mock_platform: Mock, mock_sccache: Mock, mock_find: Mock, mock_execv: Mock
+        self, mock_platform: Mock, mock_sccache: Mock, mock_find: Mock, mock_run: Mock
     ) -> None:
         """Test sccache_cpp_main on Unix with successful execution."""
         mock_platform.return_value = ("linux", "x86_64")
         mock_sccache.return_value = "/usr/bin/sccache"
         mock_find.return_value = Path("/home/.clang-tool-chain/clang/linux/x86_64/bin/clang++")
+        mock_run.return_value = MagicMock(returncode=0, stdout=b"", stderr=b"")
 
-        cli.sccache_cpp_main()
+        with self.assertRaises(SystemExit) as cm:
+            cli.sccache_cpp_main()
 
-        mock_execv.assert_called_once()
-        call_args = mock_execv.call_args[0]
-        # First arg is sccache path, second is full command list
+        self.assertEqual(cm.exception.code, 0)
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args[0][0]
+        # First arg is sccache path
         self.assertEqual(call_args[0], "/usr/bin/sccache")
-        cmd_list = call_args[1]
-        self.assertEqual(cmd_list[0], "/usr/bin/sccache")
-        self.assertIn("clang++", str(cmd_list[1]))
+        self.assertIn("clang++", str(call_args[1]))
         # On Linux, lld linker flags are added
-        args_list = list(cmd_list[2:])
+        args_list = list(call_args[2:])
         self.assertIn("-fuse-ld=lld", args_list)
         self.assertIn("main.cpp", args_list)
 
