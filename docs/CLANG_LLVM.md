@@ -120,18 +120,17 @@ clang-tool-chain-cpp -fsanitize=address main.cpp -o main.exe
 - [Clang Sanitizer Documentation](https://clang.llvm.org/docs/AddressSanitizer.html) - Official ASAN documentation
 - [UBSAN Documentation](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html) - Official UBSAN documentation
 
-## LLVM lld Linker (Linux Only, System Linker on macOS)
+## LLVM lld Linker (All Platforms)
 
-Starting with v1.0.8+, clang-tool-chain uses LLVM's `lld` linker on Linux for consistent cross-platform behavior. **macOS currently uses the system linker (ld64) due to mixed LLVM versions across architectures.**
+Starting with v1.0.8+, clang-tool-chain uses LLVM's `lld` linker on all platforms for consistent cross-platform behavior.
 
 **Platform-Specific Linker Behavior:**
-- **macOS ARM64**: LLVM 21.1.6 (supports `-fuse-ld` flag, but system linker still used for consistency with x86_64)
-- **macOS x86_64**: LLVM 19.1.7 (doesn't support `-fuse-ld` flag, requires system linker)
-- **Linux**: `lld` (ELF variant) instead of GNU `ld`
-- **Windows**: Already uses `lld` via GNU ABI setup
+- **macOS**: Uses `ld64.lld` (LLVM's Mach-O linker, LLVM 21.1.6)
+- **Linux**: Uses `ld.lld` (LLVM's ELF linker, LLVM 21.1.5)
+- **Windows**: Uses `lld` via GNU ABI setup (LLVM 21.1.5)
 
-**Why lld is Used on Linux/Windows:**
-- **Cross-platform consistency**: Same linker behavior across Linux/Windows
+**Why lld is Used:**
+- **Cross-platform consistency**: Same linker behavior across all platforms
 - **Better GNU flag support**: Accepts GNU-style linker flags (like `--no-undefined`)
 - **Faster linking**: lld is often 2-3x faster than system linkers
 - **Uniform toolchain**: Complete LLVM stack (clang + lld)
@@ -139,21 +138,20 @@ Starting with v1.0.8+, clang-tool-chain uses LLVM's `lld` linker on Linux for co
 **Automatic lld Injection:**
 
 The wrapper automatically adds platform-specific lld flags when linking:
-- **macOS**: No injection (system linker used due to x86_64 LLVM 19.1.7 limitation)
+- **macOS**: `-fuse-ld=ld64.lld` (explicit Mach-O linker)
 - **Linux**: `-fuse-ld=lld` (standard ELF linker)
 
 The injection is skipped when:
 - User sets `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` (opt-out)
 - User already specified `-fuse-ld=` in arguments
 - Compile-only operation (`-c` flag present, no linking)
-- Platform is macOS (temporarily disabled until x86_64 upgrades to LLVM 21.x+)
 
 **Environment Variables:**
 ```bash
-# Use system linker instead of lld (opt-out on Linux)
+# Use system linker instead of lld (opt-out)
 export CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1
 
-# Then compile normally - will use GNU ld on Linux
+# Then compile normally - will use system linker
 clang-tool-chain-cpp main.cpp -o main
 
 # Override for specific compilation
@@ -165,14 +163,9 @@ CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1 clang-tool-chain-cpp main.cpp -o main
 - Platform-specific linker features not supported by lld
 - Compatibility testing with native toolchain
 
-**macOS Specifics (IMPORTANT):**
-- **Currently uses system linker (ld64) exclusively**
-- **ARM64**: Upgraded to LLVM 21.1.6 (supports `-fuse-ld` flag), but system linker still used for consistency
-- **x86_64**: LLVM 19.1.7 doesn't support the `-fuse-ld` flag
-- Mixed version strategy: Can't enable lld until both architectures support it
-- **Known limitation**: Thin archives may not work with system ld64
-- **Future**: Will use lld when x86_64 upgrades to LLVM 21.1.6+ (blocked: no pre-built binary available)
-- System linker (ld64) doesn't support GNU flags like `--no-undefined`
+**macOS Specifics:**
+- Uses `ld64.lld` (LLVM's Mach-O linker) for both ARM64 and x86_64
+- GNU-style flags like `--no-undefined` are automatically translated to ld64 equivalents (`-undefined error`)
 
 **Linux Specifics:**
 - lld's ELF support is mature and well-tested

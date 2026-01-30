@@ -20,7 +20,7 @@ This package provides LLDB (LLVM Debugger) integration for debugging C/C++ progr
 | Windows  | x86_64      | 21.1.5       | ~35 MB (est.) | ✅ Ready (workflow) | ⏳ Build Pending |
 | Linux    | x86_64      | 21.1.5       | ~10-11 MB (est.) | ✅ Full (3.10) | ⏳ Wrapper Ready, Archives Pending |
 | Linux    | arm64       | 21.1.5       | ~10-11 MB (est.) | ✅ Full (3.10) | ⏳ Wrapper Ready, Archives Pending |
-| macOS    | x86_64      | 19.1.7       | ~7 MB        | ⏳ Pending     | ⏳ Pending (LLVM 21.x upgrade needed) |
+| macOS    | x86_64      | 21.1.6       | ~7 MB        | ⏳ Pending     | ⏳ Pending |
 | macOS    | arm64       | 21.1.6       | ~7 MB        | ⏳ Pending     | ⏳ Pending |
 
 **Current Status:**

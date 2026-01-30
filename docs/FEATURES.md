@@ -38,8 +38,7 @@ File locking prevents race conditions in parallel builds. Multiple processes can
 ### Pre-Built Binaries
 Official LLVM binaries with minimal modifications:
 - Clang 21.1.5 (Windows x64, Linux x86_64/ARM64)
-- Clang 21.1.6 (macOS ARM64)
-- Clang 19.1.7 (macOS x86_64)
+- Clang 21.1.6 (macOS x86_64/ARM64)
 
 ### Essential Toolchain Utilities
 Complete C/C++ development environment:

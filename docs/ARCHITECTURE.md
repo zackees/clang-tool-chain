@@ -127,7 +127,7 @@ clang-tool-chain/
 │       │   ├── win/         # Windows archives (includes integrated MinGW headers)
 │       │   │   ├── x86_64/
 │       │   │   │   ├── manifest.json
-│       │   │   │   └── llvm-19.1.7-win-x86_64.tar.zst  # Includes MinGW headers/sysroot
+│       │   │   │   └── llvm-21.1.5-win-x86_64.tar.zst  # Includes MinGW headers/sysroot
 │       │   ├── linux/       # Linux archives
 │       │   └── darwin/      # macOS archives
 │       ├── mingw/           # DEPRECATED: Separate MinGW archives (v1.x compatibility)

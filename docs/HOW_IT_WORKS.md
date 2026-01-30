@@ -382,7 +382,7 @@ Emscripten uses a separate LLVM version from the main clang toolchain:
 
 | Component | LLVM Version | Size |
 |-----------|--------------|------|
-| Main Clang toolchain | 21.1.5 (Windows/Linux), 21.1.6 (macOS ARM64), 19.1.7 (macOS x86_64) | 71-91 MB |
+| Main Clang toolchain | 21.1.5 (Windows/Linux), 21.1.6 (macOS) | 71-91 MB |
 | Emscripten SDK | 22.0 (bundled with Emscripten 4.0.19/4.0.21) | ~1.4 GB |
 
 **Why separate?** Emscripten requires specific LLVM patches and configurations for WebAssembly.

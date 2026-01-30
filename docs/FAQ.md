@@ -96,9 +96,9 @@ clang-tool-chain-c --version
 
 ## Platform-Specific
 
-### Does macOS support LLVM 21.1.5?
+### Which LLVM version does macOS use?
 
-macOS ARM64 uses LLVM 21.1.6 (Homebrew build). macOS x86_64 currently uses LLVM 19.1.7 and is pending an upgrade to 21.x for feature parity with other platforms.
+macOS uses LLVM 21.1.6 for both ARM64 and x86_64 architectures.
 
 ### Do I need to install Xcode on macOS?
 
@@ -137,7 +137,7 @@ clang-tool-chain-cpp-msvc main.cpp -o program.exe
 | Windows  | x86_64      | 21.1.5       |
 | Linux    | x86_64      | 21.1.5       |
 | Linux    | ARM64       | 21.1.5       |
-| macOS    | x86_64      | 19.1.7       |
+| macOS    | x86_64      | 21.1.6       |
 | macOS    | ARM64       | 21.1.6       |
 
 ### Can I pin a specific toolchain version?

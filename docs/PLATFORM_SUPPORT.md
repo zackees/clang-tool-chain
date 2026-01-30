@@ -9,14 +9,12 @@ Comprehensive platform support for Windows, macOS, and Linux.
 | Windows  | x86_64       | 21.1.5       | ~71 MB*      | ~350 MB        | ✅ Stable |
 | Linux    | x86_64       | 21.1.5       | ~87 MB       | ~350 MB        | ✅ Stable |
 | Linux    | ARM64        | 21.1.5       | ~91 MB       | ~340 MB        | ✅ Stable |
-| macOS    | x86_64       | 19.1.7       | ~77 MB       | ~300 MB        | ✅ Stable |
+| macOS    | x86_64       | 21.1.6       | ~77 MB       | ~300 MB        | ✅ Stable |
 | macOS    | ARM64        | 21.1.6       | ~71 MB       | ~285 MB        | ✅ Stable |
 
 \* **Windows Downloads:**
   - **GNU target (default):** ~90 MB (71 MB LLVM + 19 MB MinGW-w64 sysroot)
   - **MSVC target (opt-in):** ~71 MB (LLVM only, requires Visual Studio SDK)
-
-**Note:** macOS ARM64 uses LLVM 21.1.6 (Homebrew build). macOS x86_64 uses LLVM 19.1.7 (pending upgrade to 21.x).
 
 ## Requirements
 
@@ -71,7 +69,7 @@ xcode-select --install
 | Windows x64 | 21.1.5 | Custom build | Includes MinGW-w64 for GNU ABI |
 | Linux x86_64 | 21.1.5 | Official LLVM | Portable binary |
 | Linux ARM64 | 21.1.5 | Official LLVM | Portable binary |
-| macOS x86_64 | 19.1.7 | Homebrew | Pending upgrade to 21.x |
+| macOS x86_64 | 21.1.6 | Homebrew | Native Intel |
 | macOS ARM64 | 21.1.6 | Homebrew | Native Apple Silicon |
 
 ## Tool-Specific Platform Support
@@ -146,7 +144,7 @@ Tested and supported on:
 ### macOS
 
 - **Xcode required**: Command Line Tools mandatory for system headers
-- **x86_64 LLVM**: Still on 19.1.7 (upgrade to 21.x pending)
+- **LLVM 21.1.6**: Both x86_64 and ARM64 use LLVM 21.1.6
 - **Rosetta 2**: ARM64 binaries on x86_64 Macs require Rosetta
 
 ### Linux

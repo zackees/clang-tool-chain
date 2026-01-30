@@ -202,8 +202,7 @@ pip uninstall clang-tool-chain
 
 - **Required:** Xcode Command Line Tools (`xcode-select --install`)
 - Automatic SDK detection via `xcrun --show-sdk-path`
-- macOS ARM64 uses LLVM 21.1.6 (Homebrew build)
-- macOS x86_64 uses LLVM 19.1.7 (pending upgrade to 21.x)
+- macOS uses LLVM 21.1.6 for both x86_64 and ARM64
 
 ### Linux
 

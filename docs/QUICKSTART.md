@@ -223,7 +223,7 @@ When you `pip install clang-tool-chain`, you get **41 wrapper commands** that au
 | **Windows** | x86_64 | 21.1.5 |
 | **Linux** | x86_64 | 21.1.5 |
 | **Linux** | ARM64 | 21.1.5 |
-| **macOS** | x86_64 | 19.1.7 |
+| **macOS** | x86_64 | 21.1.6 |
 | **macOS** | ARM64 | 21.1.6 |
 
 **See:** [Platform Support Matrix](PLATFORM_SUPPORT.md) for detailed platform information.
