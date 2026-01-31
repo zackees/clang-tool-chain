@@ -1,16 +1,21 @@
 """
 Sanitizer runtime environment configuration.
 
-This module provides automatic injection of ASAN_OPTIONS and LSAN_OPTIONS
-environment variables to improve stack trace quality when running executables
-compiled with Address Sanitizer or Leak Sanitizer.
+This module provides automatic injection of ASAN_OPTIONS, LSAN_OPTIONS, and
+ASAN_SYMBOLIZER_PATH environment variables to improve stack trace quality
+when running executables compiled with Address Sanitizer or Leak Sanitizer.
 
 The default options fix <unknown module> entries in stack traces from
 dlopen()'d shared libraries by enabling slow unwinding and symbolization.
+
+The symbolizer path is automatically detected from the clang-tool-chain
+installation, enabling proper address-to-symbol resolution without manual
+configuration.
 """
 
 import logging
 import os
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +25,46 @@ logger = logging.getLogger(__name__)
 # detect_leaks=1: Enable leak detection (ASAN only)
 DEFAULT_ASAN_OPTIONS = "fast_unwind_on_malloc=0:symbolize=1:detect_leaks=1"
 DEFAULT_LSAN_OPTIONS = "fast_unwind_on_malloc=0:symbolize=1"
+
+
+def get_symbolizer_path() -> str | None:
+    """
+    Get the path to llvm-symbolizer from the clang-tool-chain installation.
+
+    This function finds the llvm-symbolizer binary bundled with clang-tool-chain,
+    which is required by ASAN/LSAN to convert memory addresses into function names
+    and source locations in stack traces.
+
+    Returns:
+        Absolute path to llvm-symbolizer, or None if not found.
+
+    Example:
+        >>> path = get_symbolizer_path()
+        >>> if path:
+        ...     os.environ["ASAN_SYMBOLIZER_PATH"] = path
+
+    Note:
+        Falls back to system PATH if the clang-tool-chain binary is not available.
+        This allows the function to work even when clang-tool-chain is not fully
+        installed (e.g., during development or in CI environments).
+    """
+    # Try to find llvm-symbolizer from clang-tool-chain installation
+    try:
+        from clang_tool_chain.platform.paths import find_tool_binary
+
+        symbolizer = find_tool_binary("llvm-symbolizer")
+        return str(symbolizer)
+    except (ImportError, RuntimeError) as e:
+        logger.debug(f"Could not find llvm-symbolizer in clang-tool-chain: {e}")
+
+    # Fall back to system PATH
+    system_symbolizer = shutil.which("llvm-symbolizer")
+    if system_symbolizer:
+        logger.debug(f"Using system llvm-symbolizer: {system_symbolizer}")
+        return system_symbolizer
+
+    logger.debug("llvm-symbolizer not found in clang-tool-chain or system PATH")
+    return None
 
 
 def detect_sanitizers_from_flags(compiler_flags: list[str]) -> tuple[bool, bool]:
@@ -64,12 +109,16 @@ def prepare_sanitizer_environment(
     compiler_flags: list[str] | None = None,
 ) -> dict[str, str]:
     """
-    Prepare environment with optimal sanitizer options.
+    Prepare environment with optimal sanitizer options and symbolizer path.
 
-    This function injects ASAN_OPTIONS and/or LSAN_OPTIONS environment variables
-    if they are not already set by the user AND the corresponding sanitizer was
-    enabled during compilation. The injected options improve stack trace quality
-    for executables using dlopen()'d shared libraries.
+    This function injects ASAN_OPTIONS, LSAN_OPTIONS, and ASAN_SYMBOLIZER_PATH
+    environment variables if they are not already set by the user AND the
+    corresponding sanitizer was enabled during compilation. The injected options
+    improve stack trace quality for executables using dlopen()'d shared libraries.
+
+    The ASAN_SYMBOLIZER_PATH is automatically detected from the clang-tool-chain
+    installation, enabling proper address-to-symbol resolution (function names,
+    file paths, line numbers) without manual configuration.
 
     Args:
         base_env: Base environment dictionary to modify. If None, uses os.environ.
@@ -85,10 +134,11 @@ def prepare_sanitizer_environment(
             disable automatic injection of sanitizer options.
         ASAN_OPTIONS: If already set, preserved as-is (user config takes priority).
         LSAN_OPTIONS: If already set, preserved as-is (user config takes priority).
+        ASAN_SYMBOLIZER_PATH: If already set, preserved as-is (user config takes priority).
 
     Example:
         >>> env = prepare_sanitizer_environment(compiler_flags=["-fsanitize=address"])
-        >>> # env now contains ASAN_OPTIONS and LSAN_OPTIONS
+        >>> # env now contains ASAN_OPTIONS, LSAN_OPTIONS, and ASAN_SYMBOLIZER_PATH
         >>> env = prepare_sanitizer_environment(compiler_flags=["-O2"])
         >>> # env unchanged - no sanitizers enabled
     """
@@ -116,5 +166,18 @@ def prepare_sanitizer_environment(
     if lsan_enabled and "LSAN_OPTIONS" not in env:
         env["LSAN_OPTIONS"] = DEFAULT_LSAN_OPTIONS
         logger.info(f"Injecting LSAN_OPTIONS={DEFAULT_LSAN_OPTIONS}")
+
+    # Inject ASAN_SYMBOLIZER_PATH if any sanitizer is enabled and not already set
+    if (asan_enabled or lsan_enabled) and "ASAN_SYMBOLIZER_PATH" not in env:
+        symbolizer_path = get_symbolizer_path()
+        if symbolizer_path:
+            env["ASAN_SYMBOLIZER_PATH"] = symbolizer_path
+            logger.info(f"Injecting ASAN_SYMBOLIZER_PATH={symbolizer_path}")
+        else:
+            logger.warning(
+                "llvm-symbolizer not found - ASAN/LSAN stack traces may show "
+                "raw addresses instead of function names. Install llvm-symbolizer "
+                "or ensure clang-tool-chain is properly installed."
+            )
 
     return env

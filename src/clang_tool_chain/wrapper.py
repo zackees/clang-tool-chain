@@ -152,6 +152,15 @@ from clang_tool_chain.execution.lldb import (
 )
 
 # ============================================================================
+# Sanitizer Environment
+# ============================================================================
+from clang_tool_chain.execution.sanitizer_env import (
+    detect_sanitizers_from_flags,
+    get_symbolizer_path,
+    prepare_sanitizer_environment,
+)
+
+# ============================================================================
 # Linker Configuration
 # ============================================================================
 from clang_tool_chain.linker import (
@@ -218,6 +227,10 @@ __all__ = [
     "run_tool",
     "sccache_clang_main",
     "sccache_clang_cpp_main",
+    # Sanitizer Environment
+    "prepare_sanitizer_environment",
+    "detect_sanitizers_from_flags",
+    "get_symbolizer_path",
     # Emscripten
     "ensure_nodejs_available",
     "execute_emscripten_tool",

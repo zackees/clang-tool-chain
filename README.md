@@ -820,15 +820,41 @@ When running executables via `clang-tool-chain-build-run`, optimal sanitizer opt
 
 - `ASAN_OPTIONS=fast_unwind_on_malloc=0:symbolize=1:detect_leaks=1` (when `-fsanitize=address` is used)
 - `LSAN_OPTIONS=fast_unwind_on_malloc=0:symbolize=1` (when `-fsanitize=address` or `-fsanitize=leak` is used)
+- `ASAN_SYMBOLIZER_PATH=/path/to/llvm-symbolizer` (automatically detected from clang-tool-chain)
 
 **What these options fix:**
 - `<unknown module>` entries in stack traces from `dlopen()`'d shared libraries
-- Missing function names in crash reports
+- Missing function names in crash reports (raw addresses like `0x7f5a4f15ac1d` instead of `my_function`)
 - Incomplete leak detection
 
-**Your options are always preserved** - if you set `ASAN_OPTIONS` or `LSAN_OPTIONS` yourself, clang-tool-chain won't override them.
+**Your options are always preserved** - if you set `ASAN_OPTIONS`, `LSAN_OPTIONS`, or `ASAN_SYMBOLIZER_PATH` yourself, clang-tool-chain won't override them.
 
 **Regular builds are unaffected** - sanitizer options are only injected when the compiler flags indicate sanitizers are being used.
+
+### Programmatic API (For Build Systems)
+
+External build systems can use the sanitizer environment API to get properly configured environments:
+
+```python
+from clang_tool_chain import prepare_sanitizer_environment, get_symbolizer_path
+
+# Option A: Complete environment setup (recommended)
+env = prepare_sanitizer_environment(
+    base_env=os.environ.copy(),
+    compiler_flags=["-fsanitize=address", "-O2"]
+)
+# env now contains ASAN_OPTIONS, LSAN_OPTIONS, and ASAN_SYMBOLIZER_PATH
+
+# Option B: Just get the symbolizer path
+symbolizer = get_symbolizer_path()
+if symbolizer:
+    os.environ["ASAN_SYMBOLIZER_PATH"] = symbolizer
+```
+
+**Available functions:**
+- `prepare_sanitizer_environment(base_env, compiler_flags)` - Returns environment dict with all sanitizer variables
+- `get_symbolizer_path()` - Returns path to `llvm-symbolizer` or `None`
+- `detect_sanitizers_from_flags(flags)` - Returns `(asan_enabled, lsan_enabled)` tuple
 
 ### Configuration
 

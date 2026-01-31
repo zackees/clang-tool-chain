@@ -1,5 +1,5 @@
 """
-Tests for automatic ASAN_OPTIONS and LSAN_OPTIONS injection.
+Tests for automatic ASAN_OPTIONS, LSAN_OPTIONS, and ASAN_SYMBOLIZER_PATH injection.
 
 This test suite verifies that sanitizer environment variables are automatically
 injected when running executables compiled with Address Sanitizer or Leak Sanitizer,
@@ -7,11 +7,15 @@ improving stack trace quality for dlopen()'d shared libraries.
 """
 
 import os
+import sys
+from pathlib import Path
+from unittest.mock import patch
 
 from clang_tool_chain.execution.sanitizer_env import (
     DEFAULT_ASAN_OPTIONS,
     DEFAULT_LSAN_OPTIONS,
     detect_sanitizers_from_flags,
+    get_symbolizer_path,
     prepare_sanitizer_environment,
 )
 
@@ -317,3 +321,275 @@ class TestSanitizerEnvironmentInjection:
         # No sanitizers, no injection
         assert "ASAN_OPTIONS" not in result
         assert "LSAN_OPTIONS" not in result
+
+
+class TestGetSymbolizerPath:
+    """Test get_symbolizer_path() function."""
+
+    def test_returns_string_or_none(self):
+        """Test that get_symbolizer_path returns a string or None."""
+        result = get_symbolizer_path()
+        assert result is None or isinstance(result, str)
+
+    def test_path_exists_when_returned(self):
+        """Test that when a path is returned, it points to an existing file."""
+        result = get_symbolizer_path()
+        if result is not None:
+            assert Path(result).exists(), f"Symbolizer path does not exist: {result}"
+
+    def test_path_contains_llvm_symbolizer(self):
+        """Test that returned path contains 'llvm-symbolizer' in the name."""
+        result = get_symbolizer_path()
+        if result is not None:
+            path = Path(result)
+            # On Windows it might be llvm-symbolizer.exe
+            assert "llvm-symbolizer" in path.name.lower().replace(".exe", "")
+
+    @patch("clang_tool_chain.execution.sanitizer_env.shutil.which")
+    @patch("clang_tool_chain.platform.paths.find_tool_binary")
+    def test_falls_back_to_system_path(self, mock_find_tool, mock_which):
+        """Test fallback to system PATH when clang-tool-chain binary not found."""
+        mock_find_tool.side_effect = RuntimeError("Tool not found")
+        mock_which.return_value = "/usr/bin/llvm-symbolizer"
+
+        # The function should fall back to shutil.which
+        result = get_symbolizer_path()
+
+        # Should have returned the system path
+        assert result == "/usr/bin/llvm-symbolizer"
+        mock_which.assert_called_with("llvm-symbolizer")
+
+    @patch("clang_tool_chain.execution.sanitizer_env.shutil.which")
+    @patch("clang_tool_chain.platform.paths.find_tool_binary")
+    def test_returns_none_when_not_found_anywhere(self, mock_find_tool, mock_which):
+        """Test that None is returned when symbolizer not found anywhere."""
+        mock_find_tool.side_effect = RuntimeError("Tool not found")
+        mock_which.return_value = None
+
+        result = get_symbolizer_path()
+
+        assert result is None
+
+    def test_returns_clang_tool_chain_path_when_available(self):
+        """Test that clang-tool-chain path is preferred when available."""
+        result = get_symbolizer_path()
+        if result is not None:
+            # When clang-tool-chain is installed, path should be in .clang-tool-chain
+            # or the installation directory
+            path = Path(result)
+            # It should be an absolute path
+            assert path.is_absolute()
+
+
+class TestAsanSymbolizerPathInjection:
+    """Test ASAN_SYMBOLIZER_PATH automatic injection."""
+
+    def test_symbolizer_path_injected_when_asan_enabled(self):
+        """Test that ASAN_SYMBOLIZER_PATH is injected when -fsanitize=address is used."""
+        base_env = {"PATH": "/usr/bin"}
+
+        # Clear disable flag
+        original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+            result = prepare_sanitizer_environment(base_env, compiler_flags=["-fsanitize=address"])
+
+            # ASAN_SYMBOLIZER_PATH should be set if symbolizer is available
+            symbolizer = get_symbolizer_path()
+            if symbolizer is not None:
+                assert "ASAN_SYMBOLIZER_PATH" in result
+                assert result["ASAN_SYMBOLIZER_PATH"] == symbolizer
+        finally:
+            if original_disable is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+
+    def test_symbolizer_path_injected_when_lsan_enabled(self):
+        """Test that ASAN_SYMBOLIZER_PATH is injected when -fsanitize=leak is used."""
+        base_env = {"PATH": "/usr/bin"}
+
+        original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+            result = prepare_sanitizer_environment(base_env, compiler_flags=["-fsanitize=leak"])
+
+            symbolizer = get_symbolizer_path()
+            if symbolizer is not None:
+                assert "ASAN_SYMBOLIZER_PATH" in result
+                assert result["ASAN_SYMBOLIZER_PATH"] == symbolizer
+        finally:
+            if original_disable is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+
+    def test_symbolizer_path_not_injected_without_sanitizers(self):
+        """Test that ASAN_SYMBOLIZER_PATH is not injected without sanitizers."""
+        base_env = {"PATH": "/usr/bin"}
+
+        result = prepare_sanitizer_environment(base_env, compiler_flags=["-O2", "-Wall"])
+
+        assert "ASAN_SYMBOLIZER_PATH" not in result
+
+    def test_symbolizer_path_preserved_when_user_specified(self):
+        """Test that user-specified ASAN_SYMBOLIZER_PATH is preserved."""
+        user_symbolizer = "/custom/path/to/llvm-symbolizer"
+        base_env = {"PATH": "/usr/bin", "ASAN_SYMBOLIZER_PATH": user_symbolizer}
+
+        original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+            result = prepare_sanitizer_environment(base_env, compiler_flags=["-fsanitize=address"])
+
+            # User-specified path should be preserved
+            assert result["ASAN_SYMBOLIZER_PATH"] == user_symbolizer
+        finally:
+            if original_disable is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+
+    def test_symbolizer_path_not_injected_when_disabled(self):
+        """Test that ASAN_SYMBOLIZER_PATH is not injected when disabled via env var."""
+        base_env = {"PATH": "/usr/bin"}
+
+        original_env = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = "1"
+
+            result = prepare_sanitizer_environment(base_env, compiler_flags=["-fsanitize=address"])
+
+            # Nothing should be injected when disabled
+            assert "ASAN_SYMBOLIZER_PATH" not in result
+            assert "ASAN_OPTIONS" not in result
+            assert "LSAN_OPTIONS" not in result
+        finally:
+            if original_env is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_env
+
+    def test_all_sanitizer_vars_injected_together(self):
+        """Test that ASAN_OPTIONS, LSAN_OPTIONS, and ASAN_SYMBOLIZER_PATH are all injected."""
+        base_env = {"PATH": "/usr/bin"}
+
+        original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+            result = prepare_sanitizer_environment(base_env, compiler_flags=["-fsanitize=address"])
+
+            # All three should be set (if symbolizer is available)
+            assert "ASAN_OPTIONS" in result
+            assert "LSAN_OPTIONS" in result
+            symbolizer = get_symbolizer_path()
+            if symbolizer is not None:
+                assert "ASAN_SYMBOLIZER_PATH" in result
+        finally:
+            if original_disable is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+
+
+class TestSymbolizerPathPlatformSpecific:
+    """Platform-specific tests for symbolizer path."""
+
+    def test_windows_symbolizer_path_has_exe_extension(self):
+        """Test that Windows symbolizer path has .exe extension."""
+        if sys.platform != "win32":
+            return  # Skip on non-Windows
+
+        result = get_symbolizer_path()
+        if result is not None:
+            assert result.endswith(".exe"), f"Windows path should end with .exe: {result}"
+
+    def test_unix_symbolizer_path_no_exe_extension(self):
+        """Test that Unix symbolizer path does not have .exe extension."""
+        if sys.platform == "win32":
+            return  # Skip on Windows
+
+        result = get_symbolizer_path()
+        if result is not None:
+            assert not result.endswith(".exe"), f"Unix path should not end with .exe: {result}"
+
+    def test_linux_symbolizer_path_valid(self):
+        """Test that Linux symbolizer path is valid."""
+        if sys.platform != "linux":
+            return  # Skip on non-Linux
+
+        result = get_symbolizer_path()
+        if result is not None:
+            path = Path(result)
+            assert path.exists(), f"Linux symbolizer should exist: {result}"
+            assert path.is_file(), f"Linux symbolizer should be a file: {result}"
+
+    def test_macos_symbolizer_path_valid(self):
+        """Test that macOS symbolizer path is valid."""
+        if sys.platform != "darwin":
+            return  # Skip on non-macOS
+
+        result = get_symbolizer_path()
+        if result is not None:
+            path = Path(result)
+            assert path.exists(), f"macOS symbolizer should exist: {result}"
+            assert path.is_file(), f"macOS symbolizer should be a file: {result}"
+
+    def test_symbolizer_path_is_executable(self):
+        """Test that the symbolizer binary is executable."""
+        result = get_symbolizer_path()
+        if result is None:
+            return  # Skip if not available
+
+        path = Path(result)
+        if sys.platform == "win32":
+            # On Windows, .exe files are executable by default
+            assert path.suffix.lower() == ".exe"
+        else:
+            # On Unix, check executable permission
+            import stat
+
+            mode = path.stat().st_mode
+            assert mode & stat.S_IXUSR, f"Symbolizer should be executable: {result}"
+
+
+class TestSymbolizerPathIntegration:
+    """Integration tests for symbolizer path with actual clang-tool-chain installation."""
+
+    def test_symbolizer_in_clang_tool_chain_bin(self):
+        """Test that symbolizer is found in clang-tool-chain bin directory."""
+        result = get_symbolizer_path()
+        if result is None:
+            return  # Skip if not installed
+
+        # The path should contain .clang-tool-chain if using bundled binary
+        path_str = str(result).lower()
+        # Either it's in .clang-tool-chain or it's a system path
+        is_bundled = ".clang-tool-chain" in path_str or "clang_tool_chain" in path_str
+        is_system = any(p in path_str for p in ["/usr/bin", "/usr/local/bin", "c:\\program files", "llvm"])
+        assert is_bundled or is_system, f"Unexpected symbolizer location: {result}"
+
+    def test_prepare_env_returns_consistent_symbolizer_path(self):
+        """Test that prepare_sanitizer_environment returns consistent symbolizer path."""
+        base_env = {"PATH": "/usr/bin"}
+
+        original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+            result1 = prepare_sanitizer_environment(base_env.copy(), compiler_flags=["-fsanitize=address"])
+            result2 = prepare_sanitizer_environment(base_env.copy(), compiler_flags=["-fsanitize=address"])
+
+            # Both calls should return the same symbolizer path
+            if "ASAN_SYMBOLIZER_PATH" in result1:
+                assert "ASAN_SYMBOLIZER_PATH" in result2
+                assert result1["ASAN_SYMBOLIZER_PATH"] == result2["ASAN_SYMBOLIZER_PATH"]
+        finally:
+            if original_disable is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable

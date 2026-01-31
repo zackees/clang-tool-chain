@@ -580,15 +580,42 @@ When running executables via `clang-tool-chain-build-run`, optimal sanitizer opt
 **Automatically injected based on compiler flags:**
 - `ASAN_OPTIONS=fast_unwind_on_malloc=0:symbolize=1:detect_leaks=1` (when `-fsanitize=address` is used)
 - `LSAN_OPTIONS=fast_unwind_on_malloc=0:symbolize=1` (when `-fsanitize=address` or `-fsanitize=leak` is used)
+- `ASAN_SYMBOLIZER_PATH=/path/to/llvm-symbolizer` (automatically detected from clang-tool-chain installation)
 
 **What these options do:**
 - `fast_unwind_on_malloc=0`: Use slow but accurate stack unwinding (fixes `<unknown module>` in dlopen'd libraries)
 - `symbolize=1`: Enable symbolization for readable function names in stack traces
 - `detect_leaks=1`: Enable leak detection (ASAN only)
+- `ASAN_SYMBOLIZER_PATH`: Points to `llvm-symbolizer` binary for address-to-symbol resolution (function names, file paths, line numbers)
 
 **Opt-out:** Set `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV=1` to disable automatic injection.
 
-**User options preserved:** If you set `ASAN_OPTIONS` or `LSAN_OPTIONS` yourself, your values are preserved (no automatic injection for that variable).
+**User options preserved:** If you set `ASAN_OPTIONS`, `LSAN_OPTIONS`, or `ASAN_SYMBOLIZER_PATH` yourself, your values are preserved (no automatic injection for that variable).
+
+### Programmatic API for Sanitizer Environment
+
+External callers can use the sanitizer environment API programmatically:
+
+```python
+from clang_tool_chain import prepare_sanitizer_environment, get_symbolizer_path
+
+# Option A: Complete environment setup (recommended)
+env = prepare_sanitizer_environment(
+    base_env=os.environ.copy(),
+    compiler_flags=["-fsanitize=address", "-O2"]
+)
+# env now contains ASAN_OPTIONS, LSAN_OPTIONS, and ASAN_SYMBOLIZER_PATH
+
+# Option B: Get just the symbolizer path
+symbolizer = get_symbolizer_path()
+if symbolizer:
+    os.environ["ASAN_SYMBOLIZER_PATH"] = symbolizer
+```
+
+**Functions:**
+- `prepare_sanitizer_environment(base_env, compiler_flags)` - Returns environment dict with all sanitizer variables injected
+- `get_symbolizer_path()` - Returns path to `llvm-symbolizer` or `None` if not found
+- `detect_sanitizers_from_flags(flags)` - Returns `(asan_enabled, lsan_enabled)` tuple
 
 **Note:** Options are only injected when the corresponding sanitizer is detected in the compiler flags. Regular builds without sanitizers are unaffected.
 
@@ -599,11 +626,15 @@ When running executables via `clang-tool-chain-build-run`, optimal sanitizer opt
 - Shared library deployment now works on all platforms (previously Windows-only)
 - The `execute_tool()` function now uses `subprocess.run()` on all platforms to enable post-link deployment
 - ASAN runtime library (`libclang_rt.asan.so`) is automatically deployed when `--deploy-dependencies` flag is used
+- **`get_symbolizer_path()`** finds `llvm-symbolizer` from clang-tool-chain installation, falls back to system PATH
+- **`prepare_sanitizer_environment()`** automatically injects `ASAN_SYMBOLIZER_PATH` when sanitizers are detected
 
 **Files Modified:**
 - `src/clang_tool_chain/execution/arg_transformers.py` - Added ASANRuntimeTransformer
 - `src/clang_tool_chain/execution/core.py` - Replaced `os.execv()` with `subprocess.run()` for Linux/macOS deployment support
+- `src/clang_tool_chain/execution/sanitizer_env.py` - Added `get_symbolizer_path()` and `ASAN_SYMBOLIZER_PATH` injection
 - `tests/test_asan_linking.py` - Comprehensive ASAN linking tests
+- `tests/test_asan_options_injection.py` - Tests for sanitizer environment injection (43 tests)
 
 ### Windows ASAN Support
 
