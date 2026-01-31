@@ -208,6 +208,21 @@ class SoDeployer(BaseLibraryDeployer):
                     if resolved.exists():
                         return resolved
 
+                # For sanitizer runtimes, try architecture-suffixed variants
+                # e.g., libclang_rt.asan.so -> libclang_rt.asan-x86_64.so
+                if lib_name.startswith("libclang_rt.") and lib_name.endswith(".so"):
+                    base_name = lib_name[:-3]  # Remove .so
+                    arch_suffixes = ["-x86_64", "-aarch64", "-arm64"]
+                    for suffix in arch_suffixes:
+                        arch_lib_path = search_dir / f"{base_name}{suffix}.so"
+                        if arch_lib_path.exists():
+                            resolved = arch_lib_path.resolve()
+                            if resolved.exists():
+                                self.logger.debug(
+                                    f"Found architecture-suffixed variant: {arch_lib_path}"
+                                )
+                                return resolved
+
             return None
 
         except KeyboardInterrupt as ke:
