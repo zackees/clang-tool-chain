@@ -94,6 +94,10 @@ jobs:
       run: |
         # Test that we can compile code using libunwind.h with bundled headers
         cat > test_unwind.c << 'EOF'
+        // UNW_LOCAL_ONLY enables local unwinding symbols (_ULx86_64_*)
+        // Without this, the header uses remote unwinding symbols (_Ux86_64_*)
+        // which require libunwind-ptrace
+        #define UNW_LOCAL_ONLY
         #include <libunwind.h>
         #include <stdio.h>
 
