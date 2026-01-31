@@ -26,6 +26,7 @@ CONTROLLABLE_FEATURES = {
     "DIRECTIVES": "Inlined build directives (@link, @std, @cflags)",
     "SHARED_ASAN": "Automatic -shared-libasan injection (Linux)",
     "SANITIZER_ENV": "Automatic ASAN_OPTIONS/LSAN_OPTIONS injection",
+    "SANITIZER_NOTE": "Sanitizer flag injection note to stderr",
     "RPATH": "Automatic rpath injection for library loading",
     "SYSROOT": "Automatic macOS SDK detection (-isysroot)",
     "DEPLOY_LIBS": "Cross-platform library deployment (all outputs)",

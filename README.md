@@ -79,7 +79,7 @@ Comprehensive test coverage across all platforms and tool categories ensures rel
 
 ---
 
-## 📋 All Commands (41 Total)
+## 📋 All Commands (42 Total)
 
 Comprehensive reference of all available commands organized by category.
 
@@ -160,7 +160,7 @@ Comprehensive reference of all available commands organized by category.
 | `clang-tool-chain-sccache-emcc` | Cached Emscripten C compiler |
 | `clang-tool-chain-sccache-empp` | Cached Emscripten C++ compiler |
 
-### Management & Diagnostics (4)
+### Management & Diagnostics (5)
 
 | Command | Description |
 |---------|-------------|
@@ -168,8 +168,9 @@ Comprehensive reference of all available commands organized by category.
 | `clang-tool-chain-test` | Run diagnostic tests (7 checks) |
 | `clang-tool-chain-fetch` | Download toolchain components |
 | `clang-tool-chain-paths` | Display installation paths |
+| `clang-tool-chain-libdeploy` | Deploy runtime library dependencies after the fact |
 
-**Total: 41 commands** providing complete C/C++/WebAssembly toolchain capabilities.
+**Total: 42 commands** providing complete C/C++/WebAssembly toolchain capabilities.
 
 ---
 
@@ -700,6 +701,70 @@ clang-tool-chain-cpp main.cpp -o program --deploy-dependencies
 
 ---
 
+## 📦 Post-Build Library Deployment (clang-tool-chain-libdeploy)
+
+**Deploy runtime dependencies after compilation** - useful when you've compiled without `--deploy-dependencies` or when using external build systems.
+
+### Quick Examples
+
+```bash
+# Deploy dependencies for a Windows executable
+clang-tool-chain-libdeploy myprogram.exe
+# Output: Deployed 3 MinGW DLL(s) for myprogram.exe
+
+# Deploy dependencies for a Linux shared library
+clang-tool-chain-libdeploy mylib.so
+
+# Deploy dependencies for a macOS executable
+clang-tool-chain-libdeploy myprogram
+
+# Dry run - see what would be deployed without copying
+clang-tool-chain-libdeploy --dry-run myprogram.exe
+# Output:
+# Would deploy 3 libraries:
+#   libwinpthread-1.dll <- /path/to/toolchain/lib/libwinpthread-1.dll
+#   libgcc_s_seh-1.dll <- /path/to/toolchain/lib/libgcc_s_seh-1.dll
+#   libstdc++-6.dll <- /path/to/toolchain/lib/libstdc++-6.dll
+```
+
+### Command Line Options
+
+```bash
+clang-tool-chain-libdeploy [options] <binary>
+
+Options:
+  -h, --help            Show help message
+  -v, --verbose         Enable verbose output
+  -n, --dry-run         Show what would be deployed without copying
+  -p, --platform        Override auto-detected platform (windows, linux, darwin)
+  -a, --arch            Target architecture (default: auto-detect)
+```
+
+### Use Cases
+
+1. **External build systems**: When using CMake, Make, or other build systems that don't use clang-tool-chain wrappers directly
+2. **Third-party binaries**: Deploy dependencies for pre-built executables compiled with clang-tool-chain
+3. **CI/CD pipelines**: Add deployment as a separate step after compilation
+4. **Debugging**: Use `--dry-run` to inspect dependencies without modifying files
+
+### Supported Formats
+
+| Platform | File Types | Dependencies Deployed |
+|----------|------------|----------------------|
+| Windows  | `.exe`, `.dll` | MinGW runtime DLLs (libwinpthread, libgcc_s, libstdc++, etc.) |
+| Linux    | executables, `.so` | libc++, libunwind, sanitizer runtimes |
+| macOS    | executables, `.dylib` | libc++, libunwind, sanitizer runtimes |
+
+### Binary Type Detection
+
+The tool automatically detects binary type from:
+1. **File extension**: `.exe`, `.dll`, `.so`, `.dylib`
+2. **Magic bytes**: ELF (Linux), Mach-O (macOS), PE (Windows)
+
+For executables without extensions (common on Linux/macOS), magic bytes are used for detection.
+
+---
+
 ## 🚀 CI/CD Integration
 
 ```yaml
@@ -861,6 +926,9 @@ export CLANG_TOOL_CHAIN_NO_SANITIZER_ENV=1
 
 # Disable automatic -shared-libasan on Linux (use static ASAN)
 export CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1
+
+# Suppress the "automatically injected sanitizer flags" note
+export CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE=1
 ```
 
 **Platform Notes:**

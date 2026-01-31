@@ -473,3 +473,42 @@ class TestASANLinking:
         assert "1 2 3 4 5" in run_result.stdout, (
             f"Expected output not found.\nSTDOUT: {run_result.stdout}\nSTDERR: {run_result.stderr}"
         )
+
+    @pytest.mark.skipif(platform.system() == "Darwin", reason="ASAN injection only on Linux/Windows")
+    def test_asan_note_can_be_suppressed(self, simple_cpp_file):
+        """
+        Test that the sanitizer note can be suppressed with CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE.
+
+        When compiling with ASAN on Linux or Windows, clang-tool-chain prints a note about
+        automatically injected sanitizer flags. This test verifies the note can be
+        suppressed with the environment variable.
+        """
+        output_exe = simple_cpp_file.parent / "test_asan_note"
+
+        # First compile WITHOUT the suppression env var - should see the note
+        compile_cmd = [
+            "clang-tool-chain-cpp",
+            "-fsanitize=address",
+            str(simple_cpp_file),
+            "-o",
+            str(output_exe),
+        ]
+
+        env_with_note = os.environ.copy()
+        env_with_note.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE", None)
+
+        result_with_note = subprocess.run(compile_cmd, capture_output=True, text=True, env=env_with_note)
+        assert result_with_note.returncode == 0, f"Compilation failed: {result_with_note.stderr}"
+        assert "automatically injected sanitizer flags" in result_with_note.stderr, (
+            f"Expected sanitizer note in stderr but not found:\n{result_with_note.stderr}"
+        )
+
+        # Now compile WITH the suppression env var - should NOT see the note
+        env_no_note = os.environ.copy()
+        env_no_note["CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE"] = "1"
+
+        result_no_note = subprocess.run(compile_cmd, capture_output=True, text=True, env=env_no_note)
+        assert result_no_note.returncode == 0, f"Compilation failed: {result_no_note.stderr}"
+        assert "automatically injected sanitizer flags" not in result_no_note.stderr, (
+            f"Sanitizer note should be suppressed but was found:\n{result_no_note.stderr}"
+        )

@@ -42,6 +42,7 @@ When `CLANG_TOOL_CHAIN_NO_AUTO=1` is set, the following features are disabled:
 |---------|---------------------|-------------|
 | Inlined Build Directives | `NO_DIRECTIVES` | `@link`, `@std`, `@cflags` parsing |
 | Shared ASAN Runtime | `NO_SHARED_ASAN` | Auto `-shared-libasan` on Linux |
+| Sanitizer Note | `NO_SANITIZER_NOTE` | Sanitizer flag injection note to stderr |
 | Sanitizer Environment | `NO_SANITIZER_ENV` | Auto `ASAN_OPTIONS`/`LSAN_OPTIONS`/`ASAN_SYMBOLIZER_PATH` |
 | Rpath Injection | `NO_RPATH` | Auto `-rpath` for library loading |
 | macOS Sysroot | `NO_SYSROOT` | Auto `-isysroot` SDK detection |
@@ -157,14 +158,20 @@ Environment variables for controlling Address Sanitizer (ASAN), Leak Sanitizer (
 
 | Variable | Platforms | Type | Default | Description |
 |----------|-----------|------|---------|-------------|
-| `CLANG_TOOL_CHAIN_NO_SHARED_ASAN` | Linux | Boolean | `0` | Disable automatic `-shared-libasan` injection |
+| `CLANG_TOOL_CHAIN_NO_SHARED_ASAN` | Linux, Windows | Boolean | `0` | Disable automatic `-shared-libasan` injection |
+| `CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE` | Linux, Windows | Boolean | `0` | Suppress the "automatically injected sanitizer flags" note |
 
 **Usage:**
 
 ```bash
 # Default behavior - shared ASAN runtime automatically used
 clang-tool-chain-cpp -fsanitize=address main.cpp -o program
-# clang-tool-chain: note: automatically injected sanitizer flags: -shared-libasan
+# clang-tool-chain: note: automatically injected sanitizer flags: -shared-libasan (disable with CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE=1)
+
+# Suppress the note (flags still injected, just no message)
+export CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE=1
+clang-tool-chain-cpp -fsanitize=address main.cpp -o program
+# No note printed, but -shared-libasan still automatically added
 
 # Disable shared ASAN (use static ASAN runtime)
 export CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1
@@ -357,7 +364,8 @@ Some components have dedicated verbose flags (see [Library Deployment](#library-
 | `CLANG_TOOL_CHAIN_USE_SYSTEM_LD` | All | Linker | Boolean | `0` | Use system linker instead of lld |
 | `CLANG_TOOL_CHAIN_NO_RPATH` | Linux | Linker | Boolean | `0` | Disable automatic rpath injection |
 | `CLANG_TOOL_CHAIN_NO_SYSROOT` | macOS | SDK | Boolean | `0` | Disable automatic -isysroot injection |
-| `CLANG_TOOL_CHAIN_NO_SHARED_ASAN` | Linux | Sanitizer | Boolean | `0` | Disable automatic `-shared-libasan` injection |
+| `CLANG_TOOL_CHAIN_NO_SHARED_ASAN` | Linux, Windows | Sanitizer | Boolean | `0` | Disable automatic `-shared-libasan` injection |
+| `CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE` | Linux, Windows | Sanitizer | Boolean | `0` | Suppress sanitizer flag injection note |
 | `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV` | All | Sanitizer | Boolean | `0` | Disable automatic ASAN/LSAN options injection |
 | `CLANG_TOOL_CHAIN_NO_DIRECTIVES` | All | Build | Boolean | `0` | Disable inlined directives |
 | `CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE` | All | Build | Boolean | `0` | Show parsed directives |

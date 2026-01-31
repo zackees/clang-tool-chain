@@ -569,6 +569,7 @@ clang-tool-chain-cpp -fsanitize=address test.cpp -o test --deploy-dependencies
 
 **Environment Variables:**
 - `CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1` - Disable automatic `-shared-libasan` injection (use static ASAN)
+- `CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE=1` - Suppress the "automatically injected sanitizer flags" note
 - `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` - Disable automatic library deployment
 - `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV=1` - Disable automatic `ASAN_OPTIONS`/`LSAN_OPTIONS` injection at runtime
 

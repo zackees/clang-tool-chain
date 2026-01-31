@@ -293,21 +293,25 @@ class ASANRuntimeTransformer(ArgumentTransformer):
 
     Priority: 250 (runs after linker but before ABI)
 
-    This transformer ensures proper ASAN runtime linking on Linux:
+    This transformer ensures proper ASAN runtime linking on Linux and Windows:
     - Detects -fsanitize=address flag
     - Adds -shared-libasan to use shared runtime library
-    - Adds -Wl,--allow-shlib-undefined when building shared libraries with ASAN
+    - Adds -Wl,--allow-shlib-undefined when building shared libraries with ASAN (Linux only)
     - Prevents undefined symbol errors during linking
 
-    The shared runtime library (libclang_rt.asan.so) contains the full
-    ASAN implementation, while the static wrapper library only contains stubs.
+    The shared runtime library (libclang_rt.asan.so on Linux, libclang_rt.asan_dynamic.dll
+    on Windows) contains the full ASAN implementation, while the static wrapper library
+    only contains stubs.
 
     When building shared libraries with sanitizers, the library may have undefined
     symbols that will be provided by the sanitizer runtime when loaded. LLD by
     default enforces no undefined symbols, so we need to allow them explicitly.
 
+    Note: macOS uses a different ASAN runtime mechanism and is not affected.
+
     Environment Variables:
         CLANG_TOOL_CHAIN_NO_SHARED_ASAN: Set to '1' to disable shared ASAN
+        CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE: Set to '1' to suppress the injection note
         CLANG_TOOL_CHAIN_NO_AUTO: Set to '1' to disable all automatic features
     """
 
@@ -315,11 +319,12 @@ class ASANRuntimeTransformer(ArgumentTransformer):
         return 250
 
     def transform(self, args: list[str], context: ToolContext) -> list[str]:
-        """Add -shared-libasan and --allow-shlib-undefined when using ASAN on Linux."""
+        """Add -shared-libasan and --allow-shlib-undefined when using ASAN on Linux/Windows."""
         import sys
 
-        # Only applies to Linux clang/clang++
-        if context.platform_name != "linux" or context.tool_name not in ("clang", "clang++"):
+        # Only applies to Linux and Windows (GNU ABI) clang/clang++
+        # macOS uses a different ASAN runtime mechanism
+        if context.platform_name not in ("linux", "win") or context.tool_name not in ("clang", "clang++"):
             return args
 
         # Check if ASAN is enabled
@@ -339,11 +344,12 @@ class ASANRuntimeTransformer(ArgumentTransformer):
             result = ["-shared-libasan"] + result
             injected_flags.append("-shared-libasan")
 
-        # Check if building a shared library with ASAN
+        # Check if building a shared library with ASAN on Linux
         # Shared libraries need to allow undefined symbols that will be provided
         # by the sanitizer runtime when the runner loads them
+        # Note: --allow-shlib-undefined is a Linux ELF linker flag, not supported on Windows
         is_shared_lib = "-shared" in args
-        if is_shared_lib:
+        if is_shared_lib and context.platform_name == "linux":
             # Check if --allow-shlib-undefined already present
             has_allow_shlib_undefined = any("--allow-shlib-undefined" in arg for arg in args)
             if not has_allow_shlib_undefined:
@@ -351,10 +357,11 @@ class ASANRuntimeTransformer(ArgumentTransformer):
                 result = ["-Wl,--allow-shlib-undefined"] + result
                 injected_flags.append("-Wl,--allow-shlib-undefined")
 
-        # Warn on stderr if we injected flags
-        if injected_flags:
+        # Warn on stderr if we injected flags (unless disabled)
+        if injected_flags and not is_feature_disabled("SANITIZER_NOTE"):
             print(
-                f"clang-tool-chain: note: automatically injected sanitizer flags: {' '.join(injected_flags)}",
+                f"clang-tool-chain: note: automatically injected sanitizer flags: {' '.join(injected_flags)} "
+                "(disable with CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE=1)",
                 file=sys.stderr,
             )
 

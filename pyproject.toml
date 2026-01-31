@@ -116,6 +116,8 @@ clang-tool-chain-meson = "clang_tool_chain.wrapper:meson_main"
 # Cosmopolitan (Actually Portable Executables)
 clang-tool-chain-cosmocc = "clang_tool_chain.wrapper:cosmocc_main"
 clang-tool-chain-cosmocpp = "clang_tool_chain.wrapper:cosmocpp_main"
+# Library Deployment (post-build)
+clang-tool-chain-libdeploy = "clang_tool_chain.deployment.libdeploy:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clang_tool_chain"]
