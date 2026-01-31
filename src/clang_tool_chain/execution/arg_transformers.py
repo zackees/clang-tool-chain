@@ -496,9 +496,9 @@ class RPathTransformer(ArgumentTransformer):
         if is_feature_disabled("RPATH"):
             return args
 
-        # Check if rpath already present
+        # Check if $ORIGIN rpath already present (don't skip for other rpaths)
         for arg in args:
-            if "-rpath" in arg or "$ORIGIN" in arg:
+            if "$ORIGIN" in arg:
                 return args
 
         # Add rpath to look in executable's directory first
