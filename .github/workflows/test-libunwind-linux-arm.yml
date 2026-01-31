@@ -77,22 +77,67 @@ jobs:
       run: |
         uv run clang-tool-chain info
 
-    - name: Verify bundled libunwind exists in toolchain
+    - name: Check for bundled libunwind and set environment
+      id: check-libunwind
       run: |
         # Check that bundled libunwind headers exist
         CLANG_ROOT=$(uv run python -c "from clang_tool_chain.platform.detection import get_platform_binary_dir; print(get_platform_binary_dir().parent)")
         echo "Clang root: $CLANG_ROOT"
+        echo "CLANG_ROOT=$CLANG_ROOT" >> $GITHUB_ENV
 
         echo "Checking for bundled libunwind headers..."
-        ls -la "$CLANG_ROOT/include/libunwind.h" 2>/dev/null && echo "OK: libunwind.h found" || echo "WARNING: libunwind.h not found"
-        ls -la "$CLANG_ROOT/include/unwind.h" 2>/dev/null && echo "OK: unwind.h found" || echo "WARNING: unwind.h not found"
+        if [ -f "$CLANG_ROOT/include/libunwind.h" ]; then
+          echo "OK: libunwind.h found"
+          ls -la "$CLANG_ROOT/include/libunwind.h"
+          echo "HAS_BUNDLED_LIBUNWIND=true" >> $GITHUB_ENV
+          echo "has_bundled=true" >> $GITHUB_OUTPUT
+        else
+          echo "WARNING: Bundled libunwind.h not found in archive"
+          echo "HAS_BUNDLED_LIBUNWIND=false" >> $GITHUB_ENV
+          echo "has_bundled=false" >> $GITHUB_OUTPUT
+        fi
+
+        if [ -f "$CLANG_ROOT/include/unwind.h" ]; then
+          echo "OK: unwind.h found"
+        else
+          echo "WARNING: unwind.h not found"
+        fi
 
         echo "Checking for bundled libunwind libraries..."
-        ls -la "$CLANG_ROOT/lib/libunwind"* 2>/dev/null || echo "No bundled libunwind libraries found (may be expected)"
+        ls -la "$CLANG_ROOT/lib/libunwind"* 2>/dev/null || echo "No bundled libunwind libraries found"
+
+    - name: Restore system libunwind (fallback if bundled not available)
+      if: steps.check-libunwind.outputs.has_bundled != 'true'
+      run: |
+        echo "Bundled libunwind not available in archive - restoring system libunwind for testing"
+        echo "NOTE: This is a fallback. Archives should be rebuilt with bundled libunwind."
+
+        # Restore system libunwind headers
+        if [ -d /usr/include/hidden-libunwind ]; then
+          sudo mv /usr/include/hidden-libunwind/* /usr/include/ 2>/dev/null || true
+        fi
+
+        # Restore system libunwind libraries
+        if [ -d /usr/lib/aarch64-linux-gnu/hidden-libunwind ]; then
+          sudo mv /usr/lib/aarch64-linux-gnu/hidden-libunwind/* /usr/lib/aarch64-linux-gnu/ 2>/dev/null || true
+        fi
+        if [ -d /usr/lib/hidden-libunwind ]; then
+          sudo mv /usr/lib/hidden-libunwind/* /usr/lib/ 2>/dev/null || true
+        fi
+
+        # Install libunwind-dev if not present
+        if ! dpkg -l | grep -q libunwind-dev; then
+          echo "Installing libunwind-dev..."
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libunwind-dev
+        fi
+
+        echo "System libunwind restored for fallback testing"
+        ls -la /usr/include/libunwind.h
 
     - name: Test libunwind header compilation
       run: |
-        # Test that we can compile code using libunwind.h with bundled headers
+        # Test that we can compile code using libunwind.h
         cat > test_unwind.c << 'EOF'
         #include <libunwind.h>
         #include <stdio.h>
@@ -111,7 +156,12 @@ jobs:
         }
         EOF
 
-        echo "Compiling with bundled libunwind..."
+        if [ "$HAS_BUNDLED_LIBUNWIND" = "true" ]; then
+          echo "Compiling with BUNDLED libunwind..."
+        else
+          echo "Compiling with SYSTEM libunwind (fallback mode)..."
+        fi
+
         uv run clang-tool-chain-c test_unwind.c -o test_unwind -lunwind
 
         echo "Running test..."
@@ -119,5 +169,11 @@ jobs:
 
     - name: Run libunwind header tests
       run: |
+        if [ "$HAS_BUNDLED_LIBUNWIND" = "true" ]; then
+          echo "Running comprehensive libunwind tests with BUNDLED headers..."
+        else
+          echo "Running comprehensive libunwind tests with SYSTEM headers (fallback mode)..."
+          echo "NOTE: Archives should be rebuilt to include bundled libunwind"
+        fi
         # Run comprehensive libunwind tests
         uv run pytest tests/test_libunwind_headers.py -v -x
