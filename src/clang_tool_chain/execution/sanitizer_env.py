@@ -15,7 +15,9 @@ configuration.
 
 import logging
 import os
+import platform
 import shutil
+from pathlib import Path
 
 from clang_tool_chain.env_utils import is_feature_disabled
 
@@ -106,9 +108,37 @@ def detect_sanitizers_from_flags(compiler_flags: list[str]) -> tuple[bool, bool]
     return asan_enabled, lsan_enabled
 
 
+def _get_builtin_suppression_file() -> Path | None:
+    """
+    Get path to built-in LSan suppression file for current platform.
+
+    Returns:
+        Path to built-in suppression file, or None if not applicable.
+
+    Note:
+        - macOS: Returns path to lsan_suppressions_darwin.txt
+        - Linux: Returns path to lsan_suppressions_linux.txt
+        - Windows: Returns None (LSan not supported on Windows)
+    """
+    system = platform.system()
+
+    # Locate data directory in installed package
+    data_dir = Path(__file__).parent.parent / "data"
+
+    if system == "Darwin":
+        suppression_file = data_dir / "lsan_suppressions_darwin.txt"
+    elif system == "Linux":
+        suppression_file = data_dir / "lsan_suppressions_linux.txt"
+    else:
+        return None  # No suppressions for Windows (no LSan support)
+
+    return suppression_file if suppression_file.exists() else None
+
+
 def prepare_sanitizer_environment(
     base_env: dict[str, str] | None = None,
     compiler_flags: list[str] | None = None,
+    suppression_file: str | Path | None = None,
 ) -> dict[str, str]:
     """
     Prepare environment with optimal sanitizer options and symbolizer path.
@@ -122,11 +152,17 @@ def prepare_sanitizer_environment(
     installation, enabling proper address-to-symbol resolution (function names,
     file paths, line numbers) without manual configuration.
 
+    On macOS and Linux, platform-specific LSan suppression files are automatically
+    applied to filter out false positive leaks from system libraries.
+
     Args:
         base_env: Base environment dictionary to modify. If None, uses os.environ.
         compiler_flags: List of compiler flags used to build the executable.
             Used to detect which sanitizers are enabled. If None, no options
             are injected (safe default).
+        suppression_file: Optional path to custom LSan suppression file.
+            If None, uses built-in platform-specific suppressions.
+            Set to empty string "" to disable built-in suppressions.
 
     Returns:
         Environment dictionary with sanitizer options injected as appropriate.
@@ -141,9 +177,14 @@ def prepare_sanitizer_environment(
 
     Example:
         >>> env = prepare_sanitizer_environment(compiler_flags=["-fsanitize=address"])
-        >>> # env now contains ASAN_OPTIONS, LSAN_OPTIONS, and ASAN_SYMBOLIZER_PATH
+        >>> # env now contains ASAN_OPTIONS, LSAN_OPTIONS, ASAN_SYMBOLIZER_PATH, and suppressions
         >>> env = prepare_sanitizer_environment(compiler_flags=["-O2"])
         >>> # env unchanged - no sanitizers enabled
+        >>> env = prepare_sanitizer_environment(
+        ...     compiler_flags=["-fsanitize=address"],
+        ...     suppression_file="/path/to/custom.txt"
+        ... )
+        >>> # Uses custom suppression file instead of built-in
     """
     env = base_env.copy() if base_env is not None else os.environ.copy()
 
@@ -181,5 +222,25 @@ def prepare_sanitizer_environment(
                 "raw addresses instead of function names. Install llvm-symbolizer "
                 "or ensure clang-tool-chain is properly installed."
             )
+
+    # Add platform-specific LSan suppressions if LSAN is enabled
+    if lsan_enabled:
+        # Use built-in suppression file if no custom file specified
+        if suppression_file is None:
+            suppression_file = _get_builtin_suppression_file()
+
+        # Apply suppression file if it exists (unless explicitly disabled with "")
+        if suppression_file and suppression_file != "" and Path(suppression_file).exists():
+            current_lsan = env.get("LSAN_OPTIONS", "")
+            suppression_opt = f"suppressions={Path(suppression_file).absolute()}"
+
+            if current_lsan:
+                # Append to existing options
+                env["LSAN_OPTIONS"] = f"{current_lsan}:{suppression_opt}"
+            else:
+                # Set new options
+                env["LSAN_OPTIONS"] = suppression_opt
+
+            logger.info(f"Injecting LSan suppression file: {suppression_file}")
 
     return env

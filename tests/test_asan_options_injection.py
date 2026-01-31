@@ -14,6 +14,7 @@ from unittest.mock import patch
 from clang_tool_chain.execution.sanitizer_env import (
     DEFAULT_ASAN_OPTIONS,
     DEFAULT_LSAN_OPTIONS,
+    _get_builtin_suppression_file,
     detect_sanitizers_from_flags,
     get_symbolizer_path,
     prepare_sanitizer_environment,
@@ -593,3 +594,219 @@ class TestSymbolizerPathIntegration:
                 os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
             else:
                 os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+
+
+class TestLsanSuppressionFiles:
+    """Test LSan suppression file functionality."""
+
+    def test_get_builtin_suppression_file_darwin(self):
+        """Test that Darwin suppression file is returned on macOS."""
+        with patch("clang_tool_chain.execution.sanitizer_env.platform.system") as mock_system:
+            mock_system.return_value = "Darwin"
+            result = _get_builtin_suppression_file()
+            if result is not None:  # Only if file exists
+                assert "darwin" in str(result).lower()
+                assert result.name == "lsan_suppressions_darwin.txt"
+
+    def test_get_builtin_suppression_file_linux(self):
+        """Test that Linux suppression file is returned on Linux."""
+        with patch("clang_tool_chain.execution.sanitizer_env.platform.system") as mock_system:
+            mock_system.return_value = "Linux"
+            result = _get_builtin_suppression_file()
+            if result is not None:  # Only if file exists
+                assert "linux" in str(result).lower()
+                assert result.name == "lsan_suppressions_linux.txt"
+
+    def test_get_builtin_suppression_file_windows(self):
+        """Test that Windows returns None (no LSan support)."""
+        with patch("clang_tool_chain.execution.sanitizer_env.platform.system") as mock_system:
+            mock_system.return_value = "Windows"
+            result = _get_builtin_suppression_file()
+            assert result is None
+
+    def test_suppression_file_included_in_lsan_options(self):
+        """Test that suppression file is added to LSAN_OPTIONS when LSAN is enabled."""
+        base_env = {"PATH": "/usr/bin"}
+
+        original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+            # Mock platform to ensure we get a suppression file
+            with patch("clang_tool_chain.execution.sanitizer_env.platform.system") as mock_system:
+                mock_system.return_value = "Darwin"  # Use Darwin for test
+
+                result = prepare_sanitizer_environment(base_env, compiler_flags=["-fsanitize=address"])
+
+                # LSAN_OPTIONS should be set
+                assert "LSAN_OPTIONS" in result
+
+                # Should contain suppression file path if file exists
+                suppression_file = _get_builtin_suppression_file()
+                if suppression_file is not None and suppression_file.exists():
+                    assert "suppressions=" in result["LSAN_OPTIONS"]
+        finally:
+            if original_disable is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+
+    def test_custom_suppression_file_used(self):
+        """Test that custom suppression file is used when provided."""
+        import tempfile
+
+        base_env = {"PATH": "/usr/bin"}
+
+        # Create a temporary suppression file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
+            tmp.write("leak:test_pattern\n")
+            tmp_path = tmp.name
+
+        try:
+            original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+            try:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+                result = prepare_sanitizer_environment(
+                    base_env, compiler_flags=["-fsanitize=address"], suppression_file=tmp_path
+                )
+
+                assert "LSAN_OPTIONS" in result
+                assert f"suppressions={Path(tmp_path).absolute()}" in result["LSAN_OPTIONS"]
+            finally:
+                if original_disable is None:
+                    os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+                else:
+                    os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+        finally:
+            # Clean up temporary file
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def test_empty_string_suppression_file_disables_builtin(self):
+        """Test that empty string suppression_file disables built-in suppressions."""
+        base_env = {"PATH": "/usr/bin"}
+
+        original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+            result = prepare_sanitizer_environment(base_env, compiler_flags=["-fsanitize=address"], suppression_file="")
+
+            # LSAN_OPTIONS should be set but without suppressions
+            assert "LSAN_OPTIONS" in result
+            assert "suppressions=" not in result["LSAN_OPTIONS"]
+            # Should contain default options only
+            assert "fast_unwind_on_malloc=0" in result["LSAN_OPTIONS"]
+        finally:
+            if original_disable is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+
+    def test_suppression_appended_to_existing_lsan_options(self):
+        """Test that suppression is appended to existing LSAN_OPTIONS."""
+        import tempfile
+
+        # Create a temporary suppression file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
+            tmp.write("leak:test_pattern\n")
+            tmp_path = tmp.name
+
+        try:
+            base_env = {"PATH": "/usr/bin", "LSAN_OPTIONS": "verbosity=1"}
+
+            original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+            try:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+                result = prepare_sanitizer_environment(
+                    base_env, compiler_flags=["-fsanitize=address"], suppression_file=tmp_path
+                )
+
+                # Should preserve user options and append suppression
+                assert "LSAN_OPTIONS" in result
+                assert "verbosity=1" in result["LSAN_OPTIONS"]
+                assert f"suppressions={Path(tmp_path).absolute()}" in result["LSAN_OPTIONS"]
+                assert "verbosity=1:suppressions=" in result["LSAN_OPTIONS"]
+            finally:
+                if original_disable is None:
+                    os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+                else:
+                    os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+        finally:
+            # Clean up temporary file
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def test_nonexistent_suppression_file_ignored(self):
+        """Test that nonexistent suppression file is silently ignored."""
+        base_env = {"PATH": "/usr/bin"}
+
+        original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+            result = prepare_sanitizer_environment(
+                base_env,
+                compiler_flags=["-fsanitize=address"],
+                suppression_file="/nonexistent/path/to/suppressions.txt",
+            )
+
+            # LSAN_OPTIONS should be set with default options only
+            assert "LSAN_OPTIONS" in result
+            assert "suppressions=" not in result["LSAN_OPTIONS"]
+        finally:
+            if original_disable is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+
+    def test_suppression_not_added_when_lsan_disabled(self):
+        """Test that suppression is not added when LSAN is not enabled."""
+        import tempfile
+
+        # Create a temporary suppression file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
+            tmp.write("leak:test_pattern\n")
+            tmp_path = tmp.name
+
+        try:
+            base_env = {"PATH": "/usr/bin"}
+
+            result = prepare_sanitizer_environment(base_env, compiler_flags=["-O2", "-Wall"], suppression_file=tmp_path)
+
+            # LSAN_OPTIONS should not be set since LSAN not enabled
+            assert "LSAN_OPTIONS" not in result
+        finally:
+            # Clean up temporary file
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def test_builtin_suppression_files_exist(self):
+        """Test that built-in suppression files exist in the package."""
+        # This test verifies that the suppression files are properly included in the package
+        from pathlib import Path
+
+        # Get the data directory path
+        data_dir = Path(__file__).parent.parent / "src" / "clang_tool_chain" / "data"
+
+        # Check Darwin suppression file
+        darwin_file = data_dir / "lsan_suppressions_darwin.txt"
+        assert darwin_file.exists(), f"Darwin suppression file not found: {darwin_file}"
+
+        # Check Linux suppression file
+        linux_file = data_dir / "lsan_suppressions_linux.txt"
+        assert linux_file.exists(), f"Linux suppression file not found: {linux_file}"
+
+    def test_darwin_suppression_file_contains_patterns(self):
+        """Test that Darwin suppression file contains expected patterns."""
+        from pathlib import Path
+
+        data_dir = Path(__file__).parent.parent / "src" / "clang_tool_chain" / "data"
+        darwin_file = data_dir / "lsan_suppressions_darwin.txt"
+
+        if darwin_file.exists():
+            content = darwin_file.read_text()
+            # Check for expected macOS system library patterns
+            assert "libobjc.A.dylib" in content
+            assert "libxpc.dylib" in content or "dyld" in content
+            # File should not be empty
+            assert len(content.strip()) > 0

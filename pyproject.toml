@@ -125,6 +125,7 @@ packages = ["src/clang_tool_chain"]
 # Note: assets/ should be populated before building the package
 include = [
     "src/clang_tool_chain/assets/**/*",
+    "src/clang_tool_chain/data/**/*",
 ]
 
 [tool.hatch.build.targets.sdist]
