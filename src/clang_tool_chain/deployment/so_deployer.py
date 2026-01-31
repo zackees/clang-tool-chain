@@ -218,9 +218,7 @@ class SoDeployer(BaseLibraryDeployer):
                         if arch_lib_path.exists():
                             resolved = arch_lib_path.resolve()
                             if resolved.exists():
-                                self.logger.debug(
-                                    f"Found architecture-suffixed variant: {arch_lib_path}"
-                                )
+                                self.logger.debug(f"Found architecture-suffixed variant: {arch_lib_path}")
                                 return resolved
 
             return None

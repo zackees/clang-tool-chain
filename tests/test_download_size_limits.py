@@ -18,8 +18,8 @@ MAX_DOWNLOAD_SIZES = {
         "x86_64": 100 * 1024 * 1024,  # 100 MB for Windows x64
     },
     "linux": {
-        "x86_64": 100 * 1024 * 1024,  # 100 MB for Linux x64
-        "arm64": 100 * 1024 * 1024,  # 100 MB for Linux ARM64
+        "x86_64": 120 * 1024 * 1024,  # 120 MB for Linux x64 (includes bundled libunwind)
+        "arm64": 120 * 1024 * 1024,  # 120 MB for Linux ARM64 (includes bundled libunwind)
     },
     "darwin": {
         "x86_64": 100 * 1024 * 1024,  # 100 MB for macOS x64
@@ -111,15 +111,28 @@ class TestDownloadSizeLimits(unittest.TestCase):
         latest_version = manifest.latest
         self.assertIn(latest_version, manifest.versions, f"Latest version {latest_version} not found in manifest")
 
-        # Get the download URL
+        # Get the download URL(s)
         version_info = manifest.versions[latest_version]
-        download_url = version_info.href
 
-        # Perform HTTP HEAD request to get file size
-        try:
-            content_length = _get_content_length(download_url)
-        except Exception as e:
-            self.fail(f"Failed to get content length for {platform}/{arch} ({download_url}): {e}")
+        # Check if this is a multi-part archive
+        if hasattr(version_info, "parts") and version_info.parts:
+            # Sum up the sizes of all parts
+            content_length = 0
+            for part in version_info.parts:
+                part_url = part.href
+                try:
+                    part_size = _get_content_length(part_url)
+                    content_length += part_size
+                except Exception as e:
+                    self.fail(f"Failed to get content length for {platform}/{arch} part ({part_url}): {e}")
+        else:
+            # Single archive file
+            download_url = version_info.href
+            # Perform HTTP HEAD request to get file size
+            try:
+                content_length = _get_content_length(download_url)
+            except Exception as e:
+                self.fail(f"Failed to get content length for {platform}/{arch} ({download_url}): {e}")
 
         # Get the size limit for this platform/arch
         max_size = MAX_DOWNLOAD_SIZES[platform][arch]
@@ -128,13 +141,19 @@ class TestDownloadSizeLimits(unittest.TestCase):
         content_length_mb = content_length / (1024 * 1024)
         max_size_mb = max_size / (1024 * 1024)
 
+        # Build URL info string for error messages
+        if hasattr(version_info, "parts") and version_info.parts:
+            url_info = f"Multi-part archive ({len(version_info.parts)} parts)"
+        else:
+            url_info = f"URL: {version_info.href}"
+
         # Assert that the download size is within limits
         self.assertLessEqual(
             content_length,
             max_size,
             f"{platform}/{arch} download size is {content_length_mb:.2f} MB, "
             f"which exceeds the limit of {max_size_mb:.0f} MB. "
-            f"URL: {download_url}",
+            f"{url_info}",
         )
 
         # Print success info (visible with pytest -v)
