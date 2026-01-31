@@ -64,7 +64,21 @@ jobs:
     - name: Verify libunwind in archive
       run: |
         cd downloads-bins/assets/clang/linux/x86_64
-        ARCHIVE=$(ls *.tar.zst | head -1)
+
+        # Check if archive is split into parts
+        if ls *.tar.zst.part1 1>/dev/null 2>&1; then
+          echo "Archive is split into parts, joining..."
+          # Use the join script if available
+          if [ -f *.tar.zst.join ]; then
+            bash *.tar.zst.join
+          else
+            # Manual join
+            cat *.tar.zst.part* > combined.tar.zst
+            ARCHIVE="combined.tar.zst"
+          fi
+        fi
+
+        ARCHIVE=$(ls *.tar.zst 2>/dev/null | grep -v '\.part' | head -1)
         echo "Checking archive: $ARCHIVE"
 
         # Extract to temp directory
@@ -85,8 +99,9 @@ jobs:
       with:
         name: clang-linux-x86_64
         path: |
-          downloads-bins/assets/clang/linux/x86_64/*.tar.zst
+          downloads-bins/assets/clang/linux/x86_64/*.tar.zst*
           downloads-bins/assets/clang/linux/x86_64/*.sha256
+          downloads-bins/assets/clang/linux/x86_64/*.md5
           downloads-bins/assets/clang/linux/x86_64/manifest.json
         retention-days: 30
 
@@ -140,7 +155,21 @@ jobs:
     - name: Verify libunwind in archive
       run: |
         cd downloads-bins/assets/clang/linux/arm64
-        ARCHIVE=$(ls *.tar.zst | head -1)
+
+        # Check if archive is split into parts
+        if ls *.tar.zst.part1 1>/dev/null 2>&1; then
+          echo "Archive is split into parts, joining..."
+          # Use the join script if available
+          if [ -f *.tar.zst.join ]; then
+            bash *.tar.zst.join
+          else
+            # Manual join
+            cat *.tar.zst.part* > combined.tar.zst
+            ARCHIVE="combined.tar.zst"
+          fi
+        fi
+
+        ARCHIVE=$(ls *.tar.zst 2>/dev/null | grep -v '\.part' | head -1)
         echo "Checking archive: $ARCHIVE"
 
         # Extract to temp directory
@@ -161,7 +190,8 @@ jobs:
       with:
         name: clang-linux-arm64
         path: |
-          downloads-bins/assets/clang/linux/arm64/*.tar.zst
+          downloads-bins/assets/clang/linux/arm64/*.tar.zst*
           downloads-bins/assets/clang/linux/arm64/*.sha256
+          downloads-bins/assets/clang/linux/arm64/*.md5
           downloads-bins/assets/clang/linux/arm64/manifest.json
         retention-days: 30
