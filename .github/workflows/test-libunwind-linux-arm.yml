@@ -126,14 +126,16 @@ jobs:
         fi
 
         # Install libunwind-dev if not present
-        if ! dpkg -l | grep -q libunwind-dev; then
-          echo "Installing libunwind-dev..."
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libunwind-dev
-        fi
+        echo "Installing libunwind-dev..."
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq libunwind-dev
 
         echo "System libunwind restored for fallback testing"
-        ls -la /usr/include/libunwind.h
+        # Find where libunwind.h was installed
+        echo "Locating libunwind.h..."
+        find /usr -name "libunwind.h" 2>/dev/null | head -5 || echo "libunwind.h not found in /usr"
+        # Verify with dpkg
+        dpkg -L libunwind-dev | grep "\.h$" | head -5
 
     - name: Test libunwind header compilation
       run: |
