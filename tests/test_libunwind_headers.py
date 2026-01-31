@@ -28,6 +28,10 @@ class TestLibunwindHeaderDiscovery:
         # Create a simple C file that includes libunwind.h
         source_file = tmp_path / "test_libunwind.c"
         source_file.write_text("""
+// UNW_LOCAL_ONLY must be defined before including libunwind.h
+// to use local unwinding symbols (_ULx86_64_*) instead of
+// remote unwinding symbols (_Ux86_64_*) which require libunwind-ptrace
+#define UNW_LOCAL_ONLY
 #include <libunwind.h>
 
 int main() {
@@ -138,6 +142,10 @@ int main() {
         source_file = tmp_path / "test_runtime.c"
         source_file.write_text("""
 #include <stdio.h>
+// UNW_LOCAL_ONLY must be defined before including libunwind.h
+// to use local unwinding symbols (_ULx86_64_*) instead of
+// remote unwinding symbols (_Ux86_64_*) which require libunwind-ptrace
+#define UNW_LOCAL_ONLY
 #include <libunwind.h>
 
 int main() {
