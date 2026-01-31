@@ -276,9 +276,9 @@ If llvm-objdump fails or times out, use a hardcoded list of common MinGW DLLs.
 
 | Variable | Effect |
 |----------|--------|
-| `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` | Disable all DLL deployment |
-| `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1` | Disable deployment for .dll outputs only |
-| `CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1` | Enable DEBUG logging |
+| `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` | Disable all library deployment |
+| `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1` | Disable deployment for shared library outputs only |
+| `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1` | Enable DEBUG logging |
 
 ### 5.4 Deployment Workflow
 
@@ -421,9 +421,7 @@ Mirror Windows DLL deployment variables:
 | `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` | Disable Linux/macOS deployment |
 | `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1` | Enable DEBUG logging |
 
-Reuse existing `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` to disable all platforms? Or keep separate for granular control?
-
-**Recommendation**: Use new variables (`NO_DEPLOY_LIBS`) for Linux/macOS to allow independent control.
+**Note**: The unified `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` variable disables library deployment across all platforms.
 
 ### 6.7 Recursive Scanning
 

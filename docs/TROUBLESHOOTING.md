@@ -210,28 +210,28 @@ xcrun --show-sdk-path
 1. Check you're using GNU ABI (default), not MSVC ABI (`-msvc` variant)
 2. Verify you're linking (not just compiling with `-c`)
 3. Check the output file has `.exe` extension
-4. Ensure `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS` is not set
+4. Ensure `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS` is not set
 
-### Want to Disable DLL Deployment
+### Want to Disable Library Deployment
 
 **Solution:**
 
 ```bash
 # Windows (CMD)
-set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+set CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
 clang-tool-chain-cpp main.cpp -o main.exe
 
 # Windows (PowerShell)
-$env:CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS="1"
+$env:CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS="1"
 clang-tool-chain-cpp main.cpp -o main.exe
 ```
 
-### Need Verbose DLL Logging
+### Need Verbose Library Logging
 
 **Solution:**
 
 ```bash
-set CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1
+set CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1
 clang-tool-chain-cpp main.cpp -o main.exe
 # Now shows detailed DEBUG logs
 ```

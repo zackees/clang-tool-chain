@@ -18,10 +18,11 @@ Example:
 """
 
 import logging
-import os
 import re
 import subprocess
 from pathlib import Path
+
+from clang_tool_chain.env_utils import is_feature_disabled
 
 from .base_deployer import BaseLibraryDeployer
 
@@ -499,7 +500,8 @@ def post_link_dylib_deployment(output_path: Path, arch: str = "x86_64") -> int:
 
     Environment variables:
     - CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1 - Disable all library deployment
-    - CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS=1 - Disable macOS-specific deployment
+    - CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1 - Disable deployment for shared library outputs
+    - CLANG_TOOL_CHAIN_NO_AUTO=1 - Disable all automatic features
 
     Args:
         output_path: Path to executable or shared library
@@ -512,14 +514,12 @@ def post_link_dylib_deployment(output_path: Path, arch: str = "x86_64") -> int:
         >>> # Called automatically after linking
         >>> count = post_link_dylib_deployment(Path("program"), arch="arm64")
     """
-    # Check global disable
-    if os.getenv("CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS") == "1":
-        logger.debug("dylib deployment disabled (CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1)")
+    # Check environment variables (NO_DEPLOY_LIBS or NO_AUTO)
+    if is_feature_disabled("DEPLOY_LIBS"):
         return 0
 
-    # Check macOS-specific disable
-    if os.getenv("CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS") == "1":
-        logger.debug("dylib deployment disabled (CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS=1)")
+    # Check if output is a shared library (.dylib) - if so, check NO_DEPLOY_SHARED_LIB
+    if output_path.suffix == ".dylib" and is_feature_disabled("DEPLOY_SHARED_LIB"):
         return 0
 
     # Check if output is executable or .dylib

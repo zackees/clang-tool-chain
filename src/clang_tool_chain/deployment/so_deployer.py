@@ -12,6 +12,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from clang_tool_chain.env_utils import is_feature_disabled
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 
 from .base_deployer import BaseLibraryDeployer
@@ -309,14 +310,19 @@ def post_link_so_deployment(
 
     Returns:
         Number of .so files deployed
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS: Set to "1" to disable all library deployment
+        CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB: Set to "1" to disable deployment for shared library outputs
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to "1" to disable all automatic features
     """
-    # Check environment variables
-    if os.getenv("CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS") == "1":
-        logger.debug("Linux .so deployment disabled by CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS")
+    # Check environment variables (NO_DEPLOY_LIBS or NO_AUTO)
+    if is_feature_disabled("DEPLOY_LIBS"):
         return 0
 
-    if os.getenv("CLANG_TOOL_CHAIN_NO_DEPLOY_SO") == "1":
-        logger.debug("Linux .so deployment disabled by CLANG_TOOL_CHAIN_NO_DEPLOY_SO")
+    # Check if output is a shared library (.so) - if so, check NO_DEPLOY_SHARED_LIB
+    is_shared_lib = output_path.suffix == ".so" or ".so." in output_path.name
+    if is_shared_lib and is_feature_disabled("DEPLOY_SHARED_LIB"):
         return 0
 
     # Check if output is a deployable binary

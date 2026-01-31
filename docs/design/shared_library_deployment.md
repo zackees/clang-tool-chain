@@ -1098,13 +1098,11 @@ if deploy_dependencies_requested and output_path:
 
 **Rationale**: Unified control across all platforms
 
-#### Platform-Specific Disable
+#### Shared Library Output Disable
 
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` - Disable Windows DLL deployment (existing)
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_SO=1` - Disable Linux .so deployment
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS=1` - Disable macOS .dylib deployment
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1` - Disable deployment for shared library outputs only (.dll, .so, .dylib)
 
-**Rationale**: Granular control for platform-specific issues
+**Rationale**: Granular control for shared library outputs (executables still get deployment)
 
 #### Verbose Logging
 
@@ -1115,19 +1113,15 @@ if deploy_dependencies_requested and output_path:
 #### Check Order
 
 ```python
-def should_deploy(platform_name: str) -> bool:
+def should_deploy(platform_name: str, is_shared_lib: bool) -> bool:
     import os
 
     # Global disable
     if os.getenv("CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS") == "1":
         return False
 
-    # Platform-specific disable
-    if platform_name == "windows" and os.getenv("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS") == "1":
-        return False
-    elif platform_name == "linux" and os.getenv("CLANG_TOOL_CHAIN_NO_DEPLOY_SO") == "1":
-        return False
-    elif platform_name == "darwin" and os.getenv("CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS") == "1":
+    # Shared library output disable
+    if is_shared_lib and os.getenv("CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB") == "1":
         return False
 
     return True

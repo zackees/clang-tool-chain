@@ -374,9 +374,9 @@ class TestEnvironmentVariables:
 
         assert result == 0
 
-    def test_macos_specific_disable_env_var(self, mock_binary):
-        """Test CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS disables deployment."""
-        with patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS": "1"}):
+    def test_deploy_libs_disable_env_var(self, mock_binary):
+        """Test CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS disables deployment."""
+        with patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS": "1"}):
             result = post_link_dylib_deployment(mock_binary)
 
         assert result == 0

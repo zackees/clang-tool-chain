@@ -712,10 +712,10 @@ if 'not found' in result.stdout:
 
 ### 6.2 Environment Variables for User Control
 
-Similar to Windows DLL deployment, provide opt-out mechanisms:
+Cross-platform opt-out mechanisms:
 
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_SO=1` - Disable automatic .so deployment
-- `CLANG_TOOL_CHAIN_SO_DEPLOY_VERBOSE=1` - Enable verbose logging
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` - Disable automatic library deployment
+- `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1` - Enable verbose logging
 - `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` - Use system libraries (already exists for linker)
 
 ### 6.3 Performance Considerations
@@ -781,7 +781,7 @@ tests/
    - **Recommendation**: Add `patchelf` as an optional dependency (like `sccache`). If not available, skip RPATH modification and warn user.
 
 4. **Shared library (.so) outputs**: Should we deploy dependencies for .so files (like we do for .dll on Windows)?
-   - **Recommendation**: Yes, but with opt-out (`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1` analogue).
+   - **Recommendation**: Yes, but with opt-out (`CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1`).
 
 ### 6.8 Comparison with Windows DLL Deployment
 
@@ -792,8 +792,8 @@ tests/
 | Symlink Handling | N/A (Windows shortcuts not needed) | Must create SONAME symlinks |
 | RPATH Equivalent | N/A (DLL search uses directory) | RPATH/RUNPATH in ELF binary |
 | System Libraries | Exclude MSVC runtime | Exclude glibc, libpthread, etc. |
-| Opt-out | `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` | `CLANG_TOOL_CHAIN_NO_DEPLOY_SO=1` |
-| Verbose Logging | `CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1` | `CLANG_TOOL_CHAIN_SO_DEPLOY_VERBOSE=1` |
+| Opt-out | `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` | `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` |
+| Verbose Logging | `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1` | `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1` |
 
 ---
 

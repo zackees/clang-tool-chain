@@ -968,14 +968,14 @@ def post_link_dll_deployment(
     Supports both .exe executables and .dll shared libraries.
 
     Environment Variables:
-        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS: Set to "1" to disable all DLL deployment
-        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS: Set to "1" to disable deployment for .dll outputs only
-        CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE: Set to "1" for verbose logging
+        CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS: Set to "1" to disable all library deployment
+        CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB: Set to "1" to disable deployment for shared library outputs only
+        CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE: Set to "1" for verbose logging
     """
 ```
 
 **Guard Sequence** (lines 509-541):
-1. Check `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS` → return early
+1. Check `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS` → return early
 2. Check platform is Windows → return early
 3. Check GNU ABI is used → return early
 4. Check output is `.exe` or `.dll` → return early

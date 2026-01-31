@@ -242,9 +242,9 @@ When compiling Windows executables (`.exe`) or shared libraries (`.dll`) with th
 
 ### Environment Variables
 
-- **`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1`** - Disable automatic DLL deployment for all outputs
-- **`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1`** - Disable DLL deployment for .dll outputs only (default: enabled)
-- **`CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1`** - Enable verbose logging (DEBUG level)
+- **`CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1`** - Disable automatic library deployment for all outputs (cross-platform)
+- **`CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1`** - Disable library deployment for shared library outputs only (.dll, .so, .dylib)
+- **`CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1`** - Enable verbose logging (DEBUG level)
 
 ### Example Usage
 
@@ -256,13 +256,13 @@ clang-tool-chain-cpp main.cpp -o program.exe
 # Run without PATH setup required
 .\program.exe  # Works in cmd.exe immediately!
 
-# Disable DLL deployment
-set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+# Disable library deployment
+set CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
 clang-tool-chain-cpp main.cpp -o program.exe
 # No DLLs copied
 
 # Verbose logging
-set CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1
+set CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1
 clang-tool-chain-cpp main.cpp -o program.exe
 # Output: Detailed DLL detection and copy logs
 ```
@@ -286,8 +286,8 @@ clang-tool-chain-cpp main.cpp -o program.exe
 - **MSVC ABI**: `clang-tool-chain-cpp-msvc` (uses MSVC runtime)
 - **Compile-only**: `-c` flag present (no executable produced)
 - **Non-.exe/.dll outputs**: `.o`, `.obj`, `.a`, `.lib` files
-- **Environment variable**: `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` set
-- **DLL outputs with opt-out**: `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1` set (for .dll only)
+- **Environment variable**: `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` set
+- **DLL outputs with opt-out**: `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1` set (for .dll only)
 
 ### Logging Levels
 
@@ -379,16 +379,15 @@ clang-tool-chain-cpp main.cpp -o program --deploy-dependencies -lunwind
 
 ### Cross-Platform Environment Variables
 
-For maximum compatibility, clang-tool-chain supports both legacy (Windows-specific) and modern (cross-platform) environment variables:
+clang-tool-chain uses unified cross-platform environment variables for library deployment:
 
-| Variable | Platform | Purpose | Status |
-|----------|----------|---------|--------|
-| `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS` | Windows (legacy) | Disable DLL deployment | ✅ Existing |
-| `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS` | All platforms | Disable library deployment | ✅ New |
-| `CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE` | Windows (legacy) | Verbose logging | ✅ Existing |
-| `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE` | All platforms | Verbose logging | ✅ New |
+| Variable | Platform | Purpose |
+|----------|----------|---------|
+| `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS` | All platforms | Disable library deployment for all outputs |
+| `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB` | All platforms | Disable library deployment for shared library outputs only (.dll, .so, .dylib) |
+| `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE` | All platforms | Enable verbose deployment logging |
 
-**Backward Compatibility**: All existing Windows-specific variables (`*_DLLS`, `*_DLL_*`) still work and will be honored alongside the modern cross-platform variables (`*_LIBS`, `*_LIB_*`).
+See [Environment Variables Documentation](docs/ENVIRONMENT_VARIABLES.md) for complete reference.
 
 ## Development Commands
 

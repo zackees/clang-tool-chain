@@ -207,12 +207,12 @@ class TestDependencyDeployment:
     """Test the post_link_dependency_deployment() function."""
 
     def test_opt_out_environment_variable(self):
-        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1 disables deployment."""
+        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1 disables deployment."""
         with WindowsSafeTemporaryDirectory() as tmpdir:
             dll_path = Path(tmpdir) / "test.dll"
             dll_path.touch()
 
-            with patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS": "1"}):
+            with patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS": "1"}):
                 # Should not raise, just skip
                 post_link_dependency_deployment(dll_path, "win", True)
 

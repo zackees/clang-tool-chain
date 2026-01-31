@@ -106,13 +106,13 @@ SUMMARY: AddressSanitizer: stack-buffer-overflow
 - UBSAN adds minimal overhead (~5-20%)
 - Use in debug/testing builds only, not production
 
-**Disabling DLL Deployment:**
+**Disabling Library Deployment:**
 
-To disable automatic sanitizer DLL deployment (advanced use):
+To disable automatic sanitizer library deployment (advanced use):
 ```bash
-export CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+export CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
 clang-tool-chain-cpp -fsanitize=address main.cpp -o main.exe
-# No DLLs deployed - you must manually manage dependencies
+# No libraries deployed - you must manually manage dependencies
 ```
 
 **See Also:**

@@ -674,11 +674,8 @@ clang-tool-chain-cpp main.cpp -o program --deploy-dependencies -lunwind
 
 **Disable deployment:**
 ```bash
-# Cross-platform (modern)
+# Cross-platform
 export CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
-
-# Windows-specific (legacy)
-export CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
 ```
 
 **Enable verbose logging:**
@@ -748,7 +745,7 @@ jobs:
 **Key Environment Variables:**
 - `CLANG_TOOL_CHAIN_DOWNLOAD_PATH` - Override installation location
 - `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS` - Disable automatic library deployment (all platforms)
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS` - Disable Windows DLL deployment (legacy, Windows only)
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB` - Disable library deployment for shared library outputs only
 - `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE` - Enable verbose library deployment logging
 - `CLANG_TOOL_CHAIN_USE_SYSTEM_LD` - Use system linker instead of LLD
 - `CLANG_TOOL_CHAIN_NO_DIRECTIVES` - Disable inlined build directives

@@ -35,6 +35,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from clang_tool_chain.env_utils import is_feature_disabled
+
 if TYPE_CHECKING:
     from clang_tool_chain.directives.parser import ParsedDirectives
 
@@ -111,6 +113,7 @@ class DirectivesTransformer(ArgumentTransformer):
 
     Environment Variables:
         CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to '1' to disable all automatic features
         CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE: Set to '1' to enable debug logging
     """
 
@@ -119,9 +122,8 @@ class DirectivesTransformer(ArgumentTransformer):
 
     def transform(self, args: list[str], context: ToolContext) -> list[str]:
         """Add arguments from inlined build directives in source files."""
-        # Check if directives are disabled
-        if os.environ.get("CLANG_TOOL_CHAIN_NO_DIRECTIVES") == "1":
-            logger.debug("Directives disabled via CLANG_TOOL_CHAIN_NO_DIRECTIVES=1")
+        # Check if directives are disabled (via NO_DIRECTIVES or NO_AUTO)
+        if is_feature_disabled("DIRECTIVES"):
             return args
 
         # Only apply to clang/clang++ compilation commands
@@ -306,6 +308,7 @@ class ASANRuntimeTransformer(ArgumentTransformer):
 
     Environment Variables:
         CLANG_TOOL_CHAIN_NO_SHARED_ASAN: Set to '1' to disable shared ASAN
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to '1' to disable all automatic features
     """
 
     def priority(self) -> int:
@@ -327,17 +330,14 @@ class ASANRuntimeTransformer(ArgumentTransformer):
         result = list(args)
         injected_flags = []
 
-        # Check if user disabled shared ASAN
-        if os.environ.get("CLANG_TOOL_CHAIN_NO_SHARED_ASAN") != "1":
-            # Check if -shared-libasan already present
-            if "-shared-libasan" not in args:
-                # Add -shared-libasan to use shared runtime library
-                # This prevents undefined symbol errors during linking
-                logger.info("Adding -shared-libasan for ASAN runtime linking on Linux")
-                result = ["-shared-libasan"] + result
-                injected_flags.append("-shared-libasan")
-        else:
-            logger.debug("Shared ASAN disabled via CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1")
+        # Check if user disabled shared ASAN (via NO_SHARED_ASAN or NO_AUTO)
+        # Also check if -shared-libasan already present
+        if not is_feature_disabled("SHARED_ASAN") and "-shared-libasan" not in args:
+            # Add -shared-libasan to use shared runtime library
+            # This prevents undefined symbol errors during linking
+            logger.info("Adding -shared-libasan for ASAN runtime linking on Linux")
+            result = ["-shared-libasan"] + result
+            injected_flags.append("-shared-libasan")
 
         # Check if building a shared library with ASAN
         # Shared libraries need to allow undefined symbols that will be provided
@@ -378,6 +378,7 @@ class RPathTransformer(ArgumentTransformer):
 
     Environment Variables:
         CLANG_TOOL_CHAIN_NO_RPATH: Set to '1' to disable automatic rpath injection
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to '1' to disable all automatic features
     """
 
     def priority(self) -> int:
@@ -401,9 +402,8 @@ class RPathTransformer(ArgumentTransformer):
         if not has_deploy_flag and not deploy_from_env:
             return args
 
-        # Check if user disabled rpath
-        if os.environ.get("CLANG_TOOL_CHAIN_NO_RPATH") == "1":
-            logger.debug("Rpath injection disabled via CLANG_TOOL_CHAIN_NO_RPATH=1")
+        # Check if user disabled rpath (via NO_RPATH or NO_AUTO)
+        if is_feature_disabled("RPATH"):
             return args
 
         # Check if rpath already present

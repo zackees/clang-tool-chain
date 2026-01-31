@@ -17,6 +17,8 @@ import logging
 import os
 import shutil
 
+from clang_tool_chain.env_utils import is_feature_disabled
+
 logger = logging.getLogger(__name__)
 
 # Default options to inject for optimal stack traces
@@ -132,6 +134,7 @@ def prepare_sanitizer_environment(
     Environment Variables:
         CLANG_TOOL_CHAIN_NO_SANITIZER_ENV: Set to "1", "true", or "yes" to
             disable automatic injection of sanitizer options.
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to "1" to disable all automatic features.
         ASAN_OPTIONS: If already set, preserved as-is (user config takes priority).
         LSAN_OPTIONS: If already set, preserved as-is (user config takes priority).
         ASAN_SYMBOLIZER_PATH: If already set, preserved as-is (user config takes priority).
@@ -144,9 +147,8 @@ def prepare_sanitizer_environment(
     """
     env = base_env.copy() if base_env is not None else os.environ.copy()
 
-    # Check if disabled via environment variable
-    if os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", "").lower() in ("1", "true", "yes"):
-        logger.debug("Sanitizer environment injection disabled via CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+    # Check if disabled via environment variable (NO_SANITIZER_ENV or NO_AUTO)
+    if is_feature_disabled("SANITIZER_ENV"):
         return env
 
     # If no compiler flags provided, don't inject anything (safe default)

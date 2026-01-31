@@ -138,7 +138,7 @@ uv run pytest tests/test_execution_core_deployment.py -v
 - MinGW DLL filtering (excludes Windows system DLLs)
 - Hard link optimization with copy fallback
 - Timestamp checking (skip if up-to-date)
-- Environment variable controls (`NO_DEPLOY_DLLS`, `DLL_DEPLOY_VERBOSE`)
+- Environment variable controls (`NO_DEPLOY_LIBS`, `LIB_DEPLOY_VERBOSE`)
 - Shared library (.dll) deployment with opt-out
 - Heuristic fallback when llvm-objdump fails
 
@@ -218,11 +218,9 @@ class TestLinuxSoDeployment:
 
 All deployment tests verify environment variable behavior:
 
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` - Disable DLL deployment (Windows legacy)
 - `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` - Disable library deployment (all platforms)
-- `CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1` - Verbose DLL logging (Windows legacy)
 - `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1` - Verbose library logging (all platforms)
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1` - Disable deployment for .dll outputs only
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1` - Disable deployment for shared library outputs only (.dll, .so, .dylib)
 
 ### See Also
 

@@ -12,6 +12,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from clang_tool_chain.env_utils import is_feature_disabled
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 
 from .base_deployer import BaseLibraryDeployer
@@ -510,9 +511,10 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
         None
 
     Environment Variables:
-        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS: Set to "1" to disable all DLL deployment
-        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS: Set to "1" to disable deployment for .dll outputs only
-        CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE: Set to "1" for verbose logging
+        CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS: Set to "1" to disable all library deployment
+        CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB: Set to "1" to disable deployment for shared library outputs only
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to "1" to disable all automatic features
+        CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE: Set to "1" for verbose logging
 
     Examples:
         >>> post_link_dll_deployment(Path("test.exe"), "win", True)
@@ -520,13 +522,12 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
         >>> post_link_dll_deployment(Path("mylib.dll"), "win", True)
         # Deploys runtime DLLs alongside the shared library
     """
-    # Check opt-out environment variable
-    if os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS") == "1":
-        logger.debug("DLL deployment disabled via CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS")
+    # Check opt-out environment variable (via NO_DEPLOY_LIBS or NO_AUTO)
+    if is_feature_disabled("DEPLOY_LIBS"):
         return
 
     # Enable verbose logging if requested
-    if os.environ.get("CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE") == "1":
+    if os.environ.get("CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE") == "1":
         logger.setLevel(logging.DEBUG)
 
     # Guard: only deploy on Windows
@@ -542,9 +543,8 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
     # Guard: only deploy for .exe and .dll files
     suffix = output_exe_path.suffix.lower()
     if suffix == ".dll":
-        # Check for DLL-specific opt-out
-        if os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS") == "1":
-            logger.debug("DLL deployment for .dll outputs disabled via CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS")
+        # Check for shared library-specific opt-out (via NO_DEPLOY_SHARED_LIB or NO_AUTO)
+        if is_feature_disabled("DEPLOY_SHARED_LIB"):
             return
     elif suffix != ".exe":
         logger.debug(f"DLL deployment skipped: not .exe or .dll file (suffix={output_exe_path.suffix})")
@@ -596,10 +596,9 @@ def post_link_dependency_deployment(output_path: Path, platform_name: str, use_g
         None
 
     Environment Variables:
-        CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS: Set to "1" to disable deployment (all platforms)
-        CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS: Set to "1" to disable deployment (alias)
-        CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE: Set to "1" for verbose logging (all platforms)
-        CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE: Set to "1" for verbose logging (alias)
+        CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS: Set to "1" to disable all library deployment
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to "1" to disable all automatic features
+        CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE: Set to "1" for verbose logging
 
     Examples:
         >>> post_link_dependency_deployment(Path("mylib.dll"), "win", True)
@@ -609,17 +608,11 @@ def post_link_dependency_deployment(output_path: Path, platform_name: str, use_g
         >>> post_link_dependency_deployment(Path("mylib.dylib"), "darwin", False)
         # Deploys libunwind.1.dylib, libc++.1.dylib, etc. to mylib.dylib directory
     """
-    # Check opt-out environment variables (either DLL-specific or generic)
-    if os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS") == "1":
-        logger.debug("Dependency deployment disabled via CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS")
-        return
-    if os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS") == "1":
-        logger.debug("Dependency deployment disabled via CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS")
+    # Check opt-out environment variables (NO_DEPLOY_LIBS or NO_AUTO)
+    if is_feature_disabled("DEPLOY_LIBS"):
         return
 
-    # Enable verbose logging if requested (either DLL-specific or generic)
-    if os.environ.get("CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE") == "1":
-        logger.setLevel(logging.DEBUG)
+    # Enable verbose logging if requested
     if os.environ.get("CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE") == "1":
         logger.setLevel(logging.DEBUG)
 

@@ -171,7 +171,7 @@ clang-tool-chain-cpp hello.cpp -o hello.exe
 
 **Disable deployment:**
 ```bash
-set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+set CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
 ```
 
 See [DLL Deployment Guide](DLL_DEPLOYMENT.md) for comprehensive details.
@@ -226,7 +226,7 @@ DLL deployment should be automatic. If it fails:
 
 ```bash
 # Enable verbose logging
-set CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1
+set CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1
 clang-tool-chain-cpp main.cpp -o program.exe
 
 # Or manually copy DLLs

@@ -53,39 +53,39 @@ Disable automatic SDK injection (not recommended):
 export CLANG_TOOL_CHAIN_NO_SYSROOT=1
 ```
 
-### Windows DLL Deployment
+### Library Deployment (Cross-Platform)
 
-**`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS`**
+**`CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS`**
 
-Disable automatic DLL deployment for all outputs:
+Disable automatic library deployment for all outputs (Windows DLLs, Linux .so, macOS .dylib):
 
 ```bash
 # Windows (cmd)
-set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+set CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
 
 # Windows (PowerShell)
-$env:CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS = "1"
+$env:CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS = "1"
 
-# Git Bash
-export CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+# Linux/macOS/Git Bash
+export CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
 ```
 
-**`CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS`**
+**`CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB`**
 
-Disable DLL deployment for .dll outputs only (default: enabled):
+Disable library deployment for shared library outputs only (.dll, .so, .dylib):
 
 ```bash
-set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1
+set CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1
 ```
 
-**`CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE`**
+**`CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE`**
 
-Enable verbose logging for DLL deployment:
+Enable verbose logging for library deployment:
 
 ```bash
-set CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1
+set CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1
 clang-tool-chain-cpp main.cpp -o program.exe
-# Output: Detailed DLL detection and copy logs
+# Output: Detailed library detection and copy logs
 ```
 
 ### Linker Configuration
@@ -268,8 +268,8 @@ clang-tool-chain install cosmocc
 ### Windows GNU ABI without DLL Deployment
 
 ```bash
-# Disable automatic DLL deployment
-set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+# Disable automatic library deployment
+set CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
 
 # Compile (no DLLs copied)
 clang-tool-chain-cpp main.cpp -o program.exe

@@ -101,13 +101,13 @@ clang-tool-chain-cpp hello.cpp -o hello.exe
 - **MSVC ABI**: `clang-tool-chain-cpp-msvc` uses MSVC runtime instead
 - **Compile-only**: `-c` flag present (no linking)
 - **Non-executable outputs**: `.o`, `.obj`, `.a`, `.lib` files
-- **Environment variable**: `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` or `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1`
+- **Environment variable**: `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1`
 
 #### Environment Variables
 
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` - Disable DLL deployment for all outputs
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1` - Disable for `.dll` outputs only (`.exe` still deployed)
-- `CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1` - Enable verbose DEBUG logging
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` - Disable library deployment for all outputs
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1` - Disable for `.dll` outputs only (`.exe` still deployed)
+- `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1` - Enable verbose DEBUG logging
 
 #### Performance
 
@@ -375,15 +375,13 @@ clang-tool-chain-cpp main.cpp -o program --deploy-dependencies
 # INFO: Deployed 1 shared library for program
 ```
 
-### Legacy Windows-Specific Variables (Backward Compatible)
+### Shared Library Output Control
 
-| Variable | Platform | Purpose | Notes |
-|----------|----------|---------|-------|
-| `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS` | Windows | Disable DLL deployment | Checked alongside `NO_DEPLOY_LIBS` |
-| `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS` | Windows | Disable for `.dll` outputs only | `.exe` still deployed |
-| `CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE` | Windows | Verbose DLL logging | Checked alongside `LIB_DEPLOY_VERBOSE` |
+| Variable | Platform | Purpose |
+|----------|----------|---------|
+| `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB` | All | Disable for shared library outputs only (.dll, .so, .dylib) |
 
-**Backward Compatibility**: All legacy Windows variables (`*_DLLS`, `*_DLL_*`) are honored alongside modern variables (`*_LIBS`, `*_LIB_*`). If either is set, the behavior applies.
+Use `NO_DEPLOY_SHARED_LIB` when you want runtime libraries deployed alongside executables, but not alongside shared library outputs (e.g., when building plugins or libraries that will be loaded by other executables).
 
 ---
 
@@ -409,7 +407,7 @@ clang-tool-chain-cpp main.cpp -o program --deploy-dependencies
 - **Compile-only mode**: `-c` flag present (no linking, no deployment)
 - **Non-executable outputs**: `.o`, `.obj`, `.a`, `.lib` files
 - **MSVC ABI** (Windows): Uses MSVC runtime instead of MinGW
-- **Environment variable disabled**: `NO_DEPLOY_LIBS=1` or `NO_DEPLOY_DLLS=1`
+- **Environment variable disabled**: `NO_DEPLOY_LIBS=1`
 - **Linux/macOS without flag**: `--deploy-dependencies` not specified
 
 ---
@@ -706,13 +704,10 @@ A: No, deployment is **non-fatal**:
 
 **Q: How do I disable deployment entirely?**
 
-A: Use environment variables:
+A: Use the cross-platform environment variable:
 ```bash
 # Disable on all platforms
 export CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
-
-# Windows-specific (legacy)
-export CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
 ```
 
 **Q: Can I test if deployment works without building?**

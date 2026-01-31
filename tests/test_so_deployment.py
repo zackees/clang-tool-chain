@@ -349,22 +349,10 @@ class TestSoDeployerEnvironmentVariables:
         count = post_link_so_deployment(exe)
         assert count == 0
 
-    def test_post_link_respects_no_deploy_so(self, tmp_path, monkeypatch):
-        """Test CLANG_TOOL_CHAIN_NO_DEPLOY_SO disables deployment."""
-        monkeypatch.setenv("CLANG_TOOL_CHAIN_NO_DEPLOY_SO", "1")
-
-        exe = tmp_path / "program"
-        exe.write_text("mock executable")
-        exe.chmod(0o755)
-
-        count = post_link_so_deployment(exe)
-        assert count == 0
-
     def test_post_link_allows_deployment_by_default(self, tmp_path, monkeypatch):
         """Test deployment is allowed when env vars not set."""
         # Ensure env vars are not set
         monkeypatch.delenv("CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS", raising=False)
-        monkeypatch.delenv("CLANG_TOOL_CHAIN_NO_DEPLOY_SO", raising=False)
 
         exe = tmp_path / "program"
         exe.write_text("mock executable")

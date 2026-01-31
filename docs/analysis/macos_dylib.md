@@ -911,12 +911,12 @@ def resign_binary(binary_path: str):
         logger.warning(f"Failed to re-sign {binary_path}")
 ```
 
-### 6. Environment Variables (Parity with Windows)
+### 6. Environment Variables (Cross-Platform)
 
-**Proposed:**
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS=1` - Disable automatic dylib deployment
-- `CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS_FOR_DYLIBS=1` - Disable deployment for .dylib outputs only
-- `CLANG_TOOL_CHAIN_DYLIB_DEPLOY_VERBOSE=1` - Enable verbose logging
+**Implemented:**
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` - Disable automatic library deployment
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1` - Disable deployment for .dylib outputs only
+- `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1` - Enable verbose logging
 
 ### 7. Opt-Out Conditions
 
@@ -924,8 +924,8 @@ def resign_binary(binary_path: str):
 - Platform is not macOS
 - Compile-only (`-c` flag)
 - Output is not an executable or .dylib (.o, .a files)
-- Environment variable `CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS=1`
-- Output is .dylib and `CLANG_TOOL_CHAIN_NO_DEPLOY_DYLIBS_FOR_DYLIBS=1`
+- Environment variable `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1`
+- Output is .dylib and `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1`
 
 ### 8. Logging
 

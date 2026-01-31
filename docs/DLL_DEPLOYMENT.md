@@ -227,23 +227,23 @@ clang-tool-chain-cpp main.cpp -o main.exe -static-libgcc -static-libstdc++
 
 ## Environment Variables
 
-### `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS`
+### `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS`
 
-**Purpose:** Completely disable automatic DLL deployment
+**Purpose:** Completely disable automatic library deployment (cross-platform)
 
 **Usage:**
 ```bash
 # Windows (CMD)
-set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+set CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
 clang-tool-chain-cpp main.cpp -o main.exe
 # No DLLs copied
 
 # Windows (PowerShell)
-$env:CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS="1"
+$env:CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS="1"
 clang-tool-chain-cpp main.cpp -o main.exe
 
 # Windows (Git Bash)
-export CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+export CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
 clang-tool-chain-cpp main.cpp -o main.exe
 ```
 
@@ -253,13 +253,13 @@ clang-tool-chain-cpp main.cpp -o main.exe
 - Testing executable in environment with DLLs in PATH
 - Debugging DLL-related issues
 
-### `CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE`
+### `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE`
 
-**Purpose:** Enable verbose logging (DEBUG level) for DLL deployment
+**Purpose:** Enable verbose logging (DEBUG level) for library deployment
 
 **Usage:**
 ```bash
-set CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1
+set CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1
 clang-tool-chain-cpp main.cpp -o main.exe
 ```
 
@@ -372,10 +372,10 @@ Total: 0.505s (1% overhead)
 4. **Environment variable set**
    ```bash
    # Problem: DLL deployment disabled
-   set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+   set CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
 
    # Solution: Unset variable
-   set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=
+   set CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=
    ```
 
 5. **Non-Windows platform**
@@ -394,7 +394,7 @@ Total: 0.505s (1% overhead)
 
 1. **Enable verbose logging:**
    ```bash
-   set CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1
+   set CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1
    clang-tool-chain-cpp main.cpp -o main.exe
    # Review DEBUG logs to see detected DLLs
    ```
@@ -484,7 +484,7 @@ WARNING: llvm-objdump failed (exit 1), using heuristic DLL list
    ```bash
    # Check if another process is touching the DLLs
    # Use verbose logging to see timestamp comparison
-   set CLANG_TOOL_CHAIN_DLL_DEPLOY_VERBOSE=1
+   set CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE=1
    clang-tool-chain-cpp main.cpp -o main.exe
    ```
 
@@ -599,7 +599,7 @@ if returncode == 0 and platform_name == "win":
 
 ### Q: Can I disable DLL deployment?
 
-**A:** Yes. Set `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` environment variable.
+**A:** Yes. Set `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` environment variable.
 
 ### Q: What happens if a required DLL is missing from the sysroot?
 
@@ -613,7 +613,7 @@ if returncode == 0 and platform_name == "win":
 
 **A:** Not directly. DLL detection is automatic based on the executable's PE headers. However, you can:
 - Use `-static-libgcc -static-libstdc++` to reduce dependencies
-- Set `CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1` and deploy DLLs manually
+- Set `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` and deploy DLLs manually
 
 ### Q: What if I want to deploy DLLs to a different location?
 
@@ -645,7 +645,7 @@ If you need custom DLL deployment logic:
 
 1. **Disable automatic deployment:**
    ```bash
-   set CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1
+   set CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1
    ```
 
 2. **Detect required DLLs programmatically:**

@@ -411,7 +411,7 @@ class TestPostLinkDllDeployment:
 
     def test_deployment_disabled_by_env_var(self):
         """Test that deployment can be disabled via environment variable."""
-        with patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS": "1"}):
+        with patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS": "1"}):
             # Should return early without doing anything
             post_link_dll_deployment(Path("test.exe"), "win", True)
             # No exceptions = success
@@ -623,7 +623,7 @@ int main() {
 
     @pytest.mark.skipif(os.name != "nt", reason="Windows-only test")
     def test_dll_deployment_skipped_with_env_var(self):
-        """Test that DLL deployment is skipped when CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1."""
+        """Test that DLL deployment is skipped when CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
@@ -643,9 +643,9 @@ int main() {
             from clang_tool_chain.execution.core import run_tool
 
             exe_path = tmpdir_path / "test.exe"
-            old_env = os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS")
+            old_env = os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS")
             try:
-                os.environ["CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS"] = "1"
+                os.environ["CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS"] = "1"
                 result = run_tool("clang++", [str(test_cpp), "-o", str(exe_path)])
 
                 # Verify build succeeded
@@ -659,9 +659,9 @@ int main() {
             finally:
                 # Restore environment
                 if old_env is None:
-                    os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS", None)
+                    os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS", None)
                 else:
-                    os.environ["CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS"] = old_env
+                    os.environ["CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS"] = old_env
 
     @pytest.mark.skipif(os.name != "nt", reason="Windows-only test")
     def test_compile_only_no_dll_deployment(self):
@@ -1597,8 +1597,8 @@ class TestDllDeploymentForDllOutputs:
                 patch("clang_tool_chain.deployment.dll_deployer._find_dll_in_toolchain_impl") as mock_find_dll,
             ):
                 # Clear any existing opt-out env vars
-                os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS", None)
-                os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS", None)
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS", None)
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB", None)
 
                 mock_get_platform_info.return_value = ("win", "x86_64")
                 mock_detect_deps.return_value = ["libwinpthread-1.dll"]
@@ -1622,7 +1622,7 @@ class TestDllDeploymentForDllOutputs:
                 assert mock_detect_deps.call_count >= 1, "detect_dependencies should be called at least once"
 
     def test_deployment_for_dll_output_disabled_by_env_var(self):
-        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS=1 disables deployment for .dll."""
+        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB=1 disables deployment for .dll."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
@@ -1633,7 +1633,7 @@ class TestDllDeploymentForDllOutputs:
             # Set the env var to disable DLL deployment for .dll outputs
             # Mock to ensure it would be called if not disabled
             with (
-                patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS": "1"}),
+                patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB": "1"}),
                 patch("clang_tool_chain.deployment.dll_deployer.detect_required_dlls") as mock_detect_dlls,
             ):
                 # Run deployment for .dll output
@@ -1642,8 +1642,8 @@ class TestDllDeploymentForDllOutputs:
                 # Verify detect_required_dlls was NOT called (deployment was skipped)
                 mock_detect_dlls.assert_not_called()
 
-    def test_deployment_for_exe_not_affected_by_dll_env_var(self):
-        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS does not affect .exe deployment."""
+    def test_deployment_for_exe_not_affected_by_shared_lib_env_var(self):
+        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB does not affect .exe deployment."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
@@ -1653,7 +1653,7 @@ class TestDllDeploymentForDllOutputs:
 
             # Set the env var to disable DLL deployment for .dll outputs only
             with (
-                patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS": "1"}),
+                patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB": "1"}),
                 patch("clang_tool_chain.platform.detection.get_platform_info") as mock_get_platform_info,
                 patch("clang_tool_chain.deployment.dll_deployer.DllDeployer.detect_dependencies") as mock_detect_deps,
                 patch("clang_tool_chain.deployment.dll_deployer._find_dll_in_toolchain_impl") as mock_find_dll,
@@ -1669,7 +1669,7 @@ class TestDllDeploymentForDllOutputs:
                 mock_detect_deps.assert_called_once()
 
     def test_global_opt_out_still_works_for_dll(self):
-        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS=1 disables deployment for both .exe and .dll."""
+        """Test that CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1 disables deployment for both .exe and .dll."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
@@ -1681,7 +1681,7 @@ class TestDllDeploymentForDllOutputs:
 
             # Set the global opt-out env var
             with (
-                patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS": "1"}),
+                patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS": "1"}),
                 patch("clang_tool_chain.deployment.dll_deployer.detect_required_dlls") as mock_detect_dlls,
             ):
                 # Run deployment for both
@@ -1743,9 +1743,9 @@ extern "C" __declspec(dllexport) int add(int a, int b) {
             from clang_tool_chain.execution.core import run_tool
 
             dll_path = tmpdir_path / "mylib.dll"
-            old_env = os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS")
+            old_env = os.environ.get("CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB")
             try:
-                os.environ["CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS"] = "1"
+                os.environ["CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB"] = "1"
                 result = run_tool("clang++", ["-shared", str(lib_cpp), "-o", str(dll_path)])
 
                 # Verify build succeeded
@@ -1759,9 +1759,9 @@ extern "C" __declspec(dllexport) int add(int a, int b) {
             finally:
                 # Restore environment
                 if old_env is None:
-                    os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS", None)
+                    os.environ.pop("CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB", None)
                 else:
-                    os.environ["CLANG_TOOL_CHAIN_NO_DEPLOY_DLLS_FOR_DLLS"] = old_env
+                    os.environ["CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB"] = old_env
 
 
 class TestExtractOutputPathForDlls:

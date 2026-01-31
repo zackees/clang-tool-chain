@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import NoReturn
 
 from clang_tool_chain.directives import DirectiveParser
+from clang_tool_chain.env_utils import is_feature_disabled
 from clang_tool_chain.execution.core import run_tool
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 
@@ -109,9 +110,13 @@ def _get_directive_args(source_path: Path) -> list[str]:
 
     Returns:
         List of compiler/linker arguments derived from directives
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to '1' to disable all automatic features
     """
-    # Check if directives parsing is disabled via environment variable
-    if os.environ.get("CLANG_TOOL_CHAIN_NO_DIRECTIVES", "").lower() in ("1", "true", "yes"):
+    # Check if directives parsing is disabled (via NO_DIRECTIVES or NO_AUTO)
+    if is_feature_disabled("DIRECTIVES"):
         return []
 
     try:
