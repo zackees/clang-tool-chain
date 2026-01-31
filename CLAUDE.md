@@ -37,13 +37,13 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 | macOS    | x86_64      | 21.1.6            | ld64.lld    | -                    |
 | macOS    | arm64       | 21.1.6            | ld64.lld    | -                    |
 | Windows  | x86_64      | 21.1.5            | lld         | MinGW-w64 (integrated) |
-| Linux    | x86_64      | 21.1.5            | lld         | -                    |
-| Linux    | arm64       | 21.1.5            | lld         | -                    |
+| Linux    | x86_64      | 21.1.5            | lld         | libunwind (bundled)  |
+| Linux    | arm64       | 21.1.5            | lld         | libunwind (bundled)  |
 
 *Version information as of January 17, 2026*
 
 **Linker Notes:**
-- **macOS**: Uses `-fuse-ld=ld64.lld` on LLVM 21.x+ (explicit Mach-O linker). On older LLVM versions, automatically falls back to `-fuse-ld=lld` with a compatibility notice to stderr. GNU-style flags like `--no-undefined` are automatically translated to ld64 equivalents (`-undefined error`).
+- **macOS**: Uses `-fuse-ld=ld64.lld` on LLVM 21.x+ (explicit Mach-O linker). On older LLVM versions, automatically falls back to `-fuse-ld=lld` with a compatibility notice to stderr. GNU-style flags are automatically translated to ld64 equivalents: `--no-undefined` → `-undefined error`, `--fatal-warnings` → `-fatal_warnings`. Flags with no equivalent (like `--allow-shlib-undefined`) are removed with a warning. Set `CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1` to suppress the warning.
 - **Linux/Windows**: Uses LLVM lld for faster linking and cross-platform consistency
 - **Opt-out**: Set `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` to use the system linker instead of bundled LLD
 
@@ -139,6 +139,77 @@ For more information: https://github.com/jart/cosmopolitan
 - Bundled Node.js runtime
 - **Cosmopolitan Libc support for Actually Portable Executables (APE)**
 - **Inlined Build Directives for self-contained source files** (NEW)
+- **Bundled libunwind for Linux** (headers + shared library, no system packages required)
+
+## Bundled libunwind (Linux)
+
+On Linux, clang-tool-chain bundles libunwind headers and shared libraries, providing a complete self-contained solution for stack unwinding without requiring system packages.
+
+### What's Bundled
+
+| Component | Files | Size |
+|-----------|-------|------|
+| Headers | `libunwind.h`, `libunwind-common.h`, `libunwind-x86_64.h`/`libunwind-aarch64.h`, `libunwind-dynamic.h`, `libunwind-ptrace.h`, `unwind.h` | ~20 KB |
+| Libraries | `libunwind.so.*`, `libunwind-x86_64.so.*` (or `aarch64`) | ~300 KB |
+
+### How It Works
+
+When compiling on Linux, clang-tool-chain automatically:
+1. Adds `-I<clang_root>/include` for bundled libunwind headers
+2. Adds `-L<clang_root>/lib` for bundled libunwind libraries
+3. Adds `-Wl,-rpath,<clang_root>/lib` so executables find libunwind at runtime
+
+This means `#include <libunwind.h>` and `-lunwind` work out of the box without installing `libunwind-dev`.
+
+### Usage Example
+
+```c
+// test_unwind.c
+#include <stdio.h>
+#include <libunwind.h>
+
+void print_backtrace() {
+    unw_cursor_t cursor;
+    unw_context_t context;
+    unw_getcontext(&context);
+    unw_init_local(&cursor, &context);
+
+    while (unw_step(&cursor) > 0) {
+        char name[256];
+        unw_word_t offset;
+        unw_get_proc_name(&cursor, name, sizeof(name), &offset);
+        printf("  %s+0x%lx\n", name, (unsigned long)offset);
+    }
+}
+
+int main() {
+    print_backtrace();
+    return 0;
+}
+```
+
+```bash
+# Compile and link with bundled libunwind
+clang-tool-chain-c test_unwind.c -lunwind -o test_unwind
+
+# Run without LD_LIBRARY_PATH - works due to embedded rpath
+./test_unwind
+```
+
+### Environment Variables
+
+- **`CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND=1`** - Disable bundled libunwind (use system libunwind instead)
+
+### Platform Support
+
+| Platform | libunwind.h | libunwind.so |
+|----------|-------------|--------------|
+| Linux x86_64 | ✅ Bundled | ✅ Bundled |
+| Linux ARM64 | ✅ Bundled | ✅ Bundled |
+| Windows | ✅ MinGW sysroot | ✅ MinGW sysroot |
+| macOS | System | System |
+
+**Note:** Building Linux archives with bundled libunwind requires Docker. The archive build pipeline uses `docker run ubuntu:22.04` to extract libunwind from Debian packages.
 
 ## Inlined Build Directives
 

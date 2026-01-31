@@ -12,6 +12,7 @@ import logging
 import os
 import sys
 
+from clang_tool_chain.env_utils import is_feature_disabled
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 from clang_tool_chain.llvm_versions import get_llvm_version_tuple, supports_ld64_lld_flag
 
@@ -187,12 +188,15 @@ def _translate_linker_flags_for_macos_lld(args: list[str]) -> list[str]:
     Translate GNU ld linker flags to ld64.lld equivalents for macOS.
 
     When using lld on macOS (ld64.lld), certain GNU ld flags need to be
-    translated to their Mach-O equivalents:
+    translated to their Mach-O equivalents or removed:
     - --no-undefined -> -undefined error
     - --fatal-warnings -> -fatal_warnings
-    - More translations can be added as needed
+    - --allow-shlib-undefined -> (removed, ld64 allows undefined symbols by default)
 
     This function processes both direct linker flags and flags passed via -Wl,
+
+    A warning is printed to stderr when flags are removed, unless silenced via
+    CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1.
 
     Args:
         args: Original compiler arguments
@@ -201,11 +205,18 @@ def _translate_linker_flags_for_macos_lld(args: list[str]) -> list[str]:
         Modified arguments with translated linker flags
     """
     # Map of GNU ld flags to ld64.lld equivalents
-    flag_translations = {
+    # None means the flag should be removed (no equivalent needed)
+    flag_translations: dict[str, str | None] = {
         "--no-undefined": "-undefined error",
         "--fatal-warnings": "-fatal_warnings",
+        # --allow-shlib-undefined: ld64 allows undefined symbols in dylibs by default,
+        # so this flag is a no-op on macOS. We remove it entirely.
+        "--allow-shlib-undefined": None,
         # Add more translations as needed
     }
+
+    # Track removed flags for warning
+    removed_flags: list[str] = []
 
     result = []
     i = 0
@@ -221,14 +232,18 @@ def _translate_linker_flags_for_macos_lld(args: list[str]) -> list[str]:
             for flag in linker_flags:
                 # Check if this flag needs translation
                 if flag in flag_translations:
-                    # Translate the flag (may result in multiple flags)
                     translated = flag_translations[flag]
-                    if " " in translated:
+                    if translated is None:
+                        # Flag should be removed entirely (no equivalent on macOS)
+                        removed_flags.append(flag)
+                        logger.debug(f"Removed linker flag (no macOS equivalent): {flag}")
+                    elif " " in translated:
                         # Multiple flags (e.g., "-undefined error")
                         translated_flags.extend(translated.split())
+                        logger.debug(f"Translated linker flag: {flag} -> {translated}")
                     else:
                         translated_flags.append(translated)
-                    logger.debug(f"Translated linker flag: {flag} -> {translated}")
+                        logger.debug(f"Translated linker flag: {flag} -> {translated}")
                 else:
                     translated_flags.append(flag)
 
@@ -239,18 +254,33 @@ def _translate_linker_flags_for_macos_lld(args: list[str]) -> list[str]:
         # Handle standalone linker flags passed directly
         elif arg in flag_translations:
             translated = flag_translations[arg]
-            logger.debug(f"Translated linker flag: {arg} -> {translated}")
-            # Add via -Wl, to pass to linker
-            if " " in translated:
-                # Multiple flags
-                result.append("-Wl," + ",".join(translated.split()))
+            if translated is None:
+                # Flag should be removed entirely (no equivalent on macOS)
+                removed_flags.append(arg)
+                logger.debug(f"Removed linker flag (no macOS equivalent): {arg}")
             else:
-                result.append("-Wl," + translated)
+                logger.debug(f"Translated linker flag: {arg} -> {translated}")
+                # Add via -Wl, to pass to linker
+                if " " in translated:
+                    # Multiple flags
+                    result.append("-Wl," + ",".join(translated.split()))
+                else:
+                    result.append("-Wl," + translated)
 
         else:
             result.append(arg)
 
         i += 1
+
+    # Emit warning for removed flags (unless silenced)
+    if removed_flags and not is_feature_disabled("LINKER_COMPAT_NOTE"):
+        import sys
+
+        print(
+            f"clang-tool-chain: note: removed GNU linker flags not supported by ld64.lld: "
+            f"{', '.join(removed_flags)} (disable with CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1)",
+            file=sys.stderr,
+        )
 
     return result
 

@@ -14,9 +14,12 @@ The Chain of Responsibility pattern allows:
 
 Architecture:
     ArgumentTransformer (ABC)
-        ├── MacOSSDKTransformer (priority=100)
         ├── DirectivesTransformer (priority=50)
+        ├── MacOSSDKTransformer (priority=100)
+        ├── LinuxUnwindTransformer (priority=150)
         ├── LLDLinkerTransformer (priority=200)
+        ├── ASANRuntimeTransformer (priority=250)
+        ├── RPathTransformer (priority=275)
         ├── GNUABITransformer (priority=300)
         └── MSVCABITransformer (priority=300)
 
@@ -203,6 +206,86 @@ class MacOSSDKTransformer(ArgumentTransformer):
 
         logger.debug("Checking if macOS sysroot needs to be added")
         return _add_macos_sysroot_if_needed(args)
+
+
+class LinuxUnwindTransformer(ArgumentTransformer):
+    """
+    Transformer for adding bundled libunwind include/library paths on Linux.
+
+    Priority: 150 (runs after SDK but before linker)
+
+    This transformer adds include and library paths for the bundled libunwind
+    headers and libraries on Linux. This allows compilation of code that uses
+    libunwind without requiring system libunwind-dev to be installed.
+
+    When libunwind.h exists in the clang toolchain's include directory:
+    - Adds -I<clang_root>/include for header discovery
+    - Adds -L<clang_root>/lib for library discovery
+    - Adds -Wl,-rpath,<clang_root>/lib for runtime library discovery
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND: Set to '1' to disable bundled libunwind
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to '1' to disable all automatic features
+    """
+
+    def priority(self) -> int:
+        return 150
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Add bundled libunwind paths if available on Linux."""
+        # Only applies to Linux clang/clang++
+        if context.platform_name != "linux" or context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Check if disabled (via NO_BUNDLED_UNWIND or NO_AUTO)
+        if is_feature_disabled("BUNDLED_UNWIND"):
+            return args
+
+        # Check if compile-only (no linking)
+        is_compile_only = "-c" in args
+
+        try:
+            from clang_tool_chain.platform.detection import get_platform_binary_dir
+
+            clang_bin = get_platform_binary_dir()
+            clang_root = clang_bin.parent
+
+            # Check if bundled libunwind.h exists
+            libunwind_header = clang_root / "include" / "libunwind.h"
+            if not libunwind_header.exists():
+                logger.debug("Bundled libunwind.h not found, skipping LinuxUnwindTransformer")
+                return args
+
+            result = list(args)
+            include_dir = clang_root / "include"
+            lib_dir = clang_root / "lib"
+
+            # Add include path (always needed for compilation)
+            include_flag = f"-I{include_dir}"
+            if include_flag not in args:
+                result = [include_flag] + result
+                logger.debug(f"Adding bundled libunwind include path: {include_flag}")
+
+            # Add library path and rpath (only for linking)
+            if not is_compile_only:
+                lib_flag = f"-L{lib_dir}"
+                if lib_flag not in args:
+                    result = [lib_flag] + result
+                    logger.debug(f"Adding bundled libunwind library path: {lib_flag}")
+
+                # Add rpath so runtime can find libunwind.so
+                rpath_flag = f"-Wl,-rpath,{lib_dir}"
+                # Check if any rpath to our lib dir already exists
+                has_our_rpath = any(str(lib_dir) in arg and "-rpath" in arg for arg in args)
+                if not has_our_rpath:
+                    result = [rpath_flag] + result
+                    logger.debug(f"Adding bundled libunwind rpath: {rpath_flag}")
+
+            return result
+
+        except Exception as e:
+            logger.debug(f"LinuxUnwindTransformer error: {e}")
+            return args
 
 
 class LLDLinkerTransformer(ArgumentTransformer):
@@ -535,11 +618,12 @@ def create_default_pipeline() -> ArgumentPipeline:
     This includes all standard transformers in their default priority order:
     1. DirectivesTransformer (priority=50)
     2. MacOSSDKTransformer (priority=100)
-    3. LLDLinkerTransformer (priority=200)
-    4. ASANRuntimeTransformer (priority=250)
-    5. RPathTransformer (priority=275)
-    6. GNUABITransformer (priority=300)
-    7. MSVCABITransformer (priority=300)
+    3. LinuxUnwindTransformer (priority=150)
+    4. LLDLinkerTransformer (priority=200)
+    5. ASANRuntimeTransformer (priority=250)
+    6. RPathTransformer (priority=275)
+    7. GNUABITransformer (priority=300)
+    8. MSVCABITransformer (priority=300)
 
     Returns:
         Configured ArgumentPipeline ready for use
@@ -548,6 +632,7 @@ def create_default_pipeline() -> ArgumentPipeline:
         [
             DirectivesTransformer(),
             MacOSSDKTransformer(),
+            LinuxUnwindTransformer(),
             LLDLinkerTransformer(),
             ASANRuntimeTransformer(),
             RPathTransformer(),

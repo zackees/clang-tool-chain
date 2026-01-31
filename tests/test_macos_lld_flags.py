@@ -66,6 +66,36 @@ class TestMacOSLLDFlagTranslation(unittest.TestCase):
         result = _translate_linker_flags_for_macos_lld(args)
         self.assertEqual(result, ["-Wl,-undefined,error", "-Wl,-fatal_warnings", "-Wl,-L/usr/lib"])
 
+    def test_allow_shlib_undefined_removed_in_wl(self):
+        """Test that --allow-shlib-undefined is removed from -Wl, flags (no macOS equivalent)."""
+        args = ["-Wl,--allow-shlib-undefined"]
+        result = _translate_linker_flags_for_macos_lld(args)
+        # The flag should be completely removed (ld64 allows undefined by default in dylibs)
+        self.assertEqual(result, [])
+
+    def test_allow_shlib_undefined_removed_standalone(self):
+        """Test that standalone --allow-shlib-undefined is removed (no macOS equivalent)."""
+        args = ["--allow-shlib-undefined"]
+        result = _translate_linker_flags_for_macos_lld(args)
+        # The flag should be completely removed
+        self.assertEqual(result, [])
+
+    def test_allow_shlib_undefined_removed_with_other_flags(self):
+        """Test that --allow-shlib-undefined is removed while preserving other flags."""
+        args = ["-Wl,--no-undefined,--allow-shlib-undefined,-rpath,/lib"]
+        result = _translate_linker_flags_for_macos_lld(args)
+        # --allow-shlib-undefined should be removed, others preserved
+        self.assertEqual(result, ["-Wl,-undefined,error,-rpath,/lib"])
+
+    def test_allow_shlib_undefined_warning_suppressed(self):
+        """Test that warning for removed flags can be suppressed via env var."""
+        with patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE": "1"}):
+            args = ["-Wl,--allow-shlib-undefined"]
+            # This should not print a warning (we can't easily test stderr output here,
+            # but the env var should prevent the warning from being printed)
+            result = _translate_linker_flags_for_macos_lld(args)
+            self.assertEqual(result, [])
+
     def test_complex_compilation_command(self):
         """Test with a realistic compilation command."""
         args = [

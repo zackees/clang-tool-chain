@@ -74,6 +74,7 @@ Comprehensive test coverage across all platforms and tool categories ensures rel
 | **lldb** | [![lldb-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-win.yml) | [![lldb-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-x86.yml) | [![lldb-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-arm.yml) | [![lldb-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-x86.yml) | [![lldb-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-arm.yml) |
 | **cosmocc** | [![cosmocc-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-win.yml) | [![cosmocc-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-x86.yml) | [![cosmocc-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-arm.yml) | [![cosmocc-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-x86.yml) | [![cosmocc-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-arm.yml) |
 | **lib-deploy** | [![lib-deploy-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-win.yml) | [![lib-deploy-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-x86.yml) | [![lib-deploy-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-arm.yml) | [![lib-deploy-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-x86.yml) | [![lib-deploy-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-arm.yml) |
+| **libunwind** | N/A | [![libunwind-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-x86.yml) | [![libunwind-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-arm.yml) | N/A | N/A |
 
 **📖 [Complete Test Matrix Documentation](docs/TEST_MATRIX.md)** - Tool category descriptions, test organization, running tests locally.
 
@@ -199,6 +200,7 @@ Comprehensive reference of all available commands organized by category.
 - [Executable C++ Scripts](#-executable-c-scripts-shebang-support)
 - [Windows DLL Deployment](#-windows-dll-deployment)
 - [Address Sanitizer (ASAN)](#️-address-sanitizer-asan-support)
+- [Bundled libunwind (Linux)](#-bundled-libunwind-linux)
 - [sccache Integration](#-sccache-integration)
 
 ### Platform & Configuration
@@ -233,13 +235,13 @@ Comprehensive reference of all available commands organized by category.
 
 ### Platform & Version Matrix
 
-| Platform | Architecture | LLVM Version | Archive Size | Linker | Status |
-|----------|--------------|--------------|--------------|--------|--------|
-| Windows  | x86_64       | 21.1.5       | ~71-90 MB    | lld    | ✅ Stable |
-| Linux    | x86_64       | 21.1.5       | ~87 MB       | lld    | ✅ Stable |
-| Linux    | ARM64        | 21.1.5       | ~91 MB       | lld    | ✅ Stable |
-| macOS    | x86_64       | 21.1.6       | ~77 MB       | ld64.lld | ✅ Stable |
-| macOS    | ARM64        | 21.1.6       | ~71 MB       | ld64.lld | ✅ Stable |
+| Platform | Architecture | LLVM Version | Archive Size | Linker | Extras | Status |
+|----------|--------------|--------------|--------------|--------|--------|--------|
+| Windows  | x86_64       | 21.1.5       | ~71-90 MB    | lld    | MinGW sysroot | ✅ Stable |
+| Linux    | x86_64       | 21.1.5       | ~87 MB       | lld    | libunwind (bundled) | ✅ Stable |
+| Linux    | ARM64        | 21.1.5       | ~91 MB       | lld    | libunwind (bundled) | ✅ Stable |
+| macOS    | x86_64       | 21.1.6       | ~77 MB       | ld64.lld | - | ✅ Stable |
+| macOS    | ARM64        | 21.1.6       | ~71 MB       | ld64.lld | - | ✅ Stable |
 
 ### Windows ABI Selection
 
@@ -791,13 +793,13 @@ jobs:
 
 ## 🌍 Platform Support Matrix
 
-| Platform | Architecture | LLVM Version | Archive Size | Status |
-|----------|--------------|--------------|--------------|--------|
-| Windows  | x86_64       | 21.1.5       | ~71-90 MB    | ✅ Stable |
-| Linux    | x86_64       | 21.1.5       | ~87 MB       | ✅ Stable |
-| Linux    | ARM64        | 21.1.5       | ~91 MB       | ✅ Stable |
-| macOS    | x86_64       | 19.1.7       | ~77 MB       | ✅ Stable |
-| macOS    | ARM64        | 21.1.6       | ~71 MB       | ✅ Stable |
+| Platform | Architecture | LLVM Version | Archive Size | Bundled Extras | Status |
+|----------|--------------|--------------|--------------|----------------|--------|
+| Windows  | x86_64       | 21.1.5       | ~71-90 MB    | MinGW sysroot | ✅ Stable |
+| Linux    | x86_64       | 21.1.5       | ~87 MB       | libunwind | ✅ Stable |
+| Linux    | ARM64        | 21.1.5       | ~91 MB       | libunwind | ✅ Stable |
+| macOS    | x86_64       | 19.1.7       | ~77 MB       | - | ✅ Stable |
+| macOS    | ARM64        | 21.1.6       | ~71 MB       | - | ✅ Stable |
 
 **Requirements:** Python 3.10+, ~100-400 MB disk space
 
@@ -814,6 +816,7 @@ jobs:
 - `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE` - Enable verbose library deployment logging
 - `CLANG_TOOL_CHAIN_USE_SYSTEM_LD` - Use system linker instead of LLD
 - `CLANG_TOOL_CHAIN_NO_DIRECTIVES` - Disable inlined build directives
+- `CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND` - Disable bundled libunwind on Linux (use system version)
 - `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV` - Disable automatic ASAN/LSAN options injection at runtime
 - `SDKROOT` - Custom macOS SDK path (auto-detected by default)
 
@@ -963,6 +966,83 @@ See: https://github.com/google/sanitizers/issues/899
 
 ---
 
+## 📚 Bundled libunwind (Linux)
+
+**Self-contained stack unwinding - no system packages required**
+
+On Linux, clang-tool-chain bundles libunwind headers and shared libraries, providing a complete solution for stack unwinding without requiring system packages like `libunwind-dev`.
+
+### What's Bundled
+
+| Component | Files | Size |
+|-----------|-------|------|
+| Headers | `libunwind.h`, `libunwind-common.h`, `libunwind-x86_64.h`/`libunwind-aarch64.h`, `unwind.h` | ~20 KB |
+| Libraries | `libunwind.so.*`, `libunwind-x86_64.so.*` (or `aarch64`) | ~300 KB |
+
+### How It Works
+
+When compiling on Linux, clang-tool-chain **automatically**:
+1. Adds `-I<clang_root>/include` for bundled libunwind headers
+2. Adds `-L<clang_root>/lib` for bundled libunwind libraries
+3. Adds `-Wl,-rpath,<clang_root>/lib` so executables find libunwind at runtime
+
+This means `#include <libunwind.h>` and `-lunwind` work out of the box.
+
+### Usage Example
+
+```c
+// backtrace.c - Print a stack trace using libunwind
+#include <stdio.h>
+#include <libunwind.h>
+
+void print_backtrace() {
+    unw_cursor_t cursor;
+    unw_context_t context;
+    unw_getcontext(&context);
+    unw_init_local(&cursor, &context);
+
+    while (unw_step(&cursor) > 0) {
+        char name[256];
+        unw_word_t offset;
+        unw_get_proc_name(&cursor, name, sizeof(name), &offset);
+        printf("  %s+0x%lx\n", name, (unsigned long)offset);
+    }
+}
+
+int main() {
+    print_backtrace();
+    return 0;
+}
+```
+
+```bash
+# Compile and link with bundled libunwind - no apt-get install needed!
+clang-tool-chain-c backtrace.c -lunwind -o backtrace
+
+# Run without LD_LIBRARY_PATH - works due to embedded rpath
+./backtrace
+```
+
+### Configuration
+
+**Disable bundled libunwind** (use system version instead):
+```bash
+export CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND=1
+```
+
+### Platform Support
+
+| Platform | Headers | Libraries | Status |
+|----------|---------|-----------|--------|
+| Linux x86_64 | ✅ Bundled | ✅ Bundled | ✅ Full |
+| Linux ARM64 | ✅ Bundled | ✅ Bundled | ✅ Full |
+| Windows | MinGW sysroot | MinGW sysroot | N/A (different API) |
+| macOS | System | System | N/A (uses system) |
+
+**📖 [Complete Documentation](docs/LIBUNWIND.md)** - Detailed usage, API reference, integration with ASAN, advanced examples.
+
+---
+
 ## 🔧 How It Works
 
 Auto-downloads on first use (~71-91 MB, 10-60 seconds). Subsequent uses are instant.
@@ -1072,6 +1152,7 @@ For in-depth information on specific topics, see the documentation in the `docs/
 | **[Cosmopolitan Libc](docs/COSMOCC.md)** | Actually Portable Executables (APE) |
 | **[sccache Integration](docs/SCCACHE.md)** | Compilation caching (2-10x speedup) |
 | **[Inlined Build Directives](docs/DIRECTIVES.md)** | Self-contained source files |
+| **[Bundled libunwind](docs/LIBUNWIND.md)** | Linux stack unwinding (headers + libraries) |
 
 ### Setup & Configuration
 | Document | Description |

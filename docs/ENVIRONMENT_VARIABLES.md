@@ -9,6 +9,7 @@ This document lists all environment variables recognized by clang-tool-chain for
 - [Master Control](#master-control)
 - [Library Deployment](#library-deployment)
 - [Linker Configuration](#linker-configuration)
+- [Bundled Libraries (Linux)](#bundled-libraries-linux)
 - [Sanitizer Configuration](#sanitizer-configuration)
 - [Build Tools](#build-tools)
 - [Toolchain Installation](#toolchain-installation)
@@ -46,6 +47,7 @@ When `CLANG_TOOL_CHAIN_NO_AUTO=1` is set, the following features are disabled:
 | Sanitizer Environment | `NO_SANITIZER_ENV` | Auto `ASAN_OPTIONS`/`LSAN_OPTIONS`/`ASAN_SYMBOLIZER_PATH` |
 | Rpath Injection | `NO_RPATH` | Auto `-rpath` for library loading |
 | macOS Sysroot | `NO_SYSROOT` | Auto `-isysroot` SDK detection |
+| Bundled libunwind | `NO_BUNDLED_UNWIND` | Bundled libunwind headers/libs on Linux |
 | Library Deployment | `NO_DEPLOY_LIBS` | Auto copy of runtime libraries (all outputs) |
 | Shared Lib Deployment | `NO_DEPLOY_SHARED_LIB` | Library deployment for .dll/.so/.dylib outputs only |
 
@@ -147,6 +149,47 @@ clang-tool-chain-cpp main.cpp -o program
 - **macOS**: Uses `-fuse-ld=ld64.lld` (LLVM 21.x+) or `-fuse-ld=lld` (older versions)
 - **Linux**: Uses `-fuse-ld=lld` (LLVM lld)
 - **Windows**: Uses lld-link (integrated MinGW support)
+
+---
+
+## Bundled Libraries (Linux)
+
+Environment variables for controlling bundled libraries on Linux.
+
+### libunwind
+
+On Linux, clang-tool-chain bundles libunwind headers and shared libraries for stack unwinding, eliminating the need for `libunwind-dev` system packages.
+
+| Variable | Platforms | Type | Default | Description |
+|----------|-----------|------|---------|-------------|
+| `CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND` | Linux | Boolean | `0` | Disable bundled libunwind (use system version) |
+
+**Usage:**
+
+```bash
+# Default behavior - bundled libunwind automatically used
+clang-tool-chain-cpp backtrace.cpp -lunwind -o backtrace
+# Automatically adds -I, -L, and -rpath for bundled libunwind
+# No apt-get install libunwind-dev required!
+
+# Disable bundled libunwind (use system version)
+export CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND=1
+clang-tool-chain-cpp backtrace.cpp -lunwind -o backtrace
+# Uses system libunwind (requires: apt-get install libunwind-dev)
+```
+
+**What Gets Injected (When Bundled):**
+- `-I/path/to/clang-tool-chain/include` - Find libunwind.h
+- `-L/path/to/clang-tool-chain/lib` - Find libunwind.so
+- `-Wl,-rpath,/path/to/clang-tool-chain/lib` - Find library at runtime
+
+**Why Bundled libunwind:**
+- No need to install `libunwind-dev` package
+- Consistent library version across all Linux systems
+- Executables are self-contained (work without LD_LIBRARY_PATH)
+- Works on minimal Docker images and CI runners
+
+**See Also:** [Bundled libunwind Documentation](LIBUNWIND.md)
 
 ---
 
@@ -364,6 +407,7 @@ Some components have dedicated verbose flags (see [Library Deployment](#library-
 | `CLANG_TOOL_CHAIN_USE_SYSTEM_LD` | All | Linker | Boolean | `0` | Use system linker instead of lld |
 | `CLANG_TOOL_CHAIN_NO_RPATH` | Linux | Linker | Boolean | `0` | Disable automatic rpath injection |
 | `CLANG_TOOL_CHAIN_NO_SYSROOT` | macOS | SDK | Boolean | `0` | Disable automatic -isysroot injection |
+| `CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND` | Linux | Libraries | Boolean | `0` | Disable bundled libunwind (use system) |
 | `CLANG_TOOL_CHAIN_NO_SHARED_ASAN` | Linux, Windows | Sanitizer | Boolean | `0` | Disable automatic `-shared-libasan` injection |
 | `CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE` | Linux, Windows | Sanitizer | Boolean | `0` | Suppress sanitizer flag injection note |
 | `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV` | All | Sanitizer | Boolean | `0` | Disable automatic ASAN/LSAN options injection |
@@ -442,6 +486,7 @@ setx CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS 1
 ## See Also
 
 - **[Library Deployment Guide](SHARED_LIBRARY_DEPLOYMENT.md)** - Comprehensive deployment documentation
+- **[Bundled libunwind (Linux)](LIBUNWIND.md)** - Stack unwinding without system packages
 - **[Inlined Build Directives](DIRECTIVES.md)** - Source file embedded configuration
 - **[Parallel Downloads](PARALLEL_DOWNLOADS.md)** - High-speed download configuration
 - **[Clang/LLVM Toolchain](CLANG_LLVM.md)** - Compiler wrapper documentation

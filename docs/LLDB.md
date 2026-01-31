@@ -404,12 +404,14 @@ LLDB uses libunwind for accurate stack unwinding during debugging. This is criti
 | Platform | libunwind Included? | Source | Notes |
 |----------|-------------------|--------|-------|
 | Windows x64 | ✅ Yes | MinGW sysroot | Bundled with toolchain |
-| Linux x64 | ⚠️ TBD | LLVM or system | Investigation pending |
-| Linux ARM64 | ⚠️ TBD | LLVM or system | May use ARM EHABI |
+| Linux x64 | ✅ Yes | Ubuntu packages (via Docker) | Fully bundled (headers + library) |
+| Linux ARM64 | ✅ Yes | Ubuntu packages (via Docker) | Fully bundled (headers + library) |
 | macOS x64 | ✅ Yes | System libunwind | Part of macOS |
 | macOS ARM64 | ✅ Yes | System libunwind | Part of macOS |
 
-**For detailed libunwind investigation results, see:** `lib_unwind_issues.md` (pending creation)
+**Linux libunwind bundling:** The Linux clang archives include libunwind headers (`libunwind.h`, etc.) and shared libraries (`libunwind.so.*`) extracted from Ubuntu 22.04 packages via Docker. This provides a complete, self-contained solution - no system packages required.
+
+See also: [Bundled libunwind documentation](../CLAUDE.md#bundled-libunwind-linux)
 
 ### Current libunwind Usage
 

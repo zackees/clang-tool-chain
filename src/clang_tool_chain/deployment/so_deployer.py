@@ -36,6 +36,8 @@ class SoDeployer(BaseLibraryDeployer):
         r"libc\+\+\.so[.\d]*",
         r"libc\+\+abi\.so[.\d]*",
         r"libunwind\.so[.\d]*",
+        r"libunwind-x86_64\.so[.\d]*",  # Platform-specific libunwind (bundled)
+        r"libunwind-aarch64\.so[.\d]*",  # Platform-specific libunwind (bundled)
         r"libclang_rt\..*\.so",  # Sanitizer runtimes
     ]
 

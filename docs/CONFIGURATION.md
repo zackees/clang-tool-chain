@@ -107,6 +107,30 @@ set CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1
 - **Linux**: `lld` (LLVM linker)
 - **Windows**: `lld` (LLVM linker)
 
+### Bundled libunwind (Linux)
+
+**`CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND`**
+
+Disable bundled libunwind headers and libraries (use system version):
+
+```bash
+# Default: bundled libunwind used automatically
+clang-tool-chain-cpp backtrace.cpp -lunwind -o backtrace
+# No apt-get install libunwind-dev required!
+
+# Use system libunwind instead of bundled
+export CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND=1
+clang-tool-chain-cpp backtrace.cpp -lunwind -o backtrace
+# Requires: apt-get install libunwind-dev
+```
+
+**What gets injected by default:**
+- `-I<clang_root>/include` - Find libunwind.h
+- `-L<clang_root>/lib` - Find libunwind.so
+- `-Wl,-rpath,<clang_root>/lib` - Find library at runtime
+
+See [Bundled libunwind Documentation](LIBUNWIND.md) for details.
+
 ### Build Directives
 
 **`CLANG_TOOL_CHAIN_NO_DIRECTIVES`**
@@ -292,6 +316,7 @@ This design philosophy keeps configuration explicit and portable.
 
 - [Installation Guide](INSTALLATION.md) - Installation paths
 - [Windows DLL Deployment](DLL_DEPLOYMENT.md) - DLL configuration
+- [Bundled libunwind](LIBUNWIND.md) - Linux stack unwinding (no system packages needed)
 - [Inlined Build Directives](DIRECTIVES.md) - Source file configuration
 - [sccache Integration](SCCACHE.md) - Cache configuration
 - [Troubleshooting](TROUBLESHOOTING.md) - Common configuration issues
