@@ -20,11 +20,16 @@ jobs:
     if: ${{ github.event.inputs.arch == 'x86_64' || github.event.inputs.arch == 'both' }}
 
     steps:
-    - name: Checkout code with submodules
+    - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        lfs: true
+
+    - name: Clone downloads-bins tools (without LFS)
+      run: |
+        # Clone just the tools from downloads-bins without downloading LFS objects
+        # We only need the build scripts, not existing archives
+        GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 https://github.com/zackees/clang-tool-chain-bins.git downloads-bins
+        # Remove .git to save space
+        rm -rf downloads-bins/.git
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -91,11 +96,16 @@ jobs:
     if: ${{ github.event.inputs.arch == 'arm64' || github.event.inputs.arch == 'both' }}
 
     steps:
-    - name: Checkout code with submodules
+    - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        lfs: true
+
+    - name: Clone downloads-bins tools (without LFS)
+      run: |
+        # Clone just the tools from downloads-bins without downloading LFS objects
+        # We only need the build scripts, not existing archives
+        GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 https://github.com/zackees/clang-tool-chain-bins.git downloads-bins
+        # Remove .git to save space
+        rm -rf downloads-bins/.git
 
     - name: Set up Python
       uses: actions/setup-python@v5
