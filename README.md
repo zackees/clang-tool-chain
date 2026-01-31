@@ -845,6 +845,31 @@ export CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1
 - **Windows**: Works with both GNU and MSVC ABIs
 - **macOS**: Uses bundled LLVM ASAN runtime
 
+### Dynamically Loaded Libraries
+
+If you see `<unknown module>` in ASAN/LSAN stack traces for code in dynamically loaded libraries, apply these fixes:
+
+**1. Use `RTLD_NOW | RTLD_GLOBAL` (not `RTLD_LAZY`)**
+
+```cpp
+void* handle = dlopen(path, RTLD_NOW | RTLD_GLOBAL);  // Good
+void* handle = dlopen(path, RTLD_LAZY);               // Bad - causes <unknown module>
+```
+
+**2. Skip `dlclose()` when ASAN is active**
+
+ASAN symbolizes at exit; if the library is unloaded, addresses become `<unknown module>`.
+
+```cpp
+#if !defined(__SANITIZE_ADDRESS__)
+    dlclose(handle);  // Only close when not running under ASAN
+#endif
+```
+
+On Windows, use the same pattern with `FreeLibrary()`.
+
+See: https://github.com/google/sanitizers/issues/899
+
 ---
 
 ## 🔧 How It Works

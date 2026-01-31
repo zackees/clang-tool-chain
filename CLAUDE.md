@@ -613,57 +613,9 @@ Windows ASAN support works with both GNU and MSVC ABIs. Runtime DLLs are automat
 
 macOS ASAN support uses the bundled LLVM ASAN runtime with automatic deployment via `--deploy-dependencies`.
 
-### ASAN Best Practices for Dynamically Loaded Libraries
+### Dynamically Loaded Libraries
 
-When using ASAN with applications that load shared libraries at runtime (via `dlopen`/`LoadLibrary`), follow these guidelines:
-
-**1. Use Shared ASAN Runtime (`-shared-libasan`)**
-
-Required for DLL/shared library architectures. clang-tool-chain injects this automatically on Linux.
-
-**2. Allow Undefined Symbols in Shared Libraries (`-Wl,--allow-shlib-undefined`)**
-
-Shared libraries compiled with ASAN have symbols that are resolved at runtime by the sanitizer. LLD by default enforces no undefined symbols, so this flag is required. clang-tool-chain injects this automatically when building shared libraries with ASAN.
-
-**3. Use `RTLD_NOW | RTLD_GLOBAL` When Loading Libraries**
-
-Use immediate symbol resolution to help ASAN properly track symbols from loaded libraries:
-
-```cpp
-// Good: Immediate resolution helps ASAN track symbols
-void* handle = dlopen(so_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
-
-// Avoid: Lazy loading can cause ASAN tracking issues
-void* handle = dlopen(so_path.c_str(), RTLD_LAZY);
-```
-
-**4. Skip `dlclose()`/`FreeLibrary()` When ASAN is Active**
-
-ASAN runs leak detection at program exit. If you unload the shared library before that, ASAN cannot symbolize addresses from the unloaded library, resulting in `<unknown module>` in stack traces.
-
-See: https://github.com/google/sanitizers/issues/899
-
-```cpp
-// Conditionally skip dlclose when ASAN is active
-#if !defined(__SANITIZE_ADDRESS__) && !defined(__has_feature)
-    dlclose(handle);
-#elif defined(__has_feature)
-#if !__has_feature(address_sanitizer)
-    dlclose(handle);
-#endif
-#endif
-```
-
-On Windows:
-```cpp
-#if !defined(__SANITIZE_ADDRESS__)
-    FreeLibrary(dll);
-#endif
-```
-
-**Detection Macros:**
-- `__SANITIZE_ADDRESS__` - Defined by GCC and Clang when ASAN is enabled
-- `__has_feature(address_sanitizer)` - Clang-specific feature check
+See README.md "Dynamically Loaded Libraries" section for user-facing documentation on fixing `<unknown module>` in ASAN stack traces (dlopen flags, dlclose handling).
 
 ## Code Quality Standards
 
