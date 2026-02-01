@@ -701,9 +701,10 @@ On Linux, when using `-fsanitize=address`, clang-tool-chain automatically inject
 - `-shared-libasan` - Uses the shared ASAN runtime library (prevents undefined symbol errors during linking)
 - `-Wl,--allow-shlib-undefined` - When building shared libraries (`-shared`), allows undefined symbols that will be provided by the sanitizer runtime at load time
 
-A warning is printed to stderr when flags are automatically injected:
+Individual notes are printed to stderr when flags are automatically injected:
 ```
-clang-tool-chain: note: automatically injected sanitizer flags: -shared-libasan -Wl,--allow-shlib-undefined
+clang-tool-chain: note: automatically injected -shared-libasan for ASAN runtime linking (disable with CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE=1)
+clang-tool-chain: note: automatically injected -Wl,--allow-shlib-undefined for shared library ASAN (disable with CLANG_TOOL_CHAIN_NO_ALLOW_SHLIB_UNDEFINED_NOTE=1)
 ```
 
 **Example:**
@@ -723,9 +724,23 @@ clang-tool-chain-cpp -fsanitize=address test.cpp -o test --deploy-dependencies
 
 **Environment Variables:**
 - `CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1` - Disable automatic `-shared-libasan` injection (use static ASAN)
-- `CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE=1` - Suppress the "automatically injected sanitizer flags" note
 - `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` - Disable automatic library deployment
 - `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV=1` - Disable automatic `ASAN_OPTIONS`/`LSAN_OPTIONS` injection at runtime
+
+**Note Suppression (Hierarchical):**
+Notes can be suppressed at different levels using a hierarchical system:
+
+| Variable | Scope | What it suppresses |
+|----------|-------|-------------------|
+| `CLANG_TOOL_CHAIN_NO_AUTO=1` | Global | All automatic features and notes |
+| `CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE=1` | Category | All sanitizer-related notes |
+| `CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE=1` | Specific | Only the -shared-libasan note |
+| `CLANG_TOOL_CHAIN_NO_ALLOW_SHLIB_UNDEFINED_NOTE=1` | Specific | Only the --allow-shlib-undefined note |
+| `CLANG_TOOL_CHAIN_NO_LINKER_NOTE=1` | Category | All linker-related notes |
+| `CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1` | Specific | Only the removed GNU flags note |
+| `CLANG_TOOL_CHAIN_NO_LD64_LLD_CONVERT_NOTE=1` | Specific | Only the ld64.lld conversion note |
+
+Each note message includes its specific disable variable for easy discoverability.
 
 ### Runtime Environment (ASAN_OPTIONS Injection)
 

@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 
-from clang_tool_chain.env_utils import is_feature_disabled
+from clang_tool_chain.env_utils import is_note_disabled
 from clang_tool_chain.interrupt_utils import handle_keyboard_interrupt_properly
 from clang_tool_chain.llvm_versions import get_llvm_version_tuple, supports_ld64_lld_flag
 
@@ -272,10 +272,8 @@ def _translate_linker_flags_for_macos_lld(args: list[str]) -> list[str]:
 
         i += 1
 
-    # Emit warning for removed flags (unless silenced)
-    if removed_flags and not is_feature_disabled("LINKER_COMPAT_NOTE"):
-        import sys
-
+    # Emit warning for removed flags (unless silenced via hierarchical suppression)
+    if removed_flags and not is_note_disabled("LINKER_COMPAT_NOTE", "LINKER_NOTE"):
         print(
             f"clang-tool-chain: note: removed GNU linker flags not supported by ld64.lld: "
             f"{', '.join(removed_flags)} (disable with CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1)",
@@ -379,11 +377,13 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
         # Check if user specified -fuse-ld=ld64.lld (which is not a valid clang driver option)
         # and emit a warning about the auto-conversion to -fuse-ld=lld
         if _user_specified_ld64_lld(args):
-            print(
-                "[clang-tool-chain] Warning: -fuse-ld=ld64.lld is not a valid clang driver option. "
-                "Auto-converting to -fuse-ld=lld (clang driver auto-dispatches to ld64.lld on Darwin).",
-                file=sys.stderr,
-            )
+            if not is_note_disabled("LD64_LLD_CONVERT_NOTE", "LINKER_NOTE"):
+                print(
+                    "clang-tool-chain: warning: -fuse-ld=ld64.lld is not a valid clang driver option. "
+                    "Auto-converting to -fuse-ld=lld (clang driver auto-dispatches to ld64.lld on Darwin). "
+                    "(disable with CLANG_TOOL_CHAIN_NO_LD64_LLD_CONVERT_NOTE=1)",
+                    file=sys.stderr,
+                )
             args = _convert_ld64_lld_to_lld(args)
 
         return _translate_linker_flags_for_macos_lld(args)

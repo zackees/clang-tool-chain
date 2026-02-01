@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from clang_tool_chain.env_utils import is_feature_disabled
+from clang_tool_chain.env_utils import is_feature_disabled, is_note_disabled
 
 if TYPE_CHECKING:
     from clang_tool_chain.directives.parser import ParsedDirectives
@@ -487,11 +487,20 @@ class ASANRuntimeTransformer(ArgumentTransformer):
                 result = ["-Wl,--allow-shlib-undefined"] + result
                 injected_flags.append("-Wl,--allow-shlib-undefined")
 
-        # Warn on stderr if we injected flags (unless disabled)
-        if injected_flags and not is_feature_disabled("SANITIZER_NOTE"):
+        # Emit individual notes for each injected flag (hierarchical suppression)
+        if "-shared-libasan" in injected_flags and not is_note_disabled("SHARED_ASAN_NOTE", "SANITIZER_NOTE"):
             print(
-                f"clang-tool-chain: note: automatically injected sanitizer flags: {' '.join(injected_flags)} "
-                "(disable with CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE=1)",
+                "clang-tool-chain: note: automatically injected -shared-libasan for ASAN runtime linking "
+                "(disable with CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE=1)",
+                file=sys.stderr,
+            )
+
+        if "-Wl,--allow-shlib-undefined" in injected_flags and not is_note_disabled(
+            "ALLOW_SHLIB_UNDEFINED_NOTE", "SANITIZER_NOTE"
+        ):
+            print(
+                "clang-tool-chain: note: automatically injected -Wl,--allow-shlib-undefined for shared library ASAN "
+                "(disable with CLANG_TOOL_CHAIN_NO_ALLOW_SHLIB_UNDEFINED_NOTE=1)",
                 file=sys.stderr,
             )
 

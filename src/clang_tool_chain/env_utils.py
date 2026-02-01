@@ -26,13 +26,20 @@ CONTROLLABLE_FEATURES = {
     "DIRECTIVES": "Inlined build directives (@link, @std, @cflags)",
     "SHARED_ASAN": "Automatic -shared-libasan injection (Linux)",
     "SANITIZER_ENV": "Automatic ASAN_OPTIONS/LSAN_OPTIONS injection",
-    "SANITIZER_NOTE": "Sanitizer flag injection note to stderr",
     "RPATH": "Automatic rpath injection for library loading",
     "SYSROOT": "Automatic macOS SDK detection (-isysroot)",
     "DEPLOY_LIBS": "Cross-platform library deployment (all outputs)",
     "DEPLOY_SHARED_LIB": "Library deployment for shared library outputs only (.dll, .so, .dylib)",
     "BUNDLED_UNWIND": "Bundled libunwind paths on Linux",
     "MACOS_UNWIND_FIX": "Automatic -lunwind removal on macOS (libunwind in libSystem)",
+    # Sanitizer notes (hierarchical)
+    "SANITIZER_NOTE": "All sanitizer-related notes (category master)",
+    "SHARED_ASAN_NOTE": "-shared-libasan injection note",
+    "ALLOW_SHLIB_UNDEFINED_NOTE": "-Wl,--allow-shlib-undefined injection note",
+    # Linker notes (hierarchical)
+    "LINKER_NOTE": "All linker-related notes (category master)",
+    "LINKER_COMPAT_NOTE": "Removed GNU linker flags note",
+    "LD64_LLD_CONVERT_NOTE": "-fuse-ld=ld64.lld conversion note",
 }
 
 
@@ -137,3 +144,54 @@ def log_disabled_features_summary() -> None:
         logger.info("All automatic features disabled via CLANG_TOOL_CHAIN_NO_AUTO=1")
     else:
         logger.info(f"Disabled features: {', '.join(disabled)}")
+
+
+def is_note_disabled(specific: str, category: str | None = None) -> bool:
+    """
+    Check if a specific note is disabled using hierarchical suppression.
+
+    A note is disabled if ANY of:
+    1. CLANG_TOOL_CHAIN_NO_AUTO=1 (global master)
+    2. CLANG_TOOL_CHAIN_NO_{category}=1 (category master, if provided)
+    3. CLANG_TOOL_CHAIN_NO_{specific}=1 (specific note)
+
+    This allows users to:
+    - Disable all automatic features with NO_AUTO=1
+    - Disable a category of notes (e.g., all sanitizer notes) with NO_SANITIZER_NOTE=1
+    - Disable a specific note with its dedicated variable (e.g., NO_SHARED_ASAN_NOTE=1)
+
+    Args:
+        specific: The specific note name (e.g., "SHARED_ASAN_NOTE")
+        category: Optional category master (e.g., "SANITIZER_NOTE")
+
+    Returns:
+        True if the note should be suppressed
+
+    Example:
+        >>> os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE"] = "1"
+        >>> is_note_disabled("SHARED_ASAN_NOTE", "SANITIZER_NOTE")
+        True  # Disabled via category
+
+        >>> os.environ["CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE"] = "1"
+        >>> is_note_disabled("SHARED_ASAN_NOTE", "SANITIZER_NOTE")
+        True  # Disabled via specific variable
+    """
+    # Check the global master (NO_AUTO)
+    if is_auto_disabled():
+        logger.debug(f"Note {specific} disabled via CLANG_TOOL_CHAIN_NO_AUTO=1")
+        return True
+
+    # Check the category master (if provided)
+    if category:
+        var_name = f"CLANG_TOOL_CHAIN_NO_{category}"
+        if _is_truthy(os.environ.get(var_name)):
+            logger.debug(f"Note {specific} disabled via {var_name}=1 (category master)")
+            return True
+
+    # Check the specific note variable
+    var_name = f"CLANG_TOOL_CHAIN_NO_{specific}"
+    if _is_truthy(os.environ.get(var_name)):
+        logger.debug(f"Note {specific} disabled via {var_name}=1")
+        return True
+
+    return False

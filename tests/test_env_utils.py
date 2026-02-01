@@ -8,6 +8,7 @@ from clang_tool_chain.env_utils import (
     get_disabled_features,
     is_auto_disabled,
     is_feature_disabled,
+    is_note_disabled,
 )
 
 
@@ -155,6 +156,135 @@ class TestEnvUtils(unittest.TestCase):
 
         os.environ["CLANG_TOOL_CHAIN_NO_AUTO"] = "Yes"
         self.assertTrue(is_auto_disabled())
+
+
+class TestIsNoteDisabled(unittest.TestCase):
+    """Test cases for the hierarchical note suppression system."""
+
+    def setUp(self):
+        """Save original environment variables."""
+        self.original_env = os.environ.copy()
+
+    def tearDown(self):
+        """Restore original environment variables."""
+        # Remove any test variables we added
+        for key in list(os.environ.keys()):
+            if key.startswith("CLANG_TOOL_CHAIN_NO_"):
+                if key not in self.original_env:
+                    del os.environ[key]
+                else:
+                    os.environ[key] = self.original_env[key]
+
+    def test_is_note_disabled_when_not_set(self):
+        """Test that is_note_disabled returns False when nothing is set."""
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_AUTO", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE", None)
+
+        self.assertFalse(is_note_disabled("SHARED_ASAN_NOTE", "SANITIZER_NOTE"))
+
+    def test_is_note_disabled_when_specific_var_set(self):
+        """Test that is_note_disabled returns True when specific var is set."""
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_AUTO", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE", None)
+        os.environ["CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE"] = "1"
+
+        self.assertTrue(is_note_disabled("SHARED_ASAN_NOTE", "SANITIZER_NOTE"))
+
+    def test_is_note_disabled_when_category_var_set(self):
+        """Test that is_note_disabled returns True when category var is set."""
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_AUTO", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE", None)
+        os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE"] = "1"
+
+        self.assertTrue(is_note_disabled("SHARED_ASAN_NOTE", "SANITIZER_NOTE"))
+
+    def test_is_note_disabled_when_auto_var_set(self):
+        """Test that is_note_disabled returns True when NO_AUTO is set."""
+        os.environ["CLANG_TOOL_CHAIN_NO_AUTO"] = "1"
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE", None)
+
+        self.assertTrue(is_note_disabled("SHARED_ASAN_NOTE", "SANITIZER_NOTE"))
+
+    def test_is_note_disabled_without_category(self):
+        """Test that is_note_disabled works without a category."""
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_AUTO", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE", None)
+
+        # Without category, should only check global and specific
+        self.assertFalse(is_note_disabled("LINKER_COMPAT_NOTE"))
+
+        # Set specific var
+        os.environ["CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE"] = "1"
+        self.assertTrue(is_note_disabled("LINKER_COMPAT_NOTE"))
+
+    def test_is_note_disabled_category_only_affects_children(self):
+        """Test that setting category doesn't disable unrelated notes."""
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_AUTO", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_LINKER_NOTE", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE", None)
+
+        # Set SANITIZER_NOTE category
+        os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE"] = "1"
+
+        # SANITIZER_NOTE category should disable SHARED_ASAN_NOTE
+        self.assertTrue(is_note_disabled("SHARED_ASAN_NOTE", "SANITIZER_NOTE"))
+
+        # But SANITIZER_NOTE should NOT disable LINKER_COMPAT_NOTE
+        self.assertFalse(is_note_disabled("LINKER_COMPAT_NOTE", "LINKER_NOTE"))
+
+    def test_is_note_disabled_hierarchy_all_sanitizer_notes(self):
+        """Test that SANITIZER_NOTE disables all sanitizer-related notes."""
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_AUTO", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_ALLOW_SHLIB_UNDEFINED_NOTE", None)
+        os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE"] = "1"
+
+        self.assertTrue(is_note_disabled("SHARED_ASAN_NOTE", "SANITIZER_NOTE"))
+        self.assertTrue(is_note_disabled("ALLOW_SHLIB_UNDEFINED_NOTE", "SANITIZER_NOTE"))
+
+    def test_is_note_disabled_hierarchy_all_linker_notes(self):
+        """Test that LINKER_NOTE disables all linker-related notes."""
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_AUTO", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_LD64_LLD_CONVERT_NOTE", None)
+        os.environ["CLANG_TOOL_CHAIN_NO_LINKER_NOTE"] = "1"
+
+        self.assertTrue(is_note_disabled("LINKER_COMPAT_NOTE", "LINKER_NOTE"))
+        self.assertTrue(is_note_disabled("LD64_LLD_CONVERT_NOTE", "LINKER_NOTE"))
+
+    def test_is_note_disabled_auto_overrides_all(self):
+        """Test that NO_AUTO disables all notes regardless of other settings."""
+        os.environ["CLANG_TOOL_CHAIN_NO_AUTO"] = "1"
+        # Even if category and specific are NOT set, AUTO should disable
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_LINKER_NOTE", None)
+        os.environ.pop("CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE", None)
+
+        self.assertTrue(is_note_disabled("SHARED_ASAN_NOTE", "SANITIZER_NOTE"))
+        self.assertTrue(is_note_disabled("ALLOW_SHLIB_UNDEFINED_NOTE", "SANITIZER_NOTE"))
+        self.assertTrue(is_note_disabled("LINKER_COMPAT_NOTE", "LINKER_NOTE"))
+        self.assertTrue(is_note_disabled("LD64_LLD_CONVERT_NOTE", "LINKER_NOTE"))
+
+    def test_controllable_features_has_note_entries(self):
+        """Test that CONTROLLABLE_FEATURES contains the new note entries."""
+        expected_note_features = [
+            "SANITIZER_NOTE",
+            "SHARED_ASAN_NOTE",
+            "ALLOW_SHLIB_UNDEFINED_NOTE",
+            "LINKER_NOTE",
+            "LINKER_COMPAT_NOTE",
+            "LD64_LLD_CONVERT_NOTE",
+        ]
+
+        for feature in expected_note_features:
+            self.assertIn(
+                feature,
+                CONTROLLABLE_FEATURES,
+                f"Expected note feature {feature} in CONTROLLABLE_FEATURES",
+            )
 
 
 if __name__ == "__main__":

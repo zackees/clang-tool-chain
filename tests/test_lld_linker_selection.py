@@ -145,7 +145,7 @@ class TestLLDLinkerSelection(unittest.TestCase):
 
         # Verify the warning was emitted
         warning_output = captured_stderr.getvalue()
-        self.assertIn("Warning", warning_output)
+        self.assertIn("warning", warning_output)
         self.assertIn("-fuse-ld=ld64.lld", warning_output)
         self.assertIn("Auto-converting", warning_output)
         self.assertIn("-fuse-ld=lld", warning_output)

@@ -481,7 +481,7 @@ class TestASANLinking:
 
         When compiling with ASAN on Linux or Windows, clang-tool-chain prints a note about
         automatically injected sanitizer flags. This test verifies the note can be
-        suppressed with the environment variable.
+        suppressed with the environment variable (category master) or specific variable.
         """
         output_exe = simple_cpp_file.parent / "test_asan_note"
 
@@ -496,19 +496,32 @@ class TestASANLinking:
 
         env_with_note = os.environ.copy()
         env_with_note.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE", None)
+        env_with_note.pop("CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE", None)
 
         result_with_note = subprocess.run(compile_cmd, capture_output=True, text=True, env=env_with_note)
         assert result_with_note.returncode == 0, f"Compilation failed: {result_with_note.stderr}"
-        assert "automatically injected sanitizer flags" in result_with_note.stderr, (
+        # Check for the new individual note format
+        assert "automatically injected -shared-libasan" in result_with_note.stderr, (
             f"Expected sanitizer note in stderr but not found:\n{result_with_note.stderr}"
         )
 
-        # Now compile WITH the suppression env var - should NOT see the note
+        # Now compile WITH the category suppression env var - should NOT see the note
         env_no_note = os.environ.copy()
         env_no_note["CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE"] = "1"
 
         result_no_note = subprocess.run(compile_cmd, capture_output=True, text=True, env=env_no_note)
         assert result_no_note.returncode == 0, f"Compilation failed: {result_no_note.stderr}"
-        assert "automatically injected sanitizer flags" not in result_no_note.stderr, (
+        assert "automatically injected -shared-libasan" not in result_no_note.stderr, (
             f"Sanitizer note should be suppressed but was found:\n{result_no_note.stderr}"
+        )
+
+        # Also test with specific suppression env var
+        env_specific_no_note = os.environ.copy()
+        env_specific_no_note.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE", None)
+        env_specific_no_note["CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE"] = "1"
+
+        result_specific_no_note = subprocess.run(compile_cmd, capture_output=True, text=True, env=env_specific_no_note)
+        assert result_specific_no_note.returncode == 0, f"Compilation failed: {result_specific_no_note.stderr}"
+        assert "automatically injected -shared-libasan" not in result_specific_no_note.stderr, (
+            f"Sanitizer note should be suppressed with specific env var but was found:\n{result_specific_no_note.stderr}"
         )
