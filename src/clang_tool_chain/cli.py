@@ -202,6 +202,19 @@ def cmd_list_tools(args: argparse.Namespace) -> int:
         print(f"  {cmd:30s} - {desc}")
 
     print()
+    print("Debugging and analysis:")
+    print("=" * 60)
+    print()
+
+    debug_tools = [
+        ("clang-tool-chain-lldb", "LLVM debugger (lldb)"),
+        ("clang-tool-chain-iwyu", "Include What You Use analyzer"),
+    ]
+
+    for cmd, desc in debug_tools:
+        print(f"  {cmd:30s} - {desc}")
+
+    print()
     print("For more information, run:")
     print("  clang-tool-chain info")
 

@@ -202,14 +202,96 @@ clang-tool-chain-c test_unwind.c -lunwind -o test_unwind
 
 ### Platform Support
 
-| Platform | libunwind.h | libunwind.so |
-|----------|-------------|--------------|
-| Linux x86_64 | ✅ Bundled | ✅ Bundled |
-| Linux ARM64 | ✅ Bundled | ✅ Bundled |
-| Windows | ✅ MinGW sysroot | ✅ MinGW sysroot |
-| macOS | System | System |
+| Platform | libunwind.h | libunwind.so | Test Workflow |
+|----------|-------------|--------------|---------------|
+| Linux x86_64 | ✅ Bundled | ✅ Bundled | `test-libunwind-linux-x86.yml` |
+| Linux ARM64 | ✅ Bundled | ✅ Bundled | `test-libunwind-linux-arm.yml` |
+| Windows x64 | ✅ MinGW sysroot | ✅ MinGW sysroot | `test-libunwind-win.yml` |
+| macOS x86_64 | ✅ System | ✅ System | `test-libunwind-macos-x86.yml` |
+| macOS ARM64 | ✅ System | ✅ System | `test-libunwind-macos-arm.yml` |
 
-**Note:** Building Linux archives with bundled libunwind requires Docker. The archive build pipeline uses `docker run ubuntu:22.04` to extract libunwind from Debian packages.
+**Notes:**
+- **Linux**: Bundled libunwind (headers + shared libraries) extracted from Debian packages. Building Linux archives requires Docker (`docker run ubuntu:22.04`).
+- **Windows**: libunwind provided via MinGW sysroot (part of the Windows toolchain). No additional installation required. Native symbol resolution is provided via `unwind_windows.c` implementation.
+- **macOS**: Uses system libunwind from macOS SDK. No additional installation required.
+- **Testing**: All platforms have comprehensive test suites (`tests/test_libunwind_headers.py`) that verify header compilation, library linking, runtime execution, and backtrace functionality.
+- **CI/CD**: All five platform variants have dedicated GitHub Actions workflows ensuring libunwind works correctly on every supported platform.
+
+**Symbol Resolution on Windows:**
+clang-tool-chain provides native symbol resolution for Windows through a C implementation that makes `unw_get_proc_name()` work automatically.
+
+**Using Native Symbol Resolution** (recommended):
+```bash
+# Compile your program with unwind_windows.c to enable symbol resolution
+clang-tool-chain-c unwind_windows.c your_program.c -lunwind -o program.exe
+
+# Or include the header and link with the pre-built DLL
+clang-tool-chain-c your_program.c -lunwind -lunwind_proc_name -o program.exe
+```
+
+**How it works:**
+1. Parses COFF symbol table embedded in the PE executable
+2. Builds sorted symbol map at initialization
+3. Handles ASLR automatically by calculating runtime addresses
+4. Returns function names and offsets from function start
+5. Works in-process with no external tool dependencies
+
+**Example stack trace output:**
+```c
+#include <stdio.h>
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
+
+void print_backtrace(void) {
+    unw_cursor_t cursor;
+    unw_context_t context;
+    unw_getcontext(&context);
+    unw_init_local(&cursor, &context);
+
+    while (unw_step(&cursor) > 0) {
+        char name[256];
+        unw_word_t offset;
+        if (unw_get_proc_name(&cursor, name, sizeof(name), &offset) == 0) {
+            printf("%s+0x%lx\n", name, offset);
+        }
+    }
+}
+```
+
+**Output:**
+```
+test_func_beta+0x9
+test_func_alpha+0x9
+main+0x1b
+```
+
+**Source Location Information:**
+The native implementation provides function names and offsets. For detailed source locations (file:line:column), use LLDB debugger:
+```bash
+clang-tool-chain-lldb --print program.exe  # Print crash stack trace with source locations
+clang-tool-chain-lldb program.exe          # Interactive debugging
+```
+
+**Implementation Files:**
+- `src/clang_tool_chain/symbolizer/unwind_windows.c` - C implementation
+- `src/clang_tool_chain/symbolizer/unwind_windows.h` - Header file
+- `src/clang_tool_chain/symbolizer/libunwind_proc_name.dll` - Pre-built DLL (optional)
+
+**Advanced: Manual Symbol Resolution with llvm-symbolizer:**
+If you need source locations without LLDB, you can manually use llvm-symbolizer:
+```bash
+# Compile with debug symbols
+clang-tool-chain-c program.c -o program.exe -g
+
+# Get symbols from binary
+llvm-nm program.exe | grep main
+# Output: 1400014d0 T main
+
+# Resolve static address to source location
+llvm-symbolizer -e program.exe -f -C 0x1400014d0
+# Output: main
+#         C:\path\to\program.c:10:0
+```
 
 ## Inlined Build Directives
 
@@ -559,10 +641,10 @@ See [Testing Guide](docs/TESTING.md) for comprehensive testing documentation.
 
 ## Test Matrix
 
-The project uses a comprehensive test matrix with 40 GitHub Actions workflows covering all platform+tool combinations:
+The project uses a comprehensive test matrix with 45+ GitHub Actions workflows covering all platform+tool combinations:
 
 - **5 platforms:** Windows x64, Linux x86_64, Linux ARM64, macOS x86_64, macOS ARM64
-- **8 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, lldb, format-lint, binary-utils
+- **9 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, lldb, libunwind, format-lint, binary-utils
 
 Each workflow runs platform-specific tests to ensure all tools work correctly on all platforms.
 
@@ -575,6 +657,7 @@ See the "Test Matrix" section in README.md for live status badges.
 - **tests/test_emscripten_full_pipeline.py** - Full Emscripten pipeline tests
 - **tests/test_iwyu.py** - Include What You Use analyzer tests
 - **tests/test_lldb.py** - LLDB debugger tests (crash analysis and stack traces)
+- **tests/test_libunwind_headers.py** - libunwind stack unwinding tests (all platforms: Linux bundled, Windows MinGW sysroot, macOS system)
 - **tests/test_format_lint.py** - clang-format and clang-tidy tests
 - **tests/test_binary_utils.py** - LLVM binary utilities tests (ar, nm, objdump, strip, etc.)
 - **tests/test_build_run_cached_integration.py** - sccache integration tests

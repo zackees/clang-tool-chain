@@ -74,7 +74,7 @@ Comprehensive test coverage across all platforms and tool categories ensures rel
 | **lldb** | [![lldb-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-win.yml) | [![lldb-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-x86.yml) | [![lldb-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-linux-arm.yml) | [![lldb-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-x86.yml) | [![lldb-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lldb-macos-arm.yml) |
 | **cosmocc** | [![cosmocc-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-win.yml) | [![cosmocc-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-x86.yml) | [![cosmocc-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-linux-arm.yml) | [![cosmocc-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-x86.yml) | [![cosmocc-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-cosmocc-macos-arm.yml) |
 | **lib-deploy** | [![lib-deploy-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-win.yml) | [![lib-deploy-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-x86.yml) | [![lib-deploy-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-linux-arm.yml) | [![lib-deploy-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-x86.yml) | [![lib-deploy-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-lib-deploy-macos-arm.yml) |
-| **libunwind** | N/A | [![libunwind-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-x86.yml) | [![libunwind-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-arm.yml) | N/A | N/A |
+| **libunwind** | [![libunwind-win](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-win.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-win.yml) | [![libunwind-linux-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-x86.yml) | [![libunwind-linux-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-linux-arm.yml) | [![libunwind-macos-x86](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-macos-x86.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-macos-x86.yml) | [![libunwind-macos-arm](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-macos-arm.yml/badge.svg)](https://github.com/zackees/clang-tool-chain/actions/workflows/test-libunwind-macos-arm.yml) |
 
 **📖 [Complete Test Matrix Documentation](docs/TEST_MATRIX.md)** - Tool category descriptions, test organization, running tests locally.
 
@@ -966,18 +966,51 @@ See: https://github.com/google/sanitizers/issues/899
 
 ---
 
-## 📚 Bundled libunwind (Linux)
+## 📚 libunwind Support (All Platforms)
 
-**Self-contained stack unwinding - no system packages required**
+**Cross-platform stack unwinding for debugging and profiling**
 
-On Linux, clang-tool-chain bundles libunwind headers and shared libraries, providing a complete solution for stack unwinding without requiring system packages like `libunwind-dev`.
+clang-tool-chain provides libunwind support on all platforms with platform-specific implementations:
+- **Linux**: Bundled libunwind (headers + shared libraries) - no system packages required
+- **Windows**: MinGW sysroot libunwind - included in toolchain
+- **macOS**: System libunwind from macOS SDK - no additional installation required
 
-### What's Bundled
+All platforms support `#include <libunwind.h>` and `-lunwind` out of the box.
+
+### What's Bundled (Linux)
 
 | Component | Files | Size |
 |-----------|-------|------|
 | Headers | `libunwind.h`, `libunwind-common.h`, `libunwind-x86_64.h`/`libunwind-aarch64.h`, `unwind.h` | ~20 KB |
 | Libraries | `libunwind.so.*`, `libunwind-x86_64.so.*` (or `aarch64`) | ~300 KB |
+
+### Platform-Specific Details
+
+| Platform | Source | Installation | Symbol Resolution | Notes |
+|----------|--------|--------------|-------------------|-------|
+| **Linux** | Bundled (from Debian packages) | Automatic with toolchain | ✅ Full support via `unw_get_proc_name()` | Includes headers + shared libraries |
+| **Windows** | MinGW sysroot | Automatic with toolchain | ⚠️ Limited - use `llvm-symbolizer` | Stack walking works; symbol resolution requires external tool |
+| **macOS** | System SDK | Pre-installed with macOS | ✅ Full support via `unw_get_proc_name()` | Uses system libunwind |
+
+**Windows Symbol Resolution:**
+
+MinGW libunwind on Windows doesn't support `unw_get_proc_name()`. While `llvm-symbolizer` is bundled, Windows ASLR makes runtime address resolution complex.
+
+**Recommended**: Use `clang-tool-chain-lldb` for debugging with symbols, or use Linux/macOS for built-in symbol resolution.
+
+**Verification** (llvm-symbolizer works with static addresses):
+```bash
+# Compile with debug symbols
+clang-tool-chain-c program.c -o program.exe -g
+
+# Get function addresses and resolve
+llvm-nm program.exe | grep main
+# Shows: 1400014d0 T main
+
+llvm-symbolizer -e program.exe -f -C 0x1400014d0
+# Shows: main
+#        C:\path\to\program.c:10:0
+```
 
 ### How It Works
 
@@ -1025,10 +1058,12 @@ clang-tool-chain-c backtrace.c -lunwind -o backtrace
 
 ### Configuration
 
-**Disable bundled libunwind** (use system version instead):
+**Disable bundled libunwind on Linux** (use system version instead):
 ```bash
-export CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND=1
+export CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND=1  # Linux only
 ```
+
+**Note**: This environment variable only applies to Linux. Windows and macOS always use their respective platform sources (MinGW sysroot and system SDK).
 
 ### Platform Support
 

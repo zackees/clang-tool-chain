@@ -181,3 +181,6 @@ a.out
 a.exe
 ./*.dll
 .loop
+
+# Symbolizer DLLs are built from source, not committed
+src/clang_tool_chain/symbolizer/*.dll
