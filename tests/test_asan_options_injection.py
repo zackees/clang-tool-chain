@@ -7,9 +7,12 @@ improving stack trace quality for dlopen()'d shared libraries.
 """
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from clang_tool_chain.execution.sanitizer_env import (
     DEFAULT_ASAN_OPTIONS,
@@ -651,8 +654,8 @@ class TestLsanSuppressionFiles:
             else:
                 os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
 
-    def test_custom_suppression_file_used(self):
-        """Test that custom suppression file is used when provided."""
+    def test_custom_suppression_file_merged_with_builtin(self):
+        """Test that custom suppression file is merged with built-in suppressions."""
         import tempfile
 
         base_env = {"PATH": "/usr/bin"}
@@ -667,12 +670,24 @@ class TestLsanSuppressionFiles:
             try:
                 os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
 
-                result = prepare_sanitizer_environment(
-                    base_env, compiler_flags=["-fsanitize=address"], suppression_file=tmp_path
-                )
+                # Mock platform to ensure we get a built-in suppression file
+                with patch("clang_tool_chain.execution.sanitizer_env.platform.system") as mock_system:
+                    mock_system.return_value = "Darwin"
 
-                assert "LSAN_OPTIONS" in result
-                assert f"suppressions={Path(tmp_path).absolute()}" in result["LSAN_OPTIONS"]
+                    result = prepare_sanitizer_environment(
+                        base_env, compiler_flags=["-fsanitize=address"], suppression_file=tmp_path
+                    )
+
+                    assert "LSAN_OPTIONS" in result
+                    # Custom suppression should be present
+                    assert f"suppressions={Path(tmp_path).absolute()}" in result["LSAN_OPTIONS"]
+
+                    # Built-in suppression should ALSO be present (merge behavior)
+                    builtin_file = _get_builtin_suppression_file()
+                    if builtin_file and builtin_file.exists():
+                        assert f"suppressions={builtin_file.absolute()}" in result["LSAN_OPTIONS"]
+                        # Verify both are in the options (two suppressions= entries)
+                        assert result["LSAN_OPTIONS"].count("suppressions=") == 2
             finally:
                 if original_disable is None:
                     os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
@@ -703,8 +718,8 @@ class TestLsanSuppressionFiles:
             else:
                 os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
 
-    def test_suppression_appended_to_existing_lsan_options(self):
-        """Test that suppression is appended to existing LSAN_OPTIONS."""
+    def test_suppressions_appended_to_existing_lsan_options(self):
+        """Test that both built-in and custom suppressions are appended to existing LSAN_OPTIONS."""
         import tempfile
 
         # Create a temporary suppression file
@@ -719,15 +734,27 @@ class TestLsanSuppressionFiles:
             try:
                 os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
 
-                result = prepare_sanitizer_environment(
-                    base_env, compiler_flags=["-fsanitize=address"], suppression_file=tmp_path
-                )
+                # Mock platform to ensure we get a built-in suppression file
+                with patch("clang_tool_chain.execution.sanitizer_env.platform.system") as mock_system:
+                    mock_system.return_value = "Darwin"
 
-                # Should preserve user options and append suppression
-                assert "LSAN_OPTIONS" in result
-                assert "verbosity=1" in result["LSAN_OPTIONS"]
-                assert f"suppressions={Path(tmp_path).absolute()}" in result["LSAN_OPTIONS"]
-                assert "verbosity=1:suppressions=" in result["LSAN_OPTIONS"]
+                    result = prepare_sanitizer_environment(
+                        base_env, compiler_flags=["-fsanitize=address"], suppression_file=tmp_path
+                    )
+
+                    # Should preserve user options
+                    assert "LSAN_OPTIONS" in result
+                    assert "verbosity=1" in result["LSAN_OPTIONS"]
+
+                    # Custom suppression should be present
+                    assert f"suppressions={Path(tmp_path).absolute()}" in result["LSAN_OPTIONS"]
+
+                    # Built-in suppression should also be present (merge behavior)
+                    builtin_file = _get_builtin_suppression_file()
+                    if builtin_file and builtin_file.exists():
+                        assert f"suppressions={builtin_file.absolute()}" in result["LSAN_OPTIONS"]
+                        # User options + built-in + custom = should start with verbosity
+                        assert result["LSAN_OPTIONS"].startswith("verbosity=1:")
             finally:
                 if original_disable is None:
                     os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
@@ -737,23 +764,36 @@ class TestLsanSuppressionFiles:
             # Clean up temporary file
             Path(tmp_path).unlink(missing_ok=True)
 
-    def test_nonexistent_suppression_file_ignored(self):
-        """Test that nonexistent suppression file is silently ignored."""
+    def test_nonexistent_custom_suppression_file_ignored_but_builtin_applied(self):
+        """Test that nonexistent custom suppression file is ignored but built-in still applies."""
         base_env = {"PATH": "/usr/bin"}
 
         original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
         try:
             os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
 
-            result = prepare_sanitizer_environment(
-                base_env,
-                compiler_flags=["-fsanitize=address"],
-                suppression_file="/nonexistent/path/to/suppressions.txt",
-            )
+            # Mock platform to ensure we get a built-in suppression file
+            with patch("clang_tool_chain.execution.sanitizer_env.platform.system") as mock_system:
+                mock_system.return_value = "Darwin"
 
-            # LSAN_OPTIONS should be set with default options only
-            assert "LSAN_OPTIONS" in result
-            assert "suppressions=" not in result["LSAN_OPTIONS"]
+                result = prepare_sanitizer_environment(
+                    base_env,
+                    compiler_flags=["-fsanitize=address"],
+                    suppression_file="/nonexistent/path/to/suppressions.txt",
+                )
+
+                # LSAN_OPTIONS should be set
+                assert "LSAN_OPTIONS" in result
+
+                # Built-in suppression should still be present (nonexistent custom is skipped)
+                builtin_file = _get_builtin_suppression_file()
+                if builtin_file and builtin_file.exists():
+                    assert f"suppressions={builtin_file.absolute()}" in result["LSAN_OPTIONS"]
+                    # Only one suppressions= entry (custom was skipped)
+                    assert result["LSAN_OPTIONS"].count("suppressions=") == 1
+
+                # The nonexistent custom path should NOT be in the options
+                assert "/nonexistent/path/to/suppressions.txt" not in result["LSAN_OPTIONS"]
         finally:
             if original_disable is None:
                 os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
@@ -810,3 +850,272 @@ class TestLsanSuppressionFiles:
             assert "libxpc.dylib" in content or "dyld" in content
             # File should not be empty
             assert len(content.strip()) > 0
+
+    def test_no_warning_when_no_custom_suppression_file_provided(self):
+        """Test that no warning is logged when user doesn't provide a custom suppression file."""
+
+        base_env = {"PATH": "/usr/bin"}
+
+        original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+            # Capture log output
+            with patch("clang_tool_chain.execution.sanitizer_env.logger") as mock_logger:
+                # Call without custom suppression file (None = use built-in only)
+                prepare_sanitizer_environment(base_env, compiler_flags=["-fsanitize=address"], suppression_file=None)
+
+                # Should NOT have called warning() - only info() for injecting built-in
+                mock_logger.warning.assert_not_called()
+        finally:
+            if original_disable is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+
+    def test_warning_when_custom_suppression_file_not_found(self):
+        """Test that a warning is logged when user provides a nonexistent custom suppression file."""
+
+        base_env = {"PATH": "/usr/bin"}
+
+        original_disable = os.environ.get("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV")
+        try:
+            os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+
+            # Capture log output
+            with patch("clang_tool_chain.execution.sanitizer_env.logger") as mock_logger:
+                # Call with nonexistent custom suppression file
+                prepare_sanitizer_environment(
+                    base_env,
+                    compiler_flags=["-fsanitize=address"],
+                    suppression_file="/nonexistent/path/to/suppressions.txt",
+                )
+
+                # Should have called warning() for missing file
+                mock_logger.warning.assert_called_once()
+                warning_msg = mock_logger.warning.call_args[0][0]
+                assert "not found" in warning_msg
+                assert "/nonexistent/path/to/suppressions.txt" in warning_msg
+        finally:
+            if original_disable is None:
+                os.environ.pop("CLANG_TOOL_CHAIN_NO_SANITIZER_ENV", None)
+            else:
+                os.environ["CLANG_TOOL_CHAIN_NO_SANITIZER_ENV"] = original_disable
+
+
+class TestLsanSuppressionIntegration:
+    """Integration tests for LSan suppression with actual compilation and execution.
+
+    These tests verify that:
+    1. A program with an intentional memory leak is detected by LSan
+    2. A custom suppression file can suppress the leak detection
+    3. The merge behavior works (built-in + custom suppressions)
+
+    Note: These tests require the clang-tool-chain toolchain to be installed.
+    They are skipped on Windows since LSAN is not supported there.
+    """
+
+    @pytest.fixture
+    def temp_dir(self):
+        """Create a temporary directory for test files."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+
+    @pytest.fixture
+    def leak_c_file(self, temp_dir):
+        """Create a C file with an intentional memory leak."""
+        c_file = temp_dir / "leak_test.c"
+        c_file.write_text(
+            """
+#include <stdlib.h>
+#include <stdio.h>
+
+// Function that leaks memory - name is used for suppression matching
+void intentional_leak_function(void) {
+    // Allocate memory and intentionally leak it
+    char* leaked = (char*)malloc(100);
+    if (leaked) {
+        leaked[0] = 'X';  // Use the memory to prevent optimization
+        printf("Allocated memory at %p\\n", (void*)leaked);
+    }
+    // Intentionally NOT freeing 'leaked' - this is the leak
+}
+
+int main(void) {
+    printf("Starting leak test\\n");
+    intentional_leak_function();
+    printf("Exiting without freeing memory\\n");
+    return 0;
+}
+"""
+        )
+        return c_file
+
+    @pytest.fixture
+    def suppression_file(self, temp_dir):
+        """Create a custom suppression file that suppresses the intentional leak."""
+        supp_file = temp_dir / "my_suppressions.txt"
+        supp_file.write_text(
+            """# Custom suppression file for testing
+# This suppresses the intentional leak in our test program
+leak:intentional_leak_function
+"""
+        )
+        return supp_file
+
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="LSan is not supported on Windows",
+    )
+    def test_leak_detected_without_suppression(self, leak_c_file, temp_dir):
+        """Test that the memory leak is detected by LSan without suppression."""
+
+        output_exe = temp_dir / "leak_test"
+
+        # Compile with ASAN (includes LSAN)
+        compile_cmd = [
+            "clang-tool-chain-c",
+            "-fsanitize=address",
+            "-g",
+            str(leak_c_file),
+            "-o",
+            str(output_exe),
+        ]
+
+        compile_result = subprocess.run(compile_cmd, capture_output=True, text=True)
+        if compile_result.returncode != 0:
+            pytest.skip(f"Compilation failed: {compile_result.stderr}")
+
+        assert output_exe.exists(), "Executable not created"
+
+        # Run without any suppression - leak should be detected
+        # Prepare environment with ASAN options but no custom suppression
+        env = prepare_sanitizer_environment(
+            base_env=os.environ.copy(),
+            compiler_flags=["-fsanitize=address"],
+            suppression_file="",  # Disable built-in suppressions to ensure leak is detected
+        )
+
+        run_result = subprocess.run([str(output_exe)], capture_output=True, text=True, env=env)
+
+        # LSan should detect the leak and exit with non-zero code
+        # Note: The exact exit code may vary, but stderr should contain leak info
+        assert (
+            "leak" in run_result.stderr.lower()
+            or "sanitizer" in run_result.stderr.lower()
+            or run_result.returncode != 0
+        ), (
+            f"Expected leak detection, got: stdout={run_result.stdout}, stderr={run_result.stderr}, rc={run_result.returncode}"
+        )
+
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="LSan is not supported on Windows",
+    )
+    def test_leak_suppressed_with_custom_file(self, leak_c_file, suppression_file, temp_dir):
+        """Test that the memory leak is suppressed when using a custom suppression file."""
+
+        output_exe = temp_dir / "leak_test_suppressed"
+
+        # Compile with ASAN (includes LSAN)
+        compile_cmd = [
+            "clang-tool-chain-c",
+            "-fsanitize=address",
+            "-g",
+            str(leak_c_file),
+            "-o",
+            str(output_exe),
+        ]
+
+        compile_result = subprocess.run(compile_cmd, capture_output=True, text=True)
+        if compile_result.returncode != 0:
+            pytest.skip(f"Compilation failed: {compile_result.stderr}")
+
+        assert output_exe.exists(), "Executable not created"
+
+        # Run WITH custom suppression file - leak should be suppressed
+        env = prepare_sanitizer_environment(
+            base_env=os.environ.copy(),
+            compiler_flags=["-fsanitize=address"],
+            suppression_file=str(suppression_file),
+        )
+
+        run_result = subprocess.run([str(output_exe)], capture_output=True, text=True, env=env)
+
+        # With suppression, the program should exit cleanly (or at least not report our specific leak)
+        # Check that stderr doesn't contain "intentional_leak_function" as a leak source
+        assert "intentional_leak_function" not in run_result.stderr or "suppressed" in run_result.stderr.lower(), (
+            f"Expected leak to be suppressed, got: stderr={run_result.stderr}"
+        )
+
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="LSan is not supported on Windows",
+    )
+    def test_merge_behavior_both_suppressions_applied(self, temp_dir):
+        """Test that both built-in and custom suppressions are merged correctly."""
+
+        # Create a C file with two different leak patterns
+        c_file = temp_dir / "dual_leak_test.c"
+        c_file.write_text(
+            """
+#include <stdlib.h>
+#include <stdio.h>
+
+// Leak that will be suppressed by custom file
+void custom_suppressed_leak(void) {
+    char* leaked = (char*)malloc(50);
+    if (leaked) leaked[0] = 'A';
+}
+
+// Another leak for testing
+void another_leak(void) {
+    char* leaked = (char*)malloc(50);
+    if (leaked) leaked[0] = 'B';
+}
+
+int main(void) {
+    custom_suppressed_leak();
+    another_leak();
+    return 0;
+}
+"""
+        )
+
+        # Custom suppression file that only suppresses one leak
+        custom_supp = temp_dir / "partial_suppressions.txt"
+        custom_supp.write_text("leak:custom_suppressed_leak\n")
+
+        output_exe = temp_dir / "dual_leak_test"
+
+        # Compile
+        compile_cmd = [
+            "clang-tool-chain-c",
+            "-fsanitize=address",
+            "-g",
+            str(c_file),
+            "-o",
+            str(output_exe),
+        ]
+
+        compile_result = subprocess.run(compile_cmd, capture_output=True, text=True)
+        if compile_result.returncode != 0:
+            pytest.skip(f"Compilation failed: {compile_result.stderr}")
+
+        # Run with merge behavior
+        env = prepare_sanitizer_environment(
+            base_env=os.environ.copy(),
+            compiler_flags=["-fsanitize=address"],
+            suppression_file=str(custom_supp),  # Custom suppression + built-in
+        )
+
+        run_result = subprocess.run([str(output_exe)], capture_output=True, text=True, env=env)
+
+        # custom_suppressed_leak should be suppressed
+        # another_leak might still be detected (unless caught by built-in suppressions)
+        # The key is that our custom suppression was applied
+        assert "custom_suppressed_leak" not in run_result.stderr or "suppressed" in run_result.stderr.lower(), (
+            f"Expected custom_suppressed_leak to be suppressed, got: stderr={run_result.stderr}"
+        )

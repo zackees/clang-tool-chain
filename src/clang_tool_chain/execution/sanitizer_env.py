@@ -160,9 +160,10 @@ def prepare_sanitizer_environment(
         compiler_flags: List of compiler flags used to build the executable.
             Used to detect which sanitizers are enabled. If None, no options
             are injected (safe default).
-        suppression_file: Optional path to custom LSan suppression file.
-            If None, uses built-in platform-specific suppressions.
-            Set to empty string "" to disable built-in suppressions.
+        suppression_file: Optional path to additional custom LSan suppression file.
+            If provided, this file is merged with built-in platform-specific
+            suppressions (built-in applied first, then custom).
+            Set to empty string "" to disable built-in suppressions entirely.
 
     Returns:
         Environment dictionary with sanitizer options injected as appropriate.
@@ -184,7 +185,7 @@ def prepare_sanitizer_environment(
         ...     compiler_flags=["-fsanitize=address"],
         ...     suppression_file="/path/to/custom.txt"
         ... )
-        >>> # Uses custom suppression file instead of built-in
+        >>> # Uses BOTH built-in AND custom suppression files (merged)
     """
     env = base_env.copy() if base_env is not None else os.environ.copy()
 
@@ -225,22 +226,33 @@ def prepare_sanitizer_environment(
 
     # Add platform-specific LSan suppressions if LSAN is enabled
     if lsan_enabled:
-        # Use built-in suppression file if no custom file specified
-        if suppression_file is None:
-            suppression_file = _get_builtin_suppression_file()
+        # Check if user explicitly disabled built-in suppressions with ""
+        disable_builtin = suppression_file == ""
 
-        # Apply suppression file if it exists (unless explicitly disabled with "")
-        if suppression_file and suppression_file != "" and Path(suppression_file).exists():
+        # Helper to append suppression file to LSAN_OPTIONS
+        def _append_suppression(file_path: Path) -> None:
             current_lsan = env.get("LSAN_OPTIONS", "")
-            suppression_opt = f"suppressions={Path(suppression_file).absolute()}"
+            suppression_opt = f"suppressions={file_path.absolute()}"
 
             if current_lsan:
-                # Append to existing options
                 env["LSAN_OPTIONS"] = f"{current_lsan}:{suppression_opt}"
             else:
-                # Set new options
                 env["LSAN_OPTIONS"] = suppression_opt
 
-            logger.info(f"Injecting LSan suppression file: {suppression_file}")
+            logger.info(f"Injecting LSan suppression file: {file_path}")
+
+        # First, apply built-in platform-specific suppressions (unless disabled)
+        if not disable_builtin:
+            builtin_file = _get_builtin_suppression_file()
+            if builtin_file and builtin_file.exists():
+                _append_suppression(builtin_file)
+
+        # Then, also apply custom suppression file if provided (merge behavior)
+        if suppression_file and suppression_file != "":
+            custom_path = Path(suppression_file)
+            if custom_path.exists():
+                _append_suppression(custom_path)
+            else:
+                logger.warning(f"Custom suppression file not found: {suppression_file}")
 
     return env
