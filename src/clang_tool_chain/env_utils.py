@@ -31,6 +31,8 @@ CONTROLLABLE_FEATURES = {
     "SYSROOT": "Automatic macOS SDK detection (-isysroot)",
     "DEPLOY_LIBS": "Cross-platform library deployment (all outputs)",
     "DEPLOY_SHARED_LIB": "Library deployment for shared library outputs only (.dll, .so, .dylib)",
+    "BUNDLED_UNWIND": "Bundled libunwind paths on Linux",
+    "MACOS_UNWIND_FIX": "Automatic -lunwind removal on macOS (libunwind in libSystem)",
 }
 
 

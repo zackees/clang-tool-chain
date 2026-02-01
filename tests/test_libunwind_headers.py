@@ -819,3 +819,140 @@ class TestSoDeployerLibunwind:
         assert not deployer.is_deployable_library("libm.so.6")
         assert not deployer.is_deployable_library("libpthread.so.0")
         assert not deployer.is_deployable_library("ld-linux-x86-64.so.2")
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS-specific libunwind tests")
+class TestMacOSUnwindTransformer:
+    """Unit tests for MacOSUnwindTransformer class (macOS only).
+
+    This tests the macOS-specific libunwind transformer that removes the -lunwind
+    flag since macOS provides libunwind via libSystem (automatically linked).
+    """
+
+    def test_priority(self):
+        """Test transformer priority is 125."""
+        from clang_tool_chain.execution.arg_transformers import MacOSUnwindTransformer
+
+        transformer = MacOSUnwindTransformer()
+        assert transformer.priority() == 125
+
+    def test_removes_lunwind_on_macos(self):
+        """Test that -lunwind is removed on macOS."""
+        from clang_tool_chain.execution.arg_transformers import (
+            MacOSUnwindTransformer,
+            ToolContext,
+        )
+
+        transformer = MacOSUnwindTransformer()
+        context = ToolContext("darwin", "arm64", "clang", False)
+
+        # With -lunwind present
+        args = ["test.c", "-lunwind", "-o", "test"]
+        result = transformer.transform(args, context)
+
+        assert "-lunwind" not in result
+        assert "test.c" in result
+        assert "-o" in result
+        assert "test" in result
+
+    def test_preserves_other_args(self):
+        """Test that other args are preserved when -lunwind is removed."""
+        from clang_tool_chain.execution.arg_transformers import (
+            MacOSUnwindTransformer,
+            ToolContext,
+        )
+
+        transformer = MacOSUnwindTransformer()
+        context = ToolContext("darwin", "x86_64", "clang++", False)
+
+        args = ["-g", "-O2", "test.cpp", "-lunwind", "-lpthread", "-o", "test"]
+        result = transformer.transform(args, context)
+
+        assert "-lunwind" not in result
+        assert "-g" in result
+        assert "-O2" in result
+        assert "-lpthread" in result
+
+    def test_no_change_without_lunwind(self):
+        """Test that args are unchanged when -lunwind is not present."""
+        from clang_tool_chain.execution.arg_transformers import (
+            MacOSUnwindTransformer,
+            ToolContext,
+        )
+
+        transformer = MacOSUnwindTransformer()
+        context = ToolContext("darwin", "arm64", "clang", False)
+
+        args = ["test.c", "-o", "test"]
+        result = transformer.transform(args, context)
+
+        assert result == args
+
+    def test_skips_non_macos(self):
+        """Test transformer skips non-macOS platforms."""
+        from clang_tool_chain.execution.arg_transformers import (
+            MacOSUnwindTransformer,
+            ToolContext,
+        )
+
+        transformer = MacOSUnwindTransformer()
+
+        # Test Linux - should NOT remove -lunwind
+        context_linux = ToolContext("linux", "x86_64", "clang", False)
+        args = ["test.c", "-lunwind", "-o", "test"]
+        result = transformer.transform(args, context_linux)
+        assert "-lunwind" in result, "Should NOT remove -lunwind on Linux"
+
+        # Test Windows - should NOT remove -lunwind
+        context_win = ToolContext("win", "x86_64", "clang", False)
+        result = transformer.transform(args, context_win)
+        assert "-lunwind" in result, "Should NOT remove -lunwind on Windows"
+
+    def test_skips_non_clang_tools(self):
+        """Test transformer skips non-clang tools."""
+        from clang_tool_chain.execution.arg_transformers import (
+            MacOSUnwindTransformer,
+            ToolContext,
+        )
+
+        transformer = MacOSUnwindTransformer()
+
+        # Test llvm-ar
+        context = ToolContext("darwin", "arm64", "llvm-ar", False)
+        args = ["test.a", "-lunwind"]
+        result = transformer.transform(args, context)
+        assert result == args, "Should skip llvm-ar"
+
+    def test_opt_out_env_var(self):
+        """Verify CLANG_TOOL_CHAIN_NO_MACOS_UNWIND_FIX disables the transformer."""
+        from clang_tool_chain.execution.arg_transformers import (
+            MacOSUnwindTransformer,
+            ToolContext,
+        )
+
+        transformer = MacOSUnwindTransformer()
+        context = ToolContext("darwin", "arm64", "clang", False)
+        args = ["test.c", "-lunwind", "-o", "test"]
+
+        # With opt-out enabled, should NOT remove -lunwind
+        with patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_MACOS_UNWIND_FIX": "1"}):
+            result = transformer.transform(args, context)
+
+        assert "-lunwind" in result, "With opt-out, -lunwind should be preserved"
+
+    def test_no_auto_disables_transformer(self):
+        """Verify CLANG_TOOL_CHAIN_NO_AUTO also disables the transformer."""
+        from clang_tool_chain.execution.arg_transformers import (
+            MacOSUnwindTransformer,
+            ToolContext,
+        )
+
+        transformer = MacOSUnwindTransformer()
+        context = ToolContext("darwin", "arm64", "clang", False)
+        args = ["test.c", "-lunwind", "-o", "test"]
+
+        # With NO_AUTO enabled, should NOT remove -lunwind
+        with patch.dict(os.environ, {"CLANG_TOOL_CHAIN_NO_AUTO": "1"}):
+            result = transformer.transform(args, context)
+
+        assert "-lunwind" in result, "With NO_AUTO, -lunwind should be preserved"

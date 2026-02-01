@@ -16,6 +16,7 @@ Architecture:
     ArgumentTransformer (ABC)
         ├── DirectivesTransformer (priority=50)
         ├── MacOSSDKTransformer (priority=100)
+        ├── MacOSUnwindTransformer (priority=125)
         ├── LinuxUnwindTransformer (priority=150)
         ├── LLDLinkerTransformer (priority=200)
         ├── ASANRuntimeTransformer (priority=250)
@@ -206,6 +207,52 @@ class MacOSSDKTransformer(ArgumentTransformer):
 
         logger.debug("Checking if macOS sysroot needs to be added")
         return _add_macos_sysroot_if_needed(args)
+
+
+class MacOSUnwindTransformer(ArgumentTransformer):
+    """
+    Transformer for handling -lunwind on macOS.
+
+    Priority: 125 (runs after SDK but before Linux unwind transformer)
+
+    On macOS, libunwind is not a standalone library - it's embedded in libSystem.B.dylib
+    which is automatically linked by the compiler. The -lunwind flag is unnecessary
+    and causes linking errors with ld64.lld:
+
+        ld64.lld: error: library not found for -lunwind
+
+    This transformer removes -lunwind from the arguments on macOS since the
+    libunwind symbols are already available via libSystem (automatically linked).
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_MACOS_UNWIND_FIX: Set to '1' to disable this transformer
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to '1' to disable all automatic features
+    """
+
+    def priority(self) -> int:
+        return 125
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Remove -lunwind on macOS since libunwind is in libSystem."""
+        # Only applies to macOS clang/clang++
+        if context.platform_name != "darwin" or context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Check if disabled (via NO_MACOS_UNWIND_FIX or NO_AUTO)
+        if is_feature_disabled("MACOS_UNWIND_FIX"):
+            return args
+
+        # Check if -lunwind is present
+        if "-lunwind" not in args:
+            return args
+
+        # Remove -lunwind since macOS provides libunwind via libSystem
+        result = [arg for arg in args if arg != "-lunwind"]
+
+        if len(result) != len(args):
+            logger.info("Removed -lunwind on macOS (libunwind is built into libSystem, no standalone library exists)")
+
+        return result
 
 
 class LinuxUnwindTransformer(ArgumentTransformer):
@@ -618,12 +665,13 @@ def create_default_pipeline() -> ArgumentPipeline:
     This includes all standard transformers in their default priority order:
     1. DirectivesTransformer (priority=50)
     2. MacOSSDKTransformer (priority=100)
-    3. LinuxUnwindTransformer (priority=150)
-    4. LLDLinkerTransformer (priority=200)
-    5. ASANRuntimeTransformer (priority=250)
-    6. RPathTransformer (priority=275)
-    7. GNUABITransformer (priority=300)
-    8. MSVCABITransformer (priority=300)
+    3. MacOSUnwindTransformer (priority=125)
+    4. LinuxUnwindTransformer (priority=150)
+    5. LLDLinkerTransformer (priority=200)
+    6. ASANRuntimeTransformer (priority=250)
+    7. RPathTransformer (priority=275)
+    8. GNUABITransformer (priority=300)
+    9. MSVCABITransformer (priority=300)
 
     Returns:
         Configured ArgumentPipeline ready for use
@@ -632,6 +680,7 @@ def create_default_pipeline() -> ArgumentPipeline:
         [
             DirectivesTransformer(),
             MacOSSDKTransformer(),
+            MacOSUnwindTransformer(),
             LinuxUnwindTransformer(),
             LLDLinkerTransformer(),
             ASANRuntimeTransformer(),
