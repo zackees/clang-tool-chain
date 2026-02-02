@@ -7,6 +7,7 @@ improving stack trace quality for dlopen()'d shared libraries.
 """
 
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -306,7 +307,12 @@ class TestSanitizerEnvironmentInjection:
         # These settings fix <unknown module> in stack traces
         assert "fast_unwind_on_malloc=0" in DEFAULT_ASAN_OPTIONS
         assert "symbolize=1" in DEFAULT_ASAN_OPTIONS
-        assert "detect_leaks=1" in DEFAULT_ASAN_OPTIONS
+        # detect_leaks=1 only present on platforms that support LSAN (not Windows)
+        # See: https://clang.llvm.org/docs/LeakSanitizer.html
+        if platform.system() == "Windows":
+            assert "detect_leaks=1" not in DEFAULT_ASAN_OPTIONS
+        else:
+            assert "detect_leaks=1" in DEFAULT_ASAN_OPTIONS
 
         assert "fast_unwind_on_malloc=0" in DEFAULT_LSAN_OPTIONS
         assert "symbolize=1" in DEFAULT_LSAN_OPTIONS

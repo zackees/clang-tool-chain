@@ -30,9 +30,45 @@ logger = logging.getLogger(__name__)
 # Default options to inject for optimal stack traces
 # fast_unwind_on_malloc=0: Use slow but accurate unwinding (fixes <unknown module>)
 # symbolize=1: Enable symbolization for readable stack traces
-# detect_leaks=1: Enable leak detection (ASAN only)
-DEFAULT_ASAN_OPTIONS = "fast_unwind_on_malloc=0:symbolize=1:detect_leaks=1"
+# detect_leaks=1: Enable leak detection (ASAN only, NOT on Windows - LSAN unsupported)
+#
+# LeakSanitizer (LSAN) is NOT supported on Windows. Only Linux, macOS, Android,
+# Fuchsia, and NetBSD are supported. See: https://clang.llvm.org/docs/LeakSanitizer.html
+#
+# On Windows, setting detect_leaks=1 causes immediate failure with:
+#   "AddressSanitizer: detect_leaks is not supported on this platform."
+_BASE_ASAN_OPTIONS = "fast_unwind_on_malloc=0:symbolize=1"
 DEFAULT_LSAN_OPTIONS = "fast_unwind_on_malloc=0:symbolize=1"
+
+
+def get_default_asan_options() -> str:
+    """
+    Get platform-appropriate default ASAN options.
+
+    Returns options string with detect_leaks=1 only on platforms where
+    LeakSanitizer is supported (Linux, macOS). Windows does not support
+    LSAN, so detect_leaks is omitted to prevent runtime failures.
+
+    Returns:
+        ASAN options string appropriate for the current platform.
+
+    Example:
+        >>> get_default_asan_options()  # On Linux/macOS
+        'fast_unwind_on_malloc=0:symbolize=1:detect_leaks=1'
+        >>> get_default_asan_options()  # On Windows
+        'fast_unwind_on_malloc=0:symbolize=1'
+    """
+    if platform.system() == "Windows":
+        # LSAN (LeakSanitizer) is not supported on Windows
+        # See: https://clang.llvm.org/docs/LeakSanitizer.html
+        return _BASE_ASAN_OPTIONS
+    # Linux, macOS, and other platforms support LSAN
+    return f"{_BASE_ASAN_OPTIONS}:detect_leaks=1"
+
+
+# For backward compatibility - this is now dynamically computed
+# Code that imports DEFAULT_ASAN_OPTIONS directly will get the platform-appropriate value
+DEFAULT_ASAN_OPTIONS = get_default_asan_options()
 
 
 def get_symbolizer_path() -> str | None:
@@ -425,8 +461,9 @@ def prepare_sanitizer_environment(
 
     # Inject ASAN_OPTIONS if ASAN is enabled and not already set by user
     if asan_enabled and "ASAN_OPTIONS" not in env:
-        env["ASAN_OPTIONS"] = DEFAULT_ASAN_OPTIONS
-        logger.info(f"Injecting ASAN_OPTIONS={DEFAULT_ASAN_OPTIONS}")
+        asan_options = get_default_asan_options()
+        env["ASAN_OPTIONS"] = asan_options
+        logger.info(f"Injecting ASAN_OPTIONS={asan_options}")
 
     # Inject LSAN_OPTIONS if LSAN is enabled and not already set by user
     if lsan_enabled and "LSAN_OPTIONS" not in env:
