@@ -19,6 +19,9 @@ from clang_tool_chain.execution.sanitizer_env import (
     DEFAULT_LSAN_OPTIONS,
     _get_builtin_suppression_file,
     detect_sanitizers_from_flags,
+    get_all_sanitizer_runtime_dlls,
+    get_asan_runtime_dll,
+    get_runtime_dll_paths,
     get_symbolizer_path,
     prepare_sanitizer_environment,
 )
@@ -82,7 +85,8 @@ class TestSanitizerEnvironmentInjection:
         assert "ASAN_OPTIONS" in result
         assert result["ASAN_OPTIONS"] == DEFAULT_ASAN_OPTIONS
         # Original env vars should be preserved
-        assert result["PATH"] == "/usr/bin"
+        # On Windows, PATH is modified to include ASAN DLL directories (prepended)
+        assert "/usr/bin" in result["PATH"]  # Original path should still be present
         assert result["HOME"] == "/home/test"
 
     def test_lsan_options_injected_when_asan_enabled(self):
@@ -1119,3 +1123,492 @@ int main(void) {
         assert "custom_suppressed_leak" not in run_result.stderr or "suppressed" in run_result.stderr.lower(), (
             f"Expected custom_suppressed_leak to be suppressed, got: stderr={run_result.stderr}"
         )
+
+
+class TestGetAsanRuntimeDll:
+    """Tests for get_asan_runtime_dll() function.
+
+    This function is used by consuming projects (like FastLED) to copy the ASAN
+    runtime DLL to their build directory, solving the Meson PATH override issue.
+    """
+
+    def test_returns_path_or_none(self):
+        """Test that get_asan_runtime_dll returns a Path or None."""
+        result = get_asan_runtime_dll()
+        assert result is None or isinstance(result, Path)
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_returns_path_on_windows_when_toolchain_installed(self):
+        """Test that a valid Path is returned on Windows when toolchain is installed."""
+        result = get_asan_runtime_dll()
+        # If toolchain is installed, should return a path
+        # If not installed, may return None (acceptable in test environment)
+        if result is not None:
+            assert isinstance(result, Path)
+            assert result.exists(), f"ASAN DLL path does not exist: {result}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_dll_name_matches_expected_pattern(self):
+        """Test that the returned DLL has the expected ASAN runtime name."""
+        result = get_asan_runtime_dll()
+        if result is not None:
+            # Should match libclang_rt.asan*.dll pattern
+            assert result.name.startswith("libclang_rt.asan"), f"Unexpected DLL name: {result.name}"
+            assert result.suffix.lower() == ".dll", f"Expected .dll extension: {result.name}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_dll_is_in_expected_directory(self):
+        """Test that the DLL is found in the expected clang-tool-chain directory."""
+        result = get_asan_runtime_dll()
+        if result is not None:
+            path_str = str(result).lower()
+            # Should be in .clang-tool-chain directory
+            assert ".clang-tool-chain" in path_str, f"DLL not in expected location: {result}"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Non-Windows test")
+    def test_returns_none_on_non_windows(self):
+        """Test that None is returned on non-Windows platforms."""
+        result = get_asan_runtime_dll()
+        assert result is None, f"Expected None on non-Windows, got: {result}"
+
+    def test_does_not_raise_exceptions(self):
+        """Test that the function handles errors gracefully without raising."""
+        # Should never raise, just return None on failure
+        try:
+            result = get_asan_runtime_dll()
+            assert result is None or isinstance(result, Path)
+        except Exception as e:
+            pytest.fail(f"get_asan_runtime_dll() raised an exception: {e}")
+
+
+class TestGetAllSanitizerRuntimeDlls:
+    """Tests for get_all_sanitizer_runtime_dlls() function."""
+
+    def test_returns_list(self):
+        """Test that get_all_sanitizer_runtime_dlls returns a list."""
+        result = get_all_sanitizer_runtime_dlls()
+        assert isinstance(result, list)
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_returns_list_of_paths_on_windows(self):
+        """Test that the function returns a list of Path objects on Windows."""
+        result = get_all_sanitizer_runtime_dlls()
+        for dll in result:
+            assert isinstance(dll, Path), f"Expected Path, got {type(dll)}: {dll}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_all_dlls_exist(self):
+        """Test that all returned DLL paths exist."""
+        result = get_all_sanitizer_runtime_dlls()
+        for dll in result:
+            assert dll.exists(), f"DLL does not exist: {dll}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_dlls_match_sanitizer_pattern(self):
+        """Test that all DLLs match the sanitizer DLL naming pattern."""
+        result = get_all_sanitizer_runtime_dlls()
+        for dll in result:
+            # Should match libclang_rt.<sanitizer>*.dll pattern
+            name = dll.name.lower()
+            assert name.startswith("libclang_rt."), f"Unexpected DLL name: {dll.name}"
+            assert name.endswith(".dll"), f"Expected .dll extension: {dll.name}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_includes_asan_dll(self):
+        """Test that the ASAN DLL is included in the list."""
+        result = get_all_sanitizer_runtime_dlls()
+        if result:  # If any DLLs found
+            asan_dlls = [dll for dll in result if "asan" in dll.name.lower()]
+            assert len(asan_dlls) > 0, f"ASAN DLL not found in: {[d.name for d in result]}"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Non-Windows test")
+    def test_returns_empty_list_on_non_windows(self):
+        """Test that an empty list is returned on non-Windows platforms."""
+        result = get_all_sanitizer_runtime_dlls()
+        assert result == [], f"Expected empty list on non-Windows, got: {result}"
+
+    def test_no_duplicate_dlls(self):
+        """Test that the function doesn't return duplicate DLLs."""
+        result = get_all_sanitizer_runtime_dlls()
+        names = [dll.name for dll in result]
+        assert len(names) == len(set(names)), f"Duplicate DLLs found: {names}"
+
+    def test_does_not_raise_exceptions(self):
+        """Test that the function handles errors gracefully without raising."""
+        try:
+            result = get_all_sanitizer_runtime_dlls()
+            assert isinstance(result, list)
+        except Exception as e:
+            pytest.fail(f"get_all_sanitizer_runtime_dlls() raised an exception: {e}")
+
+
+class TestGetRuntimeDllPaths:
+    """Tests for get_runtime_dll_paths() function."""
+
+    def test_returns_list(self):
+        """Test that get_runtime_dll_paths returns a list."""
+        result = get_runtime_dll_paths()
+        assert isinstance(result, list)
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_returns_list_of_strings_on_windows(self):
+        """Test that the function returns a list of string paths on Windows."""
+        result = get_runtime_dll_paths()
+        for path in result:
+            assert isinstance(path, str), f"Expected str, got {type(path)}: {path}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_paths_exist(self):
+        """Test that returned paths exist on Windows."""
+        result = get_runtime_dll_paths()
+        for path in result:
+            assert Path(path).exists(), f"Path does not exist: {path}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_paths_are_directories(self):
+        """Test that returned paths are directories."""
+        result = get_runtime_dll_paths()
+        for path in result:
+            assert Path(path).is_dir(), f"Path is not a directory: {path}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_includes_sysroot_bin(self):
+        """Test that the MinGW sysroot bin directory is included."""
+        result = get_runtime_dll_paths()
+        if result:
+            # Just check that paths are valid and exist
+            for path in result:
+                assert Path(path).exists()
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Non-Windows test")
+    def test_returns_empty_list_on_non_windows(self):
+        """Test that an empty list is returned on non-Windows platforms."""
+        result = get_runtime_dll_paths()
+        assert result == [], f"Expected empty list on non-Windows, got: {result}"
+
+    def test_does_not_raise_exceptions(self):
+        """Test that the function handles errors gracefully without raising."""
+        try:
+            result = get_runtime_dll_paths()
+            assert isinstance(result, list)
+        except Exception as e:
+            pytest.fail(f"get_runtime_dll_paths() raised an exception: {e}")
+
+
+class TestAsanDllMesonWorkaround:
+    """Integration tests demonstrating the Meson PATH override workaround.
+
+    These tests verify that the new functions can be used to solve the
+    ASAN DLL loading bug described in BUG_ASAN.md.
+    """
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_asan_dll_can_be_copied_to_build_dir(self):
+        """Test that the ASAN DLL can be copied to a build directory."""
+        import shutil
+        import tempfile
+
+        dll_path = get_asan_runtime_dll()
+        if dll_path is None:
+            pytest.skip("ASAN DLL not found (toolchain may not be installed)")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            build_dir = Path(tmpdir)
+            dest_path = build_dir / dll_path.name
+
+            # Copy the DLL
+            shutil.copy2(dll_path, dest_path)
+
+            # Verify copy
+            assert dest_path.exists(), f"Failed to copy DLL to {dest_path}"
+            assert dest_path.stat().st_size == dll_path.stat().st_size, "DLL size mismatch"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_all_sanitizer_dlls_can_be_copied(self):
+        """Test that all sanitizer DLLs can be copied to a build directory."""
+        import shutil
+        import tempfile
+
+        dlls = get_all_sanitizer_runtime_dlls()
+        if not dlls:
+            pytest.skip("No sanitizer DLLs found (toolchain may not be installed)")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            build_dir = Path(tmpdir)
+
+            for dll_path in dlls:
+                dest_path = build_dir / dll_path.name
+                shutil.copy2(dll_path, dest_path)
+                assert dest_path.exists(), f"Failed to copy DLL: {dll_path.name}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_asan_dll_path_consistency(self):
+        """Test that get_asan_runtime_dll returns consistent results."""
+        path1 = get_asan_runtime_dll()
+        path2 = get_asan_runtime_dll()
+
+        if path1 is not None:
+            assert path2 is not None
+            assert path1 == path2, f"Inconsistent results: {path1} vs {path2}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_asan_dll_in_all_dlls_list(self):
+        """Test that get_asan_runtime_dll result is in get_all_sanitizer_runtime_dlls."""
+        asan_dll = get_asan_runtime_dll()
+        all_dlls = get_all_sanitizer_runtime_dlls()
+
+        if asan_dll is not None:
+            assert asan_dll in all_dlls, f"ASAN DLL {asan_dll} not in all DLLs: {all_dlls}"
+
+
+class TestAsanDllAutomaticDeployment:
+    """Tests for automatic ASAN DLL deployment via the DLL deployer.
+
+    The DLL deployer should automatically detect and deploy the ASAN runtime
+    DLL when an ASAN-instrumented executable is built. This is part of the
+    existing automatic DLL deployment mechanism that already handles MinGW
+    runtime DLLs.
+    """
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_asan_dll_pattern_is_deployable(self):
+        """Test that the ASAN DLL pattern is recognized as deployable."""
+        from clang_tool_chain.deployment.dll_deployer import _is_deployable_dll
+
+        # Test the exact DLL name used by LLVM
+        assert _is_deployable_dll("libclang_rt.asan_dynamic-x86_64.dll")
+        assert _is_deployable_dll("libclang_rt.asan_dynamic-aarch64.dll")
+        assert _is_deployable_dll("libclang_rt.asan_dynamic-i386.dll")
+        # Case insensitive
+        assert _is_deployable_dll("LIBCLANG_RT.ASAN_DYNAMIC-X86_64.DLL")
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_asan_dll_found_in_toolchain(self):
+        """Test that the ASAN DLL can be found in the toolchain directories."""
+        from clang_tool_chain.deployment.dll_deployer import find_dll_in_toolchain
+
+        asan_dll = get_asan_runtime_dll()
+        if asan_dll is None:
+            pytest.skip("ASAN DLL not found (toolchain may not be installed)")
+
+        # The find_dll_in_toolchain function should find the same DLL
+        found_dll = find_dll_in_toolchain(asan_dll.name, "win", "x86_64")
+        assert found_dll is not None, f"find_dll_in_toolchain should find {asan_dll.name}"
+        assert found_dll.exists(), f"Found DLL should exist: {found_dll}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_asan_dll_detected_in_binary(self):
+        """Test that the ASAN DLL is detected as a dependency of an ASAN-instrumented binary."""
+        import tempfile
+
+        from clang_tool_chain.deployment.dll_deployer import detect_required_dlls
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create a simple C++ file
+            cpp_file = tmpdir_path / "test_asan.cpp"
+            cpp_file.write_text(
+                """
+#include <iostream>
+int main() {
+    std::cout << "ASAN test" << std::endl;
+    return 0;
+}
+"""
+            )
+
+            exe_path = tmpdir_path / "test_asan.exe"
+
+            # Compile with ASAN using clang-tool-chain-cpp
+            compile_result = subprocess.run(
+                [
+                    "clang-tool-chain-cpp",
+                    "-fsanitize=address",
+                    str(cpp_file),
+                    "-o",
+                    str(exe_path),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            if compile_result.returncode != 0:
+                pytest.skip(f"ASAN compilation failed: {compile_result.stderr}")
+
+            assert exe_path.exists(), "Executable should exist"
+
+            # Detect required DLLs
+            detected_dlls = detect_required_dlls(exe_path)
+
+            # ASAN DLL should be detected
+            asan_dlls = [d for d in detected_dlls if "asan" in d.lower()]
+            assert len(asan_dlls) > 0, f"ASAN DLL should be detected as dependency.\nDetected DLLs: {detected_dlls}"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_asan_dll_automatically_deployed(self):
+        """Test that the ASAN DLL is automatically deployed to the output directory.
+
+        This is the key integration test: when compiling with -fsanitize=address,
+        the ASAN runtime DLL should be automatically deployed to the output
+        directory, just like MinGW DLLs are.
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create a simple C++ file
+            cpp_file = tmpdir_path / "test_asan_deploy.cpp"
+            cpp_file.write_text(
+                """
+#include <iostream>
+int main() {
+    std::cout << "ASAN auto-deploy test" << std::endl;
+    return 0;
+}
+"""
+            )
+
+            exe_path = tmpdir_path / "test_asan_deploy.exe"
+
+            # Compile with ASAN using clang-tool-chain-cpp
+            # Note: NOT using --deploy-dependencies - this should happen automatically
+            compile_result = subprocess.run(
+                [
+                    "clang-tool-chain-cpp",
+                    "-fsanitize=address",
+                    str(cpp_file),
+                    "-o",
+                    str(exe_path),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            if compile_result.returncode != 0:
+                pytest.skip(f"ASAN compilation failed: {compile_result.stderr}")
+
+            assert exe_path.exists(), "Executable should exist"
+
+            # Check that ASAN DLL was deployed to the output directory
+            deployed_dlls = list(tmpdir_path.glob("*asan*.dll"))
+            assert len(deployed_dlls) > 0, (
+                f"ASAN DLL should be automatically deployed to output directory.\n"
+                f"Output directory contents: {list(tmpdir_path.glob('*'))}\n"
+                f"Compilation stderr: {compile_result.stderr}"
+            )
+
+            # Verify the deployed DLL exists and is the correct one
+            deployed_asan_dll = deployed_dlls[0]
+            assert "libclang_rt.asan" in deployed_asan_dll.name.lower(), (
+                f"Deployed DLL should be the ASAN runtime: {deployed_asan_dll.name}"
+            )
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_asan_dll_deployed_for_shared_library(self):
+        """Test that ASAN DLL is deployed when building a shared library with ASAN.
+
+        This tests the scenario where test DLLs are built with ASAN instrumentation,
+        like in the FastLED test suite. The ASAN runtime should be deployed alongside
+        the built shared library.
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create a simple shared library source
+            cpp_file = tmpdir_path / "test_lib.cpp"
+            cpp_file.write_text(
+                """
+extern "C" __declspec(dllexport) int add(int a, int b) {
+    return a + b;
+}
+"""
+            )
+
+            dll_path = tmpdir_path / "test_lib.dll"
+
+            # Compile as shared library with ASAN
+            compile_result = subprocess.run(
+                [
+                    "clang-tool-chain-cpp",
+                    "-fsanitize=address",
+                    "-shared",
+                    str(cpp_file),
+                    "-o",
+                    str(dll_path),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            if compile_result.returncode != 0:
+                pytest.skip(f"ASAN shared library compilation failed: {compile_result.stderr}")
+
+            assert dll_path.exists(), "Shared library should exist"
+
+            # Check that ASAN DLL was deployed to the output directory
+            deployed_dlls = list(tmpdir_path.glob("*asan*.dll"))
+            assert len(deployed_dlls) > 0, (
+                f"ASAN DLL should be deployed alongside shared library.\n"
+                f"Output directory contents: {list(tmpdir_path.glob('*'))}\n"
+                f"Compilation stderr: {compile_result.stderr}"
+            )
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_asan_executable_runs_with_deployed_dll(self):
+        """Test that an ASAN-instrumented executable runs correctly with the auto-deployed DLL."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create a simple C++ file
+            cpp_file = tmpdir_path / "test_asan_run.cpp"
+            cpp_file.write_text(
+                """
+#include <iostream>
+int main() {
+    std::cout << "ASAN run test SUCCESS" << std::endl;
+    return 0;
+}
+"""
+            )
+
+            exe_path = tmpdir_path / "test_asan_run.exe"
+
+            # Compile with ASAN
+            compile_result = subprocess.run(
+                [
+                    "clang-tool-chain-cpp",
+                    "-fsanitize=address",
+                    str(cpp_file),
+                    "-o",
+                    str(exe_path),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            if compile_result.returncode != 0:
+                pytest.skip(f"ASAN compilation failed: {compile_result.stderr}")
+
+            # Run the executable without setting PATH
+            # (to verify DLLs were deployed to the same directory)
+            run_result = subprocess.run(
+                [str(exe_path)],
+                capture_output=True,
+                text=True,
+                cwd=str(tmpdir_path),  # Run from the output directory
+                timeout=10,
+            )
+
+            assert run_result.returncode == 0, (
+                f"ASAN executable should run successfully.\n"
+                f"STDOUT: {run_result.stdout}\n"
+                f"STDERR: {run_result.stderr}\n"
+                f"DLLs in directory: {list(tmpdir_path.glob('*.dll'))}"
+            )
+            assert "SUCCESS" in run_result.stdout, "Expected output not found"

@@ -131,6 +131,168 @@ def get_runtime_dll_paths() -> list[str]:
     return paths
 
 
+def get_asan_runtime_dll() -> Path | None:
+    """
+    Get the full path to the ASAN runtime DLL (Windows only).
+
+    This function locates the shared ASAN runtime DLL used when compiling
+    with -fsanitize=address -shared-libasan. The DLL must be accessible
+    at runtime for ASAN-instrumented executables to run.
+
+    This is particularly useful when running tests via build systems like
+    Meson that reset PATH and don't inherit ASAN DLL directories. By getting
+    the DLL path, consuming projects can copy it to their build directory
+    where the build system will automatically discover it.
+
+    Returns:
+        Path to libclang_rt.asan_dynamic-x86_64.dll (or ARM64 equivalent),
+        or None if not found or not on Windows.
+
+    Example:
+        >>> dll_path = get_asan_runtime_dll()
+        >>> if dll_path:
+        ...     shutil.copy(dll_path, build_dir / dll_path.name)
+        ...     # Now Meson tests will find the ASAN DLL in build_dir
+
+    Note:
+        This function ensures the toolchain is downloaded before searching.
+        The DLL is typically located in the MinGW sysroot bin directory:
+        ~/.clang-tool-chain/clang/win/x86_64/x86_64-w64-mingw32/bin/
+
+    See Also:
+        get_runtime_dll_paths: Returns directories containing runtime DLLs
+        prepare_sanitizer_environment: Adds DLL paths to PATH
+    """
+    if platform.system() != "Windows":
+        logger.debug("get_asan_runtime_dll: Not on Windows, returning None")
+        return None
+
+    try:
+        from clang_tool_chain.platform.detection import get_platform_binary_dir, get_platform_info
+
+        # Get platform info for sysroot lookup
+        _platform_name, arch = get_platform_info()
+
+        # Get the clang root directory
+        clang_bin_dir = get_platform_binary_dir()
+        clang_root = clang_bin_dir.parent
+
+        # Determine sysroot and DLL name based on architecture
+        if arch == "x86_64":
+            sysroot_name = "x86_64-w64-mingw32"
+            dll_name = "libclang_rt.asan_dynamic-x86_64.dll"
+        elif arch == "arm64":
+            sysroot_name = "aarch64-w64-mingw32"
+            dll_name = "libclang_rt.asan_dynamic-aarch64.dll"
+        else:
+            logger.debug(f"get_asan_runtime_dll: Unsupported architecture {arch}")
+            return None
+
+        # Check MinGW sysroot bin directory first (primary location)
+        sysroot_bin = clang_root / sysroot_name / "bin"
+        dll_path = sysroot_bin / dll_name
+        if dll_path.exists():
+            logger.debug(f"Found ASAN runtime DLL: {dll_path}")
+            return dll_path
+
+        # Fallback: check clang bin directory
+        dll_path = clang_bin_dir / dll_name
+        if dll_path.exists():
+            logger.debug(f"Found ASAN runtime DLL (fallback): {dll_path}")
+            return dll_path
+
+        # Try glob pattern for any ASAN DLL (version may vary)
+        for search_dir in [sysroot_bin, clang_bin_dir]:
+            if search_dir.exists():
+                for dll_file in search_dir.glob("libclang_rt.asan*.dll"):
+                    logger.debug(f"Found ASAN runtime DLL (glob): {dll_file}")
+                    return dll_file
+
+        logger.debug(f"ASAN runtime DLL not found in {sysroot_bin} or {clang_bin_dir}")
+        return None
+
+    except (ImportError, RuntimeError) as e:
+        logger.debug(f"Could not get ASAN runtime DLL path: {e}")
+        return None
+
+
+def get_all_sanitizer_runtime_dlls() -> list[Path]:
+    """
+    Get all sanitizer runtime DLLs (Windows only).
+
+    This function locates all shared sanitizer runtime DLLs, including:
+    - Address Sanitizer (ASAN)
+    - Undefined Behavior Sanitizer (UBSAN)
+    - Thread Sanitizer (TSAN) - if available
+
+    This is useful for projects that want to copy all sanitizer DLLs to
+    their build directory to ensure all instrumented code can run.
+
+    Returns:
+        List of Paths to sanitizer runtime DLLs, or empty list if not
+        found or not on Windows.
+
+    Example:
+        >>> dlls = get_all_sanitizer_runtime_dlls()
+        >>> for dll in dlls:
+        ...     shutil.copy(dll, build_dir / dll.name)
+
+    See Also:
+        get_asan_runtime_dll: Returns just the ASAN DLL path
+    """
+    if platform.system() != "Windows":
+        return []
+
+    dlls: list[Path] = []
+
+    try:
+        from clang_tool_chain.platform.detection import get_platform_binary_dir, get_platform_info
+
+        # Get platform info for sysroot lookup
+        _platform_name, arch = get_platform_info()
+
+        # Get the clang root directory
+        clang_bin_dir = get_platform_binary_dir()
+        clang_root = clang_bin_dir.parent
+
+        # Determine sysroot based on architecture
+        if arch == "x86_64":
+            sysroot_name = "x86_64-w64-mingw32"
+        elif arch == "arm64":
+            sysroot_name = "aarch64-w64-mingw32"
+        else:
+            return []
+
+        # Search directories
+        search_dirs = [
+            clang_root / sysroot_name / "bin",
+            clang_bin_dir,
+        ]
+
+        # Patterns for sanitizer DLLs
+        patterns = [
+            "libclang_rt.asan*.dll",  # Address Sanitizer
+            "libclang_rt.ubsan*.dll",  # Undefined Behavior Sanitizer
+            "libclang_rt.tsan*.dll",  # Thread Sanitizer
+            "libclang_rt.lsan*.dll",  # Leak Sanitizer (standalone)
+        ]
+
+        seen_names: set[str] = set()
+        for search_dir in search_dirs:
+            if search_dir.exists():
+                for pattern in patterns:
+                    for dll_file in search_dir.glob(pattern):
+                        if dll_file.name not in seen_names:
+                            dlls.append(dll_file)
+                            seen_names.add(dll_file.name)
+                            logger.debug(f"Found sanitizer DLL: {dll_file}")
+
+    except (ImportError, RuntimeError) as e:
+        logger.debug(f"Could not get sanitizer runtime DLLs: {e}")
+
+    return dlls
+
+
 def detect_sanitizers_from_flags(compiler_flags: list[str]) -> tuple[bool, bool]:
     """
     Detect which sanitizers are enabled from compiler flags.

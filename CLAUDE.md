@@ -785,6 +785,9 @@ if symbolizer:
 - `prepare_sanitizer_environment(base_env, compiler_flags)` - Returns environment dict with all sanitizer variables injected
 - `get_symbolizer_path()` - Returns path to `llvm-symbolizer` or `None` if not found
 - `detect_sanitizers_from_flags(flags)` - Returns `(asan_enabled, lsan_enabled)` tuple
+- `get_asan_runtime_dll()` - Returns `Path` to the ASAN runtime DLL on Windows, or `None` (for Meson workaround)
+- `get_all_sanitizer_runtime_dlls()` - Returns list of `Path` objects for all sanitizer DLLs on Windows
+- `get_runtime_dll_paths()` - Returns list of directory paths containing runtime DLLs on Windows
 
 **Note:** Options are only injected when the corresponding sanitizer is detected in the compiler flags. Regular builds without sanitizers are unaffected.
 
@@ -808,6 +811,36 @@ if symbolizer:
 ### Windows ASAN Support
 
 Windows ASAN support works with both GNU and MSVC ABIs. Runtime DLLs are automatically deployed for GNU ABI builds.
+
+#### Meson Test Runner Workaround
+
+When running ASAN-instrumented tests via Meson's test runner (`meson test`), Meson overrides PATH to only include build directory DLLs. This causes tests to fail with exit code 3 (DLL not found) because the ASAN runtime DLL (`libclang_rt.asan_dynamic-x86_64.dll`) is external to the build directory.
+
+**Solution:** Copy the ASAN DLL to your build directory so Meson discovers it automatically:
+
+```python
+from clang_tool_chain import get_asan_runtime_dll
+import shutil
+from pathlib import Path
+
+# Get the ASAN DLL path
+dll_path = get_asan_runtime_dll()
+if dll_path:
+    build_dir = Path(".build/meson-debug/tests")  # Your build directory
+    shutil.copy(dll_path, build_dir / dll_path.name)
+    # Now `meson test` will find the ASAN DLL
+```
+
+Alternatively, copy all sanitizer DLLs:
+```python
+from clang_tool_chain import get_all_sanitizer_runtime_dlls
+import shutil
+
+for dll in get_all_sanitizer_runtime_dlls():
+    shutil.copy(dll, build_dir / dll.name)
+```
+
+See `BUG_ASAN.md` for detailed analysis of this issue.
 
 ### macOS ASAN Support
 
