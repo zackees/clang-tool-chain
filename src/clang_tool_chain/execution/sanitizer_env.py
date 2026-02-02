@@ -1,9 +1,9 @@
 """
 Sanitizer runtime environment configuration.
 
-This module provides automatic injection of ASAN_OPTIONS, LSAN_OPTIONS, and
-ASAN_SYMBOLIZER_PATH environment variables to improve stack trace quality
-when running executables compiled with Address Sanitizer or Leak Sanitizer.
+This module provides automatic injection of ASAN_OPTIONS, LSAN_OPTIONS,
+ASAN_SYMBOLIZER_PATH, and PATH environment variables to ensure executables
+compiled with Address Sanitizer or Leak Sanitizer can run correctly.
 
 The default options fix <unknown module> entries in stack traces from
 dlopen()'d shared libraries by enabling slow unwinding and symbolization.
@@ -11,6 +11,10 @@ dlopen()'d shared libraries by enabling slow unwinding and symbolization.
 The symbolizer path is automatically detected from the clang-tool-chain
 installation, enabling proper address-to-symbol resolution without manual
 configuration.
+
+On Windows with shared ASAN runtime (-shared-libasan), the clang runtime
+DLL directory is automatically added to PATH to ensure the ASAN DLL can
+be found at runtime.
 """
 
 import logging
@@ -69,6 +73,62 @@ def get_symbolizer_path() -> str | None:
 
     logger.debug("llvm-symbolizer not found in clang-tool-chain or system PATH")
     return None
+
+
+def get_runtime_dll_paths() -> list[str]:
+    """
+    Get paths to directories containing runtime DLLs (Windows only).
+
+    On Windows, when using shared ASAN runtime (-shared-libasan), the
+    libclang_rt.asan_dynamic-x86_64.dll must be findable at runtime.
+    This function returns the paths that should be added to PATH.
+
+    Returns:
+        List of directory paths containing runtime DLLs, or empty list
+        if not applicable (non-Windows or DLLs not found).
+
+    Example:
+        >>> paths = get_runtime_dll_paths()
+        >>> if paths:
+        ...     os.environ["PATH"] = os.pathsep.join(paths) + os.pathsep + os.environ.get("PATH", "")
+    """
+    if platform.system() != "Windows":
+        return []
+
+    paths = []
+
+    try:
+        from clang_tool_chain.platform.detection import get_platform_binary_dir, get_platform_info
+
+        # Get platform info for sysroot lookup
+        _platform_name, arch = get_platform_info()
+
+        # Get the clang bin directory and sysroot bin directory
+        clang_bin_dir = get_platform_binary_dir()
+        clang_root = clang_bin_dir.parent
+
+        # Add clang bin directory (for some sanitizer DLLs)
+        if clang_bin_dir.exists():
+            paths.append(str(clang_bin_dir))
+
+        # Add MinGW sysroot bin directory (where libclang_rt.asan_dynamic-x86_64.dll lives)
+        if arch == "x86_64":
+            sysroot_name = "x86_64-w64-mingw32"
+        elif arch == "arm64":
+            sysroot_name = "aarch64-w64-mingw32"
+        else:
+            sysroot_name = None
+
+        if sysroot_name:
+            sysroot_bin = clang_root / sysroot_name / "bin"
+            if sysroot_bin.exists():
+                paths.append(str(sysroot_bin))
+                logger.debug(f"Found MinGW sysroot bin: {sysroot_bin}")
+
+    except (ImportError, RuntimeError) as e:
+        logger.debug(f"Could not get runtime DLL paths: {e}")
+
+    return paths
 
 
 def detect_sanitizers_from_flags(compiler_flags: list[str]) -> tuple[bool, bool]:
@@ -223,6 +283,20 @@ def prepare_sanitizer_environment(
                 "raw addresses instead of function names. Install llvm-symbolizer "
                 "or ensure clang-tool-chain is properly installed."
             )
+
+    # On Windows, add runtime DLL paths to PATH for shared ASAN runtime
+    # This ensures libclang_rt.asan_dynamic-x86_64.dll can be found at runtime
+    if asan_enabled and platform.system() == "Windows":
+        dll_paths = get_runtime_dll_paths()
+        if dll_paths:
+            current_path = env.get("PATH", "")
+            # Prepend DLL paths to ensure they take priority
+            new_path = os.pathsep.join(dll_paths)
+            if current_path:
+                env["PATH"] = new_path + os.pathsep + current_path
+            else:
+                env["PATH"] = new_path
+            logger.info(f"Injecting runtime DLL paths to PATH: {dll_paths}")
 
     # Add platform-specific LSan suppressions if LSAN is enabled
     if lsan_enabled:

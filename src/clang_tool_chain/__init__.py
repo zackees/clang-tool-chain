@@ -9,6 +9,7 @@ from clang_tool_chain.env_utils import (
 )
 from clang_tool_chain.execution.sanitizer_env import (
     detect_sanitizers_from_flags,
+    get_runtime_dll_paths,
     get_symbolizer_path,
     prepare_sanitizer_environment,
 )
@@ -27,6 +28,7 @@ __all__ = [
     "CONTROLLABLE_FEATURES",
     # Sanitizer environment
     "prepare_sanitizer_environment",
+    "get_runtime_dll_paths",
     "get_symbolizer_path",
     "detect_sanitizers_from_flags",
 ]

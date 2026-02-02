@@ -12,6 +12,7 @@ from clang_tool_chain.execution.build import build_main, build_run_main
 from clang_tool_chain.execution.core import execute_tool, run_tool, sccache_clang_cpp_main, sccache_clang_main
 from clang_tool_chain.execution.sanitizer_env import (
     detect_sanitizers_from_flags,
+    get_runtime_dll_paths,
     get_symbolizer_path,
     prepare_sanitizer_environment,
 )
@@ -29,5 +30,6 @@ __all__ = [
     # Sanitizer utilities
     "prepare_sanitizer_environment",
     "detect_sanitizers_from_flags",
+    "get_runtime_dll_paths",
     "get_symbolizer_path",
 ]
