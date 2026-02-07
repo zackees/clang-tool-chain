@@ -1,5 +1,9 @@
 # Node.js Integration (Bundled)
 
+<!-- AGENT: Read this file when working on bundled Node.js runtime for WebAssembly execution.
+     Key topics: Node.js download, version management, Emscripten runtime dependency.
+     Related: docs/EMSCRIPTEN.md. -->
+
 **Summary:** Node.js is automatically bundled with this package for running WebAssembly programs compiled with Emscripten. Users no longer need to install Node.js manually.
 
 ## Key Features

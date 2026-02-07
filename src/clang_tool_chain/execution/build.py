@@ -80,7 +80,7 @@ def _get_directive_args(source_path: Path) -> list[str]:
             print(f"  Effective args: {' '.join(all_args)}", file=sys.stderr)
 
         return all_args
-    except KeyboardInterrupt:  # noqa: KBI002
+    except KeyboardInterrupt:
         # Re-raise KeyboardInterrupt to allow clean exit
         raise
     except Exception as e:

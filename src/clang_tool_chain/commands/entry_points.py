@@ -449,3 +449,24 @@ def cosmocpp_main() -> NoReturn:
     from ..execution.cosmocc import execute_cosmocc_tool
 
     execute_cosmocc_tool("cosmoc++")
+
+
+# ============================================================================
+# Valgrind Entry Points
+# ============================================================================
+
+
+def valgrind_main() -> NoReturn | int:
+    """
+    Entry point for clang-tool-chain-valgrind command.
+
+    Runs Valgrind memory error detector on a compiled executable
+    inside a Docker container. Works from any host platform.
+
+    Example:
+        clang-tool-chain-cpp program.cpp -g -O0 -o program
+        clang-tool-chain-valgrind --leak-check=full ./program
+    """
+    from ..execution.valgrind import execute_valgrind_tool
+
+    return execute_valgrind_tool()

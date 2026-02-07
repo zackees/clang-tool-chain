@@ -1,5 +1,9 @@
 # Testing Guide
 
+<!-- AGENT: Read this file when adding/modifying tests, debugging CI failures, or working on test infrastructure.
+     Key topics: pytest, test matrix, GitHub Actions workflows, platform-specific tests, coverage.
+     Related: docs/CLANG_LLVM.md, docs/LLDB.md, docs/EMSCRIPTEN.md. -->
+
 This document describes the testing infrastructure and how to run tests for the clang-tool-chain package.
 
 ## Quick Diagnostic Test
@@ -98,6 +102,9 @@ def pytest_configure(config):
 - `test_binary_utils.py` - LLVM binary utilities (14 tests: ar, nm, objdump, strip, readelf, objcopy, ranlib)
 - `test_iwyu.py` - Include What You Use analyzer tests
 - `test_lldb.py` - LLDB debugger tests (4 tests: installation, crash analysis, full backtraces)
+- `test_libunwind_headers.py` - libunwind stack unwinding tests (all platforms: Linux bundled, Windows MinGW sysroot, macOS system)
+- `test_asan_linking.py` - ASAN linking and shared library tests
+- `test_asan_options_injection.py` - Sanitizer environment injection tests (43 tests)
 - `test_build_run_cached_integration.py` - sccache integration tests
 
 ### Library Deployment Tests
@@ -583,11 +590,11 @@ Tests are designed to be independent and can run in any order:
 
 ### GitHub Actions Workflows
 
-The project uses a comprehensive test matrix with **35 GitHub Actions workflows** covering all platform+tool combinations:
+The project uses a comprehensive test matrix with **45+ GitHub Actions workflows** covering all platform+tool combinations:
 
 **Test Matrix Structure:**
 - **5 platforms:** Windows x64, Linux x86_64, Linux ARM64, macOS x86_64, macOS ARM64
-- **7 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, format-lint, binary-utils
+- **9 tool categories:** clang, clang-sccache, emscripten, emscripten-sccache, iwyu, lldb, libunwind, format-lint, binary-utils
 
 **Core Workflows:**
 - `.github/workflows/test.yml` - Cross-platform test suite (Linux, macOS, Windows)
@@ -600,6 +607,8 @@ The project uses a comprehensive test matrix with **35 GitHub Actions workflows*
 - `test-emscripten-{platform}.yml` - Emscripten WebAssembly compilation
 - `test-emscripten-sccache-{platform}.yml` - Emscripten with sccache
 - `test-iwyu-{platform}.yml` - Include What You Use analyzer
+- `test-lldb-{platform}.yml` - LLDB debugger tests
+- `test-libunwind-{platform}.yml` - libunwind stack unwinding tests
 - `test-format-lint-{platform}.yml` - clang-format and clang-tidy
 - `test-binary-utils-{platform}.yml` - LLVM binary utilities
 
@@ -608,7 +617,7 @@ All workflows run on:
 - Every pull request
 - Manual workflow dispatch
 
-See the README.md "Test Matrix" section for live status badges showing all 35 workflows.
+See the README.md "Test Matrix" section for live status badges showing all 45+ workflows.
 
 ## Writing New Tests
 

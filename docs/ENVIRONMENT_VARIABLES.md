@@ -1,5 +1,10 @@
 # Environment Variables
 
+<!-- AGENT: Read this file when working on CLANG_TOOL_CHAIN_* environment variables, note suppression,
+     or configuring automatic features (deployment, sanitizers, directives, linker, sysroot).
+     Key topics: NO_AUTO, NO_DEPLOY_LIBS, NO_SHARED_ASAN, NO_SANITIZER_ENV, NO_DIRECTIVES.
+     Related: docs/CLANG_LLVM.md, docs/SHARED_LIBRARY_DEPLOYMENT.md, docs/DIRECTIVES.md. -->
+
 **Comprehensive Guide to clang-tool-chain Environment Variables**
 
 This document lists all environment variables recognized by clang-tool-chain for configuration and customization.
@@ -280,7 +285,23 @@ if symbolizer:
     os.environ["ASAN_SYMBOLIZER_PATH"] = symbolizer
 ```
 
-**See Also:** [ASAN Documentation in CLAUDE.md](../CLAUDE.md#address-sanitizer-asan-support)
+### Note Suppression Hierarchy
+
+Notes printed to stderr can be suppressed at different levels:
+
+| Variable | Scope | What it suppresses |
+|----------|-------|-------------------|
+| `CLANG_TOOL_CHAIN_NO_AUTO=1` | Global | All automatic features and notes |
+| `CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE=1` | Category | All sanitizer-related notes |
+| `CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE=1` | Specific | Only the -shared-libasan note |
+| `CLANG_TOOL_CHAIN_NO_ALLOW_SHLIB_UNDEFINED_NOTE=1` | Specific | Only the --allow-shlib-undefined note |
+| `CLANG_TOOL_CHAIN_NO_LINKER_NOTE=1` | Category | All linker-related notes |
+| `CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1` | Specific | Only the removed GNU flags note |
+| `CLANG_TOOL_CHAIN_NO_LD64_LLD_CONVERT_NOTE=1` | Specific | Only the ld64.lld conversion note |
+
+Each note message includes its specific disable variable for easy discoverability.
+
+**See Also:** [ASAN Documentation in docs/CLANG_LLVM.md](CLANG_LLVM.md#linux-asan-configuration)
 
 ---
 

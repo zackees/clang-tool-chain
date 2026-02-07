@@ -116,6 +116,8 @@ clang-tool-chain-meson = "clang_tool_chain.wrapper:meson_main"
 # Cosmopolitan (Actually Portable Executables)
 clang-tool-chain-cosmocc = "clang_tool_chain.wrapper:cosmocc_main"
 clang-tool-chain-cosmocpp = "clang_tool_chain.wrapper:cosmocpp_main"
+# Valgrind (Memory Analysis via Docker)
+clang-tool-chain-valgrind = "clang_tool_chain.wrapper:valgrind_main"
 # Library Deployment (post-build)
 clang-tool-chain-libdeploy = "clang_tool_chain.deployment.libdeploy:main"
 

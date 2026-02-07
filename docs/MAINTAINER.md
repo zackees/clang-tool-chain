@@ -1,5 +1,10 @@
 # Maintainer Tools
 
+<!-- AGENT: Read this file when packaging binaries, building archives, bundling DLLs for IWYU,
+     or working on distribution infrastructure.
+     Key topics: archive creation, zstd compression, hard-link deduplication, IWYU DLL bundling.
+     Related: downloads-bins/CLAUDE.md, docs/ARCHITECTURE.md. -->
+
 This document describes the tools and workflows for maintainers who package and distribute binary archives.
 
 ## Setup

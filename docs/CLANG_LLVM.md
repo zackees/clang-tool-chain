@@ -1,5 +1,10 @@
 # Clang/LLVM Toolchain
 
+<!-- AGENT: Read this file when working on compiler wrappers, sanitizers (ASAN/UBSAN), LLD linker,
+     macOS SDK detection, Windows GNU/MSVC ABI, or sccache integration.
+     Key topics: clang-tool-chain-c, clang-tool-chain-cpp, -fsanitize, lld, ld64.lld, MinGW, MSVC.
+     Related: docs/ENVIRONMENT_VARIABLES.md, docs/SHARED_LIBRARY_DEPLOYMENT.md. -->
+
 This document covers the Clang/LLVM toolchain integration, including platform-specific features and compiler wrappers.
 
 ## sccache Integration (Optional)
@@ -119,6 +124,160 @@ clang-tool-chain-cpp -fsanitize=address main.cpp -o main.exe
 - [DLL Deployment Documentation](DLL_DEPLOYMENT.md) - Complete guide to automatic DLL deployment
 - [Clang Sanitizer Documentation](https://clang.llvm.org/docs/AddressSanitizer.html) - Official ASAN documentation
 - [UBSAN Documentation](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html) - Official UBSAN documentation
+
+### Linux ASAN Configuration
+
+On Linux, when using `-fsanitize=address`, clang-tool-chain automatically injects the following flags:
+- `-shared-libasan` - Uses the shared ASAN runtime library (prevents undefined symbol errors during linking)
+- `-Wl,--allow-shlib-undefined` - When building shared libraries (`-shared`), allows undefined symbols that will be provided by the sanitizer runtime at load time
+
+Individual notes are printed to stderr when flags are automatically injected:
+```
+clang-tool-chain: note: automatically injected -shared-libasan for ASAN runtime linking (disable with CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE=1)
+clang-tool-chain: note: automatically injected -Wl,--allow-shlib-undefined for shared library ASAN (disable with CLANG_TOOL_CHAIN_NO_ALLOW_SHLIB_UNDEFINED_NOTE=1)
+```
+
+**Example:**
+```bash
+# Compile with ASAN - runtime automatically linked
+clang-tool-chain-cpp -fsanitize=address test.cpp -o test
+
+# Build shared library with ASAN - allows undefined sanitizer symbols
+clang-tool-chain-cpp -fsanitize=address -shared -fPIC mylib.cpp -o mylib.so
+
+# Deploy ASAN shared library alongside executable (optional)
+clang-tool-chain-cpp -fsanitize=address test.cpp -o test --deploy-dependencies
+
+# Run with ASAN enabled
+./test
+```
+
+**Environment Variables:**
+- `CLANG_TOOL_CHAIN_NO_SHARED_ASAN=1` - Disable automatic `-shared-libasan` injection (use static ASAN)
+- `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS=1` - Disable automatic library deployment
+- `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV=1` - Disable automatic `ASAN_OPTIONS`/`LSAN_OPTIONS` injection at runtime
+
+### Note Suppression (Hierarchical)
+
+Notes can be suppressed at different levels using a hierarchical system:
+
+| Variable | Scope | What it suppresses |
+|----------|-------|-------------------|
+| `CLANG_TOOL_CHAIN_NO_AUTO=1` | Global | All automatic features and notes |
+| `CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE=1` | Category | All sanitizer-related notes |
+| `CLANG_TOOL_CHAIN_NO_SHARED_ASAN_NOTE=1` | Specific | Only the -shared-libasan note |
+| `CLANG_TOOL_CHAIN_NO_ALLOW_SHLIB_UNDEFINED_NOTE=1` | Specific | Only the --allow-shlib-undefined note |
+| `CLANG_TOOL_CHAIN_NO_LINKER_NOTE=1` | Category | All linker-related notes |
+| `CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1` | Specific | Only the removed GNU flags note |
+| `CLANG_TOOL_CHAIN_NO_LD64_LLD_CONVERT_NOTE=1` | Specific | Only the ld64.lld conversion note |
+
+Each note message includes its specific disable variable for easy discoverability.
+
+### Runtime Environment (ASAN_OPTIONS Injection)
+
+When running executables via `clang-tool-chain-build-run`, optimal sanitizer options are automatically injected to improve stack trace quality **only when the corresponding sanitizer was used during compilation**. This fixes `<unknown module>` entries in stack traces from `dlopen()`'d shared libraries.
+
+**Automatically injected based on compiler flags:**
+- `ASAN_OPTIONS=fast_unwind_on_malloc=0:symbolize=1:detect_leaks=1` (when `-fsanitize=address` is used)
+- `LSAN_OPTIONS=fast_unwind_on_malloc=0:symbolize=1` (when `-fsanitize=address` or `-fsanitize=leak` is used)
+- `ASAN_SYMBOLIZER_PATH=/path/to/llvm-symbolizer` (automatically detected from clang-tool-chain installation)
+
+**What these options do:**
+- `fast_unwind_on_malloc=0`: Use slow but accurate stack unwinding (fixes `<unknown module>` in dlopen'd libraries)
+- `symbolize=1`: Enable symbolization for readable function names in stack traces
+- `detect_leaks=1`: Enable leak detection (ASAN only)
+- `ASAN_SYMBOLIZER_PATH`: Points to `llvm-symbolizer` binary for address-to-symbol resolution
+
+**Opt-out:** Set `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV=1` to disable automatic injection.
+
+**User options preserved:** If you set `ASAN_OPTIONS`, `LSAN_OPTIONS`, or `ASAN_SYMBOLIZER_PATH` yourself, your values are preserved (no automatic injection for that variable).
+
+### Programmatic API for Sanitizer Environment
+
+External callers can use the sanitizer environment API programmatically:
+
+```python
+from clang_tool_chain import prepare_sanitizer_environment, get_symbolizer_path
+
+# Option A: Complete environment setup (recommended)
+env = prepare_sanitizer_environment(
+    base_env=os.environ.copy(),
+    compiler_flags=["-fsanitize=address", "-O2"]
+)
+# env now contains ASAN_OPTIONS, LSAN_OPTIONS, and ASAN_SYMBOLIZER_PATH
+
+# Option B: Get just the symbolizer path
+symbolizer = get_symbolizer_path()
+if symbolizer:
+    os.environ["ASAN_SYMBOLIZER_PATH"] = symbolizer
+```
+
+**Functions:**
+- `prepare_sanitizer_environment(base_env, compiler_flags)` - Returns environment dict with all sanitizer variables injected
+- `get_symbolizer_path()` - Returns path to `llvm-symbolizer` or `None` if not found
+- `detect_sanitizers_from_flags(flags)` - Returns `(asan_enabled, lsan_enabled)` tuple
+- `get_asan_runtime_dll()` - Returns `Path` to the ASAN runtime DLL on Windows, or `None` (for Meson workaround)
+- `get_all_sanitizer_runtime_dlls()` - Returns list of `Path` objects for all sanitizer DLLs on Windows
+- `get_runtime_dll_paths()` - Returns list of directory paths containing runtime DLLs on Windows
+
+### Windows ASAN Support
+
+Windows ASAN support works with both GNU and MSVC ABIs. Runtime DLLs are automatically deployed for GNU ABI builds.
+
+#### Meson Test Runner Workaround
+
+When running ASAN-instrumented tests via Meson's test runner (`meson test`), Meson overrides PATH to only include build directory DLLs. This causes tests to fail with exit code 3 (DLL not found) because the ASAN runtime DLL (`libclang_rt.asan_dynamic-x86_64.dll`) is external to the build directory.
+
+**Solution:** Copy the ASAN DLL to your build directory so Meson discovers it automatically:
+
+```python
+from clang_tool_chain import get_asan_runtime_dll
+import shutil
+from pathlib import Path
+
+# Get the ASAN DLL path
+dll_path = get_asan_runtime_dll()
+if dll_path:
+    build_dir = Path(".build/meson-debug/tests")  # Your build directory
+    shutil.copy(dll_path, build_dir / dll_path.name)
+    # Now `meson test` will find the ASAN DLL
+```
+
+Alternatively, copy all sanitizer DLLs:
+```python
+from clang_tool_chain import get_all_sanitizer_runtime_dlls
+import shutil
+
+for dll in get_all_sanitizer_runtime_dlls():
+    shutil.copy(dll, build_dir / dll.name)
+```
+
+See `BUG_ASAN.md` for detailed analysis of this issue.
+
+### macOS ASAN Support
+
+macOS ASAN support uses the bundled LLVM ASAN runtime with automatic deployment via `--deploy-dependencies`.
+
+### Dynamically Loaded Libraries
+
+See README.md "Dynamically Loaded Libraries" section for user-facing documentation on fixing `<unknown module>` in ASAN stack traces (dlopen flags, dlclose handling).
+
+### ASAN Implementation Details
+
+- **ASANRuntimeTransformer** (priority=250) automatically adds `-shared-libasan` when `-fsanitize=address` detected on Linux
+- **ASANRuntimeTransformer** also adds `-Wl,--allow-shlib-undefined` when building shared libraries (`-shared`) with ASAN
+- Shared library deployment now works on all platforms (previously Windows-only)
+- The `execute_tool()` function uses `subprocess.run()` on all platforms to enable post-link deployment
+- ASAN runtime library (`libclang_rt.asan.so`) is automatically deployed when `--deploy-dependencies` flag is used
+- **`get_symbolizer_path()`** finds `llvm-symbolizer` from clang-tool-chain installation, falls back to system PATH
+- **`prepare_sanitizer_environment()`** automatically injects `ASAN_SYMBOLIZER_PATH` when sanitizers are detected
+
+**Implementation Files:**
+- `src/clang_tool_chain/execution/arg_transformers.py` - ASANRuntimeTransformer
+- `src/clang_tool_chain/execution/core.py` - `subprocess.run()` for Linux/macOS deployment support
+- `src/clang_tool_chain/execution/sanitizer_env.py` - `get_symbolizer_path()` and `ASAN_SYMBOLIZER_PATH` injection
+- `tests/test_asan_linking.py` - Comprehensive ASAN linking tests
+- `tests/test_asan_options_injection.py` - Tests for sanitizer environment injection (43 tests)
 
 ## LLVM lld Linker (All Platforms)
 

@@ -81,6 +81,7 @@ from clang_tool_chain.commands.entry_points import (
     meson_main,
     sccache_emcc_main,
     sccache_empp_main,
+    valgrind_main,
     wasm_ld_main,
 )
 
@@ -125,4 +126,6 @@ __all__ = [
     # Cosmocc (Cosmopolitan)
     "cosmocc_main",
     "cosmocpp_main",
+    # Valgrind
+    "valgrind_main",
 ]

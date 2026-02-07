@@ -1,5 +1,10 @@
 # Architecture
 
+<!-- AGENT: Read this file when working on the manifest system, multi-part archives,
+     download infrastructure, or internal package structure.
+     Key topics: manifest.json, archive format, parallel downloads, toolchain installation.
+     Related: docs/PARALLEL_DOWNLOADS.md, docs/MAINTAINER.md, downloads-bins/CLAUDE.md. -->
+
 This document describes the technical architecture of the clang-tool-chain package.
 
 ## Core Components

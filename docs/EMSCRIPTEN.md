@@ -1,5 +1,10 @@
 # Emscripten (WebAssembly Compilation)
 
+<!-- AGENT: Read this file when working on WebAssembly, Emscripten compilation (emcc, em++),
+     or WASM-related features.
+     Key topics: clang-tool-chain-emcc, clang-tool-chain-emcpp, emsdk, Node.js bundling.
+     Related: docs/NODEJS.md, docs/ENVIRONMENT_VARIABLES.md. -->
+
 This package provides Emscripten integration for compiling C/C++ to WebAssembly (WASM). Emscripten is automatically downloaded and installed on first use, similar to the LLVM toolchain.
 
 ## Key Features

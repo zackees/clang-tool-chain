@@ -66,6 +66,14 @@ from clang_tool_chain.installers.nodejs import (
     is_nodejs_installed,
 )
 
+# Re-export Valgrind installer
+from clang_tool_chain.installers.valgrind import (
+    _subprocess_install_valgrind,
+    download_and_install_valgrind,
+    ensure_valgrind,
+    is_valgrind_installed,
+)
+
 # Re-export manifest functions for backward compatibility
 from clang_tool_chain.manifest import fetch_nodejs_platform_manifest, fetch_platform_manifest
 
@@ -104,6 +112,11 @@ __all__ = [
     "download_and_install_cosmocc",
     "ensure_cosmocc",
     "_subprocess_install_cosmocc",
+    # Valgrind
+    "is_valgrind_installed",
+    "download_and_install_valgrind",
+    "ensure_valgrind",
+    "_subprocess_install_valgrind",
     # Helpers
     "get_latest_version_info",
     # Path utilities (backward compatibility)

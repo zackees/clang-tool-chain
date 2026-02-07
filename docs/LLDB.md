@@ -1,5 +1,10 @@
 # LLDB (LLVM Debugger)
 
+<!-- AGENT: Read this file when working on LLDB debugger, crash analysis, stack traces,
+     Python 3.10 bundling, or interactive debugging.
+     Key topics: clang-tool-chain-lldb, --print flag, Python integration, bt all.
+     Related: docs/TESTING.md, docs/CLANG_LLVM.md. -->
+
 This package provides LLDB (LLVM Debugger) integration for debugging C/C++ programs compiled with clang-tool-chain. LLDB is automatically downloaded and installed on first use as an optional component, similar to IWYU and Emscripten.
 
 ## Key Features

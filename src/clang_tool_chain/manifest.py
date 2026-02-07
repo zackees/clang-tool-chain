@@ -26,6 +26,7 @@ LLDB_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-c
 EMSCRIPTEN_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/emscripten"
 NODEJS_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/nodejs"
 COSMOCC_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/cosmocc"
+VALGRIND_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/valgrind"
 
 # Generic type variable for JSON deserialization
 T = TypeVar("T")
@@ -603,3 +604,67 @@ def fetch_cosmocc_platform_manifest(platform: str | None = None, arch: str | Non
             f"Failed to fetch Cosmocc manifest from {manifest_url}: {e}\n"
             f"This may indicate a network issue or that the manifest URL has changed."
         ) from e
+
+
+# ============================================================================
+# Valgrind Manifest Functions
+# ============================================================================
+
+
+def fetch_valgrind_root_manifest() -> RootManifest:
+    """
+    Fetch the Valgrind root manifest file.
+
+    Returns:
+        Root manifest as a RootManifest object
+    """
+    logger.info("Fetching Valgrind root manifest")
+    url = f"{VALGRIND_MANIFEST_BASE_URL}/manifest.json"
+    data = _fetch_json_raw(url)
+    manifest = _parse_root_manifest(data)
+    logger.info(f"Valgrind root manifest loaded with {len(manifest.platforms)} platforms")
+    return manifest
+
+
+def fetch_valgrind_platform_manifest(platform: str, arch: str) -> Manifest:
+    """
+    Fetch the Valgrind platform-specific manifest file.
+
+    Valgrind is Linux-only. Requesting other platforms will raise an error.
+
+    Args:
+        platform: Platform name (must be "linux")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Platform manifest as a Manifest object
+
+    Raises:
+        RuntimeError: If platform/arch combination is not found
+    """
+    if platform != "linux":
+        raise RuntimeError(
+            f"Valgrind is only available for Linux, not '{platform}'.\n"
+            f"Valgrind runs inside a Docker container, so it works from any host platform.\n"
+            f"Use: clang-tool-chain-valgrind <executable>"
+        )
+
+    logger.info(f"Fetching Valgrind platform manifest for {platform}/{arch}")
+    root_manifest = fetch_valgrind_root_manifest()
+
+    # Find the platform in the manifest
+    for plat_entry in root_manifest.platforms:
+        if plat_entry.platform == platform:
+            # Find the architecture
+            for arch_entry in plat_entry.architectures:
+                if arch_entry.arch == arch:
+                    manifest_path = arch_entry.manifest_path
+                    logger.info(f"Found Valgrind manifest path: {manifest_path}")
+                    url = f"{VALGRIND_MANIFEST_BASE_URL}/{manifest_path}"
+                    data = _fetch_json_raw(url)
+                    manifest = _parse_manifest(data)
+                    logger.info(f"Valgrind platform manifest loaded successfully for {platform}/{arch}")
+                    return manifest
+
+    logger.error(f"Valgrind platform {platform}/{arch} not found in manifest")
+    raise RuntimeError(f"Valgrind platform {platform}/{arch} not found in manifest")

@@ -1,5 +1,10 @@
 # Cross-Platform Library Dependency Deployment
 
+<!-- AGENT: Read this file when working on DLL/SO/dylib deployment, --deploy-dependencies flag,
+     or automatic library copying for executables and shared libraries.
+     Key topics: dll_deployer, so_deployer, dylib_deployer, NO_DEPLOY_LIBS, MinGW DLLs.
+     Related: docs/ENVIRONMENT_VARIABLES.md, docs/CLANG_LLVM.md. -->
+
 **Automatic Runtime Library Deployment for Windows, Linux, and macOS**
 
 This document provides comprehensive documentation on clang-tool-chain's automatic library dependency deployment feature across all platforms.

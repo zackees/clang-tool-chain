@@ -1,5 +1,10 @@
 # Cosmopolitan Libc (Cosmocc)
 
+<!-- AGENT: Read this file when working on Cosmopolitan Libc, Actually Portable Executables (APE),
+     or cosmocc/cosmocpp compilation.
+     Key topics: clang-tool-chain-cosmocc, clang-tool-chain-cosmocpp, .com executables.
+     Related: docs/CLANG_LLVM.md. -->
+
 Cosmopolitan Libc (cosmocc) makes C a build-once run-anywhere language. Executables produced by cosmocc are called "Actually Portable Executables" (APE) and run natively on Windows, Linux, macOS, FreeBSD, NetBSD, and OpenBSD without any runtime dependencies or modifications.
 
 ## Table of Contents

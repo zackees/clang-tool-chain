@@ -313,6 +313,46 @@ def get_cosmocc_lock_path(platform: str | None = None, arch: str | None = None) 
 
 
 # ============================================================================
+# Valgrind Paths
+# ============================================================================
+
+
+def get_valgrind_install_dir(platform: str, arch: str) -> Path:
+    """
+    Get the installation directory for Valgrind.
+
+    Valgrind is Linux-only but the archives are stored by platform/arch.
+
+    Args:
+        platform: Platform name (should be "linux")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the Valgrind installation directory
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    install_dir = toolchain_dir / "valgrind" / platform / arch
+    return install_dir
+
+
+def get_valgrind_lock_path(platform: str, arch: str) -> Path:
+    """
+    Get the lock file path for Valgrind installation.
+
+    Args:
+        platform: Platform name (should be "linux")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Path to the lock file
+    """
+    toolchain_dir = get_home_toolchain_dir()
+    toolchain_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = toolchain_dir / f"valgrind-{platform}-{arch}.lock"
+    return lock_path
+
+
+# ============================================================================
 # Generic Tool Paths (Template Pattern Support)
 # ============================================================================
 

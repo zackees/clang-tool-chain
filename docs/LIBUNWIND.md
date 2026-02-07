@@ -1,5 +1,10 @@
 # Bundled libunwind (Linux)
 
+<!-- AGENT: Read this file when working on bundled libunwind, stack unwinding, backtraces,
+     or Windows symbol resolution (unwind_windows.c, unw_get_proc_name).
+     Key topics: libunwind.h, -lunwind, rpath, CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND.
+     Related: docs/CLANG_LLVM.md, docs/ENVIRONMENT_VARIABLES.md. -->
+
 **Self-contained stack unwinding - no system packages required**
 
 On Linux, clang-tool-chain bundles libunwind headers and shared libraries, providing a complete solution for stack unwinding, backtracing, and crash analysis without requiring system packages like `libunwind-dev`.

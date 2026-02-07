@@ -91,6 +91,7 @@ from clang_tool_chain.commands import (
     meson_main,
     sccache_emcc_main,
     sccache_empp_main,
+    valgrind_main,
     wasm_ld_main,
 )
 
@@ -158,6 +159,15 @@ from clang_tool_chain.execution.sanitizer_env import (
     detect_sanitizers_from_flags,
     get_symbolizer_path,
     prepare_sanitizer_environment,
+)
+
+# ============================================================================
+# Valgrind Tool Execution
+# ============================================================================
+from clang_tool_chain.execution.valgrind import (
+    execute_valgrind_tool,
+    find_valgrind_tool,
+    get_valgrind_binary_dir,
 )
 
 # ============================================================================
@@ -283,4 +293,9 @@ __all__ = [
     "execute_cosmocc_tool",
     "find_cosmocc_tool",
     "get_cosmocc_binary_dir",
+    # Valgrind
+    "valgrind_main",
+    "execute_valgrind_tool",
+    "find_valgrind_tool",
+    "get_valgrind_binary_dir",
 ]

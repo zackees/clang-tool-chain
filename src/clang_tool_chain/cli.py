@@ -209,6 +209,7 @@ def cmd_list_tools(args: argparse.Namespace) -> int:
     debug_tools = [
         ("clang-tool-chain-lldb", "LLVM debugger (lldb)"),
         ("clang-tool-chain-iwyu", "Include What You Use analyzer"),
+        ("clang-tool-chain-valgrind", "Valgrind memory error detector (Docker)"),
     ]
 
     for cmd, desc in debug_tools:
@@ -854,6 +855,83 @@ def cmd_uninstall_cosmocc_env(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_install_valgrind(args: argparse.Namespace) -> int:
+    """Pre-download and install Valgrind memory error detector (Linux only, runs via Docker)."""
+    from . import env_breadcrumbs, installer
+    from .path_utils import get_valgrind_install_dir
+
+    print("Clang Tool Chain - Install Valgrind")
+    print("=" * 60)
+    print()
+
+    # Valgrind archives are always linux - detect host arch for download
+    try:
+        _, arch = wrapper.get_platform_info()
+        print(f"Architecture: {arch}")
+        print("Note: Valgrind is Linux-only; it runs inside Docker from any host")
+        print()
+    except RuntimeError as e:
+        print(f"Error detecting platform: {e}")
+        return 1
+
+    platform_name = "linux"
+
+    # Check if already installed
+    if installer.is_valgrind_installed(platform_name, arch):
+        install_dir = get_valgrind_install_dir(platform_name, arch)
+        safe_print("✓ Valgrind already installed at:")
+        print(f"  {install_dir}")
+        print()
+
+        env_breadcrumbs.mark_component_installed("valgrind", str(install_dir))
+
+        print("To use Valgrind:")
+        print("  clang-tool-chain-cpp program.cpp -g -O0 -o program")
+        print("  clang-tool-chain-valgrind --leak-check=full ./program")
+        return 0
+
+    # Download and install
+    print("Downloading and installing Valgrind memory error detector...")
+    print()
+    print("This will download approximately:")
+    print("  - ~24 MB (compressed)")
+    print()
+    print("Requirements:")
+    print("  - Docker must be installed and running to use Valgrind")
+    print()
+
+    try:
+        installer.ensure_valgrind(platform_name, arch)
+
+        install_dir = get_valgrind_install_dir(platform_name, arch)
+        bin_dir = install_dir / "bin"
+        if bin_dir.exists():
+            print()
+            print("=" * 60)
+            safe_print("✓ Installation Complete!")
+            print()
+            print(f"Valgrind installed at: {install_dir}")
+            print()
+
+            env_breadcrumbs.mark_component_installed("valgrind", str(install_dir))
+
+            print("To use Valgrind:")
+            print("  clang-tool-chain-cpp program.cpp -g -O0 -o program")
+            print("  clang-tool-chain-valgrind --leak-check=full ./program")
+            print()
+            return 0
+        else:
+            safe_print("✗ Installation verification failed - bin directory not found")
+            return 1
+
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
+        print()
+        safe_print(f"✗ Installation failed: {e}")
+        return 1
+
+
 def cmd_test(args: argparse.Namespace) -> int:
     """Run diagnostic tests to verify the toolchain installation."""
     import tempfile
@@ -1161,6 +1239,13 @@ def main() -> int:
     )
     parser_install_cosmocc_env.set_defaults(func=cmd_install_cosmocc_env)
 
+    # install valgrind
+    parser_install_valgrind = install_subparsers.add_parser(
+        "valgrind",
+        help="Pre-download and install Valgrind memory error detector (runs via Docker)",
+    )
+    parser_install_valgrind.set_defaults(func=cmd_install_valgrind)
+
     # uninstall command (with subcommands)
     parser_uninstall = subparsers.add_parser(
         "uninstall",
@@ -1215,6 +1300,7 @@ def main() -> int:
         print("  clang-tool-chain install clang-env    - Add Clang to system PATH")
         print("  clang-tool-chain install cosmocc      - Install Cosmopolitan toolchain")
         print("  clang-tool-chain install cosmocc-env  - Add Cosmopolitan to system PATH")
+        print("  clang-tool-chain install valgrind     - Install Valgrind memory detector")
         print()
         print("For more information: clang-tool-chain install --help")
         return 1

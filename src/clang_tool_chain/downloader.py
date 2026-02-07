@@ -46,6 +46,7 @@ from clang_tool_chain.installer import (
     ensure_lldb,
     ensure_nodejs_available,
     ensure_toolchain,
+    ensure_valgrind,
     get_latest_version_info,
     is_cosmocc_installed,
     is_emscripten_installed,
@@ -53,6 +54,7 @@ from clang_tool_chain.installer import (
     is_lldb_installed,
     is_nodejs_installed,
     is_toolchain_installed,
+    is_valgrind_installed,
 )
 
 # ============================================================================
@@ -84,6 +86,8 @@ from clang_tool_chain.manifest import (
     fetch_nodejs_root_manifest,
     fetch_platform_manifest,
     fetch_root_manifest,
+    fetch_valgrind_platform_manifest,
+    fetch_valgrind_root_manifest,
 )
 
 # ============================================================================
@@ -103,6 +107,8 @@ from clang_tool_chain.path_utils import (
     get_lock_path,
     get_nodejs_install_dir,
     get_nodejs_lock_path,
+    get_valgrind_install_dir,
+    get_valgrind_lock_path,
 )
 
 # ============================================================================
@@ -191,4 +197,11 @@ __all__ = [
     "is_cosmocc_installed",
     "download_and_install_cosmocc",
     "ensure_cosmocc",
+    # Valgrind
+    "is_valgrind_installed",
+    "ensure_valgrind",
+    "get_valgrind_install_dir",
+    "get_valgrind_lock_path",
+    "fetch_valgrind_root_manifest",
+    "fetch_valgrind_platform_manifest",
 ]

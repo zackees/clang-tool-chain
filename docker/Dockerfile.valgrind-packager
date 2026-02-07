@@ -1,0 +1,65 @@
+# Dockerfile for packaging Valgrind binaries for clang-tool-chain distribution
+#
+# Usage:
+#   docker build -f docker/Dockerfile.valgrind-packager \
+#     --build-arg ARCH=x86_64 \
+#     --build-arg VALGRIND_VERSION=3.24.0 \
+#     -t valgrind-packager .
+#
+#   docker run --rm -v $(pwd)/output:/output valgrind-packager
+#
+# This produces a valgrind-{version}-linux-{arch}.tar.zst archive
+# ready for the clang-tool-chain manifest system.
+
+ARG BASE_IMAGE=ubuntu:22.04
+FROM ${BASE_IMAGE}
+
+ARG VALGRIND_VERSION=3.24.0
+ARG ARCH=x86_64
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    automake \
+    autoconf \
+    libc6-dev \
+    wget \
+    ca-certificates \
+    python3 \
+    zstd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and build Valgrind from source
+WORKDIR /build
+RUN wget -q "https://sourceware.org/pub/valgrind/valgrind-${VALGRIND_VERSION}.tar.bz2" \
+    && tar xjf "valgrind-${VALGRIND_VERSION}.tar.bz2" \
+    && cd "valgrind-${VALGRIND_VERSION}" \
+    && ./configure --prefix=/opt/valgrind \
+    && make -j$(nproc) \
+    && make install
+
+# Create the archive structure
+WORKDIR /package
+RUN mkdir -p bin lib/valgrind libexec/valgrind \
+    && cp /opt/valgrind/bin/valgrind bin/ \
+    && cp /opt/valgrind/bin/vgdb bin/ \
+    && cp /opt/valgrind/bin/valgrind-listener bin/ \
+    && cp /opt/valgrind/bin/valgrind-di-server bin/ 2>/dev/null || true \
+    && cp -r /opt/valgrind/lib/valgrind/* lib/valgrind/ \
+    && cp -r /opt/valgrind/libexec/valgrind/* libexec/valgrind/ 2>/dev/null || true
+
+# Create the compressed archive
+RUN tar cf "/tmp/valgrind-${VALGRIND_VERSION}-linux-${ARCH}.tar" -C /package . \
+    && zstd -22 --ultra "/tmp/valgrind-${VALGRIND_VERSION}-linux-${ARCH}.tar" \
+       -o "/tmp/valgrind-${VALGRIND_VERSION}-linux-${ARCH}.tar.zst" \
+    && sha256sum "/tmp/valgrind-${VALGRIND_VERSION}-linux-${ARCH}.tar.zst" \
+       > "/tmp/valgrind-${VALGRIND_VERSION}-linux-${ARCH}.tar.zst.sha256"
+
+# Copy output on run
+CMD cp /tmp/valgrind-*.tar.zst /tmp/valgrind-*.sha256 /output/ \
+    && echo "Archive created:" \
+    && ls -lh /output/valgrind-*.tar.zst \
+    && echo "SHA256:" \
+    && cat /output/valgrind-*.sha256

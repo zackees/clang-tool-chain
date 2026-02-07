@@ -1,5 +1,10 @@
 # Inlined Build Directives
 
+<!-- AGENT: Read this file when working on inlined build directives (@link, @std, @cflags,
+     @ldflags, @include, @platform) or self-contained source file compilation.
+     Key topics: directive parsing, CLANG_TOOL_CHAIN_NO_DIRECTIVES, platform-specific directives.
+     Related: docs/CLANG_LLVM.md, docs/ENVIRONMENT_VARIABLES.md. -->
+
 **Self-contained C/C++ source files with embedded build configuration.**
 
 Inlined directives allow you to embed library dependencies, compiler flags, and other build settings directly in your source files. No more remembering complex command-line flags - the source file knows how to build itself.

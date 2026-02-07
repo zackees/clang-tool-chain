@@ -1317,6 +1317,7 @@ class TestAsanDllMesonWorkaround:
         dll_path = get_asan_runtime_dll()
         if dll_path is None:
             pytest.skip("ASAN DLL not found (toolchain may not be installed)")
+        assert dll_path is not None
 
         with tempfile.TemporaryDirectory() as tmpdir:
             build_dir = Path(tmpdir)
@@ -1396,6 +1397,7 @@ class TestAsanDllAutomaticDeployment:
         asan_dll = get_asan_runtime_dll()
         if asan_dll is None:
             pytest.skip("ASAN DLL not found (toolchain may not be installed)")
+        assert asan_dll is not None
 
         # The find_dll_in_toolchain function should find the same DLL
         found_dll = find_dll_in_toolchain(asan_dll.name, "win", "x86_64")
