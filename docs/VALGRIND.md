@@ -125,6 +125,48 @@ clang-tool-chain-valgrind --leak-check=full --error-exitcode=1 ./program
 
 The `--error-exitcode=1` flag causes Valgrind to return exit code 1 if any memory errors are found, making it suitable for CI pipelines.
 
+## Using with Cosmopolitan (cosmocc)
+
+Cosmocc produces APE (Actually Portable Executable) `.com` files that use an MZ header, not ELF. Valgrind cannot run APE binaries directly. However, when compiled with `-g`, cosmocc also produces a `.dbg` sidecar file — a standard x86-64 Linux ELF binary with DWARF debug symbols that works with Valgrind.
+
+**`clang-tool-chain-valgrind` handles this automatically.** When you pass a `.com` file, it detects the APE format and redirects to the `.dbg` sidecar.
+
+### Quick Start
+
+```bash
+# Compile with cosmocc (debug build produces .dbg sidecar)
+clang-tool-chain-cosmocc -g -O0 program.c -o program.com
+
+# Run Valgrind on the .com file — auto-redirects to program.com.dbg
+clang-tool-chain-valgrind --track-origins=yes --error-exitcode=1 ./program.com
+```
+
+### How It Works
+
+1. `clang-tool-chain-valgrind` detects the APE by checking the `.com` extension or MZ magic bytes
+2. It looks for a `.dbg` sidecar: first `program.com.dbg`, then `program.dbg`
+3. If found, it runs Valgrind on the `.dbg` file instead (printing an info message to stderr)
+4. If no `.dbg` sidecar exists, it prints an error with instructions to recompile with `-g`
+
+### Limitations
+
+Cosmocc produces **statically-linked** binaries with Cosmopolitan's own custom `malloc` allocator. Valgrind intercepts heap allocation by replacing glibc's `malloc`/`free`, which doesn't work with a custom static allocator. This means:
+
+- **Heap leak detection does not work** — Valgrind reports 0 allocations
+- **Uninitialized value detection works** — Valgrind can still detect conditional jumps depending on uninitialized values
+- **Invalid memory access detection works** — out-of-bounds reads/writes are detected
+- **Other Valgrind tools** (cachegrind, callgrind, etc.) work normally
+
+Use `--track-origins=yes` instead of `--leak-check=full` for best results with cosmocc binaries.
+
+### Manual Alternative
+
+You can also pass the `.dbg` file directly:
+
+```bash
+clang-tool-chain-valgrind --track-origins=yes ./program.com.dbg
+```
+
 ## Troubleshooting
 
 ### "Docker is required to run Valgrind"
@@ -202,5 +244,6 @@ Host (any platform)          Docker Container (Ubuntu 22.04)
 ## See Also
 
 - [Clang/LLVM Toolchain](CLANG_LLVM.md) - Main compiler documentation
+- [Cosmopolitan (cosmocc)](COSMOCC.md) - Actually Portable Executables
 - [LLDB Debugger](LLDB.md) - Interactive debugger
 - [Testing Guide](TESTING.md) - Testing infrastructure

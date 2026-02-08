@@ -302,8 +302,29 @@ clang-tool-chain install cosmocc
 
 ---
 
+## Using with Valgrind
+
+APE `.com` files cannot be analyzed by Valgrind directly (they have an MZ header, not ELF). However, cosmocc produces `.dbg` sidecar files when you compile with `-g` — these are standard Linux ELF binaries with DWARF debug symbols.
+
+`clang-tool-chain-valgrind` automatically detects APE files and redirects to the `.dbg` sidecar:
+
+```bash
+# Compile with debug symbols (produces program.com + program.com.dbg)
+clang-tool-chain-cosmocc -g -O0 program.c -o program.com
+
+# Valgrind auto-redirects .com → .com.dbg
+clang-tool-chain-valgrind --track-origins=yes --error-exitcode=1 ./program.com
+```
+
+**Note:** Cosmocc binaries use a custom statically-linked `malloc`, so Valgrind **cannot detect heap leaks**. However, it can detect uninitialized value errors, invalid memory accesses, and other control-flow issues. Use `--track-origins=yes` instead of `--leak-check=full` for best results.
+
+See [Valgrind documentation](VALGRIND.md) for full details.
+
+---
+
 ## See Also
 
 - [Clang/LLVM Toolchain](CLANG_LLVM.md) - Main Clang compiler documentation
+- [Valgrind](VALGRIND.md) - Memory error detection
 - [Contributing](CONTRIBUTING.md) - How to add new tools to clang-tool-chain
 - [Architecture](ARCHITECTURE.md) - Technical architecture overview

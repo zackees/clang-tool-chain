@@ -199,6 +199,68 @@ def find_valgrind_tool(tool_name: str) -> Path:
     return tool_path
 
 
+def _detect_ape_and_resolve_dbg(exe_path: Path) -> Path:
+    """
+    Detect if an executable is an APE (Actually Portable Executable) from cosmocc
+    and resolve it to the .dbg sidecar file that Valgrind can analyze.
+
+    APE .com files have an MZ header and are not standard ELF binaries, so Valgrind
+    cannot run them directly. However, cosmocc produces .dbg sidecar files that are
+    standard x86-64 Linux ELF binaries with DWARF debug symbols.
+
+    Args:
+        exe_path: Resolved path to the executable
+
+    Returns:
+        Path to the .dbg sidecar if APE detected, otherwise the original path
+    """
+    # Fast path: check .com extension
+    is_com = exe_path.suffix.lower() == ".com"
+
+    # If not .com, check for MZ magic bytes (APE without .com extension)
+    is_ape = is_com
+    if not is_ape:
+        try:
+            with open(exe_path, "rb") as f:
+                magic = f.read(2)
+            is_ape = magic == b"MZ"
+        except OSError:
+            return exe_path
+
+    if not is_ape:
+        return exe_path
+
+    # APE detected — look for .dbg sidecar
+    # cosmocc produces: program.com + program.com.dbg
+    # Try program.com.dbg first, then program.dbg
+    candidates = [exe_path.with_suffix(exe_path.suffix + ".dbg")]
+    if is_com:
+        candidates.append(exe_path.with_suffix(".dbg"))
+
+    for dbg_path in candidates:
+        if dbg_path.exists():
+            print(
+                f"APE detected: {exe_path.name} → using debug sidecar: {dbg_path.name}",
+                file=sys.stderr,
+            )
+            return dbg_path
+
+    # No .dbg sidecar found
+    print(
+        f"ERROR: {exe_path.name} is an APE (Actually Portable Executable) which Valgrind cannot run directly.\n"
+        f"\n"
+        f"Cosmocc produces a .dbg sidecar file (standard ELF with debug symbols) that\n"
+        f"Valgrind can analyze, but no sidecar was found.\n"
+        f"\n"
+        f"Looked for:\n" + "\n".join(f"  - {c.name}" for c in candidates) + "\n"
+        f"\n"
+        f"Recompile with debug symbols to produce the .dbg sidecar:\n"
+        f"  clang-tool-chain-cosmocc -g -O0 source.c -o {exe_path.name}\n",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
 def execute_valgrind_tool(args: list[str] | None = None) -> NoReturn | int:
     """
     Execute Valgrind on a target executable using Docker.
@@ -290,6 +352,9 @@ def execute_valgrind_tool(args: list[str] | None = None) -> NoReturn | int:
     if not exe_path.exists():
         print(f"ERROR: Executable not found: {executable}", file=sys.stderr)
         sys.exit(1)
+
+    # Check for APE (cosmocc) executables and redirect to .dbg sidecar
+    exe_path = _detect_ape_and_resolve_dbg(exe_path)
 
     # Get the Valgrind installation directory
     _, arch = get_platform_info()
