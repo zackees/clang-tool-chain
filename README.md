@@ -2,8 +2,9 @@
 
 **Run C++ like a shell script. Build once, run everywhere. The entire C/C++/WASM toolchain in one `pip install`.**
 
-```cpp
+```bash
 #!/usr/bin/env -S uvx clang-tool-chain-build-run --cached
+
 #include <iostream>
 int main() {
     std::cout << "Hello, World!\n";
