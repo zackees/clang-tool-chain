@@ -192,7 +192,7 @@ Comprehensive reference of all available commands organized by category.
 ### Getting Started
 - [Quick Start](#-quick-start)
 - [Test Matrix](#-test-matrix) - Live CI/CD status for all platforms
-- [All Commands](#-all-commands-41-total) - Complete command reference
+- [All Commands](#-all-commands-43-total) - Complete command reference
 - [Installation](#-installation)
 - [Why clang-tool-chain?](#-why-clang-tool-chain)
 
@@ -735,17 +735,17 @@ clang-tool-chain install clang-env   # Use 'clang' directly
 
 ## ✨ Features
 
-41 wrapper commands • Auto-download • 94% size reduction • Cross-platform • Auto library deployment
+43 wrapper commands • Auto-download • 94% size reduction • Cross-platform • Auto library deployment
 
 - **Zero Configuration** - Auto-downloads to `~/.clang-tool-chain/`
 - **Ultra-Compact** - 71-91 MB (94% smaller via zstd-22)
-- **41 Commands** - Clang/LLVM, Emscripten, IWYU, LLDB, formatters, binary utils
+- **43 Commands** - Clang/LLVM, Emscripten, IWYU, LLDB, Valgrind, formatters, binary utils
 - **Cross-Platform** - Windows x64, macOS x64/ARM64, Linux x64/ARM64
 - **Auto Library Deployment** - Windows DLLs, Linux .so, macOS .dylib copied automatically
 - **Concurrent-Safe** - File locking for parallel builds
 - **Python Native** - Seamless Python integration
 
-**📖 [Complete Documentation](docs/FEATURES.md)** - All 41 commands by category, detailed capabilities.
+**📖 [Complete Documentation](docs/FEATURES.md)** - All 43 commands by category, detailed capabilities.
 
 ---
 

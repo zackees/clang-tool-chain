@@ -140,29 +140,20 @@ def _run_callgrind_annotate(
     Returns:
         Tuple of (return_code, annotated_output)
     """
-    # Build a shell script that tries multiple annotation strategies
+    # Build a shell script that tries multiple annotation strategies.
+    # The Docker image includes the valgrind package (which provides callgrind_annotate).
+    # Fallback strategies handle edge cases where the image was built without it.
     annotate_script = (
         "#!/bin/sh\n"
-        "set -e\n"
         # Strategy 1: Our bundled callgrind_annotate
         "if [ -x /opt/valgrind/bin/callgrind_annotate ]; then\n"
-        f"  /opt/valgrind/bin/callgrind_annotate --threshold={threshold} /workdir/{callgrind_out_name}\n"
-        "  exit $?\n"
+        f"  exec /opt/valgrind/bin/callgrind_annotate --threshold={threshold} /workdir/{callgrind_out_name}\n"
         "fi\n"
-        # Strategy 2: System callgrind_annotate
+        # Strategy 2: System callgrind_annotate (from apt valgrind package in Docker image)
         "if command -v callgrind_annotate >/dev/null 2>&1; then\n"
-        f"  callgrind_annotate --threshold={threshold} /workdir/{callgrind_out_name}\n"
-        "  exit $?\n"
+        f"  exec callgrind_annotate --threshold={threshold} /workdir/{callgrind_out_name}\n"
         "fi\n"
-        # Strategy 3: Install valgrind package (includes Perl scripts)
-        "apt-get update -qq > /dev/null 2>&1\n"
-        "apt-get install -qq -y --no-install-recommends valgrind > /dev/null 2>&1\n"
-        "if command -v callgrind_annotate >/dev/null 2>&1; then\n"
-        f"  callgrind_annotate --threshold={threshold} /workdir/{callgrind_out_name}\n"
-        "  exit $?\n"
-        "fi\n"
-        "echo 'ERROR: Could not find or install callgrind_annotate' >&2\n"
-        "echo 'The raw callgrind output file is available at: /workdir/{callgrind_out_name}' >&2\n"
+        "echo 'ERROR: callgrind_annotate not found in Docker image' >&2\n"
         "exit 1\n"
     )
 

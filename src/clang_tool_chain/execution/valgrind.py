@@ -108,10 +108,12 @@ def _ensure_docker_image() -> None:
     print("Building Valgrind Docker image (one-time setup)...", file=sys.stderr)
 
     # Build inline Dockerfile
+    # libc6-dbg: required by Valgrind for glibc symbol redirection
+    # valgrind: provides callgrind_annotate (Perl script) for callgrind profiling output
     dockerfile_content = (
         f"FROM {VALGRIND_DOCKER_IMAGE_BASE}\n"
         "RUN apt-get update -qq && "
-        "apt-get install -qq -y --no-install-recommends libc6-dbg > /dev/null 2>&1 && "
+        "apt-get install -qq -y --no-install-recommends libc6-dbg valgrind > /dev/null 2>&1 && "
         "rm -rf /var/lib/apt/lists/*\n"
     )
 
@@ -120,7 +122,7 @@ def _ensure_docker_image() -> None:
         input=dockerfile_content,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=300,
     )
     if result.returncode != 0:
         logger.error(f"Failed to build Docker image: {result.stderr}")
