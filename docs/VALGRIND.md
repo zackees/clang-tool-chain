@@ -243,6 +243,7 @@ Host (any platform)          Docker Container (Ubuntu 22.04)
 
 ## See Also
 
+- [Callgrind Profiler](CALLGRIND.md) - Dedicated callgrind profiling command with auto-annotation
 - [Clang/LLVM Toolchain](CLANG_LLVM.md) - Main compiler documentation
 - [Cosmopolitan (cosmocc)](COSMOCC.md) - Actually Portable Executables
 - [LLDB Debugger](LLDB.md) - Interactive debugger

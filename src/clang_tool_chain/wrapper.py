@@ -62,6 +62,7 @@ from clang_tool_chain.abi import (
 # CLI Entry Points (Main Functions)
 # ============================================================================
 from clang_tool_chain.commands import (
+    callgrind_main,
     clang_cpp_main,
     clang_cpp_msvc_main,
     clang_format_main,
@@ -298,4 +299,6 @@ __all__ = [
     "execute_valgrind_tool",
     "find_valgrind_tool",
     "get_valgrind_binary_dir",
+    # Callgrind
+    "callgrind_main",
 ]

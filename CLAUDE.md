@@ -83,6 +83,7 @@ All detailed documentation lives in `docs/`. Read the file matching your task.
 | **[LLDB Debugger](docs/LLDB.md)** | Working on crash analysis, stack traces, Python bundling |
 | **[Cosmopolitan](docs/COSMOCC.md)** | Working on Actually Portable Executables (cosmocc) |
 | **[Valgrind](docs/VALGRIND.md)** | Working on memory leak detection, Valgrind Docker execution |
+| **[Callgrind](docs/CALLGRIND.md)** | Working on call graph profiling, performance analysis |
 | **[Node.js](docs/NODEJS.md)** | Working on bundled Node.js runtime |
 
 ### Configuration & Environment

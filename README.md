@@ -85,7 +85,7 @@ Comprehensive test coverage across all platforms and tool categories ensures rel
 
 ---
 
-## 📋 All Commands (42 Total)
+## 📋 All Commands (43 Total)
 
 Comprehensive reference of all available commands organized by category.
 
@@ -166,6 +166,13 @@ Comprehensive reference of all available commands organized by category.
 | `clang-tool-chain-sccache-emcc` | Cached Emscripten C compiler |
 | `clang-tool-chain-sccache-empp` | Cached Emscripten C++ compiler |
 
+### Valgrind - Dynamic Analysis (2)
+
+| Command | Description |
+|---------|-------------|
+| `clang-tool-chain-valgrind` | Memory error detector (via Docker) |
+| `clang-tool-chain-callgrind` | Call graph profiler with auto-annotation (via Docker) |
+
 ### Management & Diagnostics (5)
 
 | Command | Description |
@@ -176,7 +183,7 @@ Comprehensive reference of all available commands organized by category.
 | `clang-tool-chain-paths` | Display installation paths |
 | `clang-tool-chain-libdeploy` | Deploy runtime library dependencies after the fact |
 
-**Total: 42 commands** providing complete C/C++/WebAssembly toolchain capabilities.
+**Total: 43 commands** providing complete C/C++/WebAssembly toolchain capabilities.
 
 ---
 
@@ -198,6 +205,7 @@ Comprehensive reference of all available commands organized by category.
 - [LLDB](#-lldb-debugger) - Debugger with Python support (2 commands)
 - [Emscripten](#-emscripten-webassembly) - WebAssembly compiler (5 commands)
 - [Cosmopolitan](#-cosmopolitan-actually-portable-executables) - APE compiler (2 commands)
+- [Valgrind & Callgrind](#-valgrind--callgrind-dynamic-analysis) - Dynamic analysis (2 commands)
 - [Management CLI](#️-management-cli) - install, purge, info, test (4 commands)
 
 ### Cross-Cutting Features
@@ -449,6 +457,75 @@ clang-tool-chain-cosmocpp hello.cpp -o hello.com
 ```
 
 **📖 [Complete Documentation](docs/COSMOCC.md)** - Usage guide, APE format, platform support, [Cosmopolitan project](https://github.com/jart/cosmopolitan).
+
+---
+
+## 🔬 Valgrind & Callgrind (Dynamic Analysis)
+
+**2 commands** • Memory error detection • Call graph profiling • Docker-based • Works from any host platform
+
+### Platform Support
+
+| Host Platform | Architecture | Status | Notes |
+|---------------|-------------|--------|-------|
+| Windows       | x86_64      | ✅ Supported | Via Docker Desktop |
+| Linux         | x86_64      | ✅ Supported | Via Docker |
+| Linux         | ARM64       | ✅ Supported | Via Docker |
+| macOS         | x86_64      | ✅ Supported | Via Docker Desktop |
+| macOS         | ARM64       | ✅ Supported | Via Docker Desktop |
+
+**Requires:** [Docker](https://www.docker.com/products/docker-desktop) installed and running. Valgrind binaries (~5 MB) auto-download on first use.
+
+### Valgrind - Memory Error Detection
+
+Step-by-step guide to find memory leaks and errors:
+
+```bash
+# Step 1: Compile with debug symbols and no optimization
+clang-tool-chain-cpp program.cpp -g -O0 -o program
+
+# Step 2: Run with Valgrind memory checker
+clang-tool-chain-valgrind --leak-check=full ./program
+
+# Step 3: Track origins of uninitialized values
+clang-tool-chain-valgrind --leak-check=full --track-origins=yes ./program
+
+# Step 4: Use in CI/CD (fail on errors)
+clang-tool-chain-valgrind --leak-check=full --error-exitcode=1 ./program
+```
+
+### Callgrind - Performance Profiling
+
+Step-by-step guide to find performance bottlenecks:
+
+```bash
+# Step 1: Compile with debug symbols and no optimization
+clang-tool-chain-cpp program.cpp -g -O0 -o program
+
+# Step 2: Profile with callgrind (auto-annotated output)
+clang-tool-chain-callgrind ./program
+
+# Step 3: Save annotated report to a file
+clang-tool-chain-callgrind -o profile_report.txt ./program
+
+# Step 4: Keep raw output for KCachegrind/QCachegrind GUI
+clang-tool-chain-callgrind --raw ./program
+kcachegrind callgrind.out.*   # Open in GUI (Linux)
+qcachegrind callgrind.out.*   # Open in GUI (macOS/Windows)
+```
+
+### Works with Cosmopolitan (cosmocc)
+
+Both tools automatically detect APE `.com` files and use the `.dbg` sidecar:
+
+```bash
+clang-tool-chain-cosmocc -g -O0 program.c -o program.com
+clang-tool-chain-valgrind --track-origins=yes ./program.com   # auto-redirects to .dbg
+clang-tool-chain-callgrind ./program.com                      # auto-redirects to .dbg
+```
+
+**📖 [Valgrind Documentation](docs/VALGRIND.md)** - Memory leak detection, Docker setup, cosmocc integration.
+**📖 [Callgrind Documentation](docs/CALLGRIND.md)** - Call graph profiling, KCachegrind, performance analysis.
 
 ---
 
@@ -1193,6 +1270,8 @@ For in-depth information on specific topics, see the documentation in the `docs/
 | **[sccache Integration](docs/SCCACHE.md)** | Compilation caching (2-10x speedup) |
 | **[Inlined Build Directives](docs/DIRECTIVES.md)** | Self-contained source files |
 | **[Bundled libunwind](docs/LIBUNWIND.md)** | Linux stack unwinding (headers + libraries) |
+| **[Valgrind](docs/VALGRIND.md)** | Memory error detection via Docker |
+| **[Callgrind](docs/CALLGRIND.md)** | Call graph profiling via Docker |
 
 ### Setup & Configuration
 | Document | Description |

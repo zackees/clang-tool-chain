@@ -52,6 +52,7 @@ until they are moved to execution.build module.
 """
 
 from clang_tool_chain.commands.entry_points import (
+    callgrind_main,
     clang_cpp_main,
     clang_cpp_msvc_main,
     clang_format_main,
@@ -128,4 +129,6 @@ __all__ = [
     "cosmocpp_main",
     # Valgrind
     "valgrind_main",
+    # Callgrind
+    "callgrind_main",
 ]

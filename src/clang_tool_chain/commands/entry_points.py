@@ -456,6 +456,22 @@ def cosmocpp_main() -> NoReturn:
 # ============================================================================
 
 
+def callgrind_main() -> NoReturn | int:
+    """
+    Entry point for clang-tool-chain-callgrind command.
+
+    Runs Valgrind's callgrind profiler on a compiled executable
+    and produces an annotated source-level profiling report.
+
+    Example:
+        clang-tool-chain-cpp program.cpp -g -O0 -o program
+        clang-tool-chain-callgrind ./program
+    """
+    from ..execution.callgrind import execute_callgrind_tool
+
+    return execute_callgrind_tool()
+
+
 def valgrind_main() -> NoReturn | int:
     """
     Entry point for clang-tool-chain-valgrind command.
