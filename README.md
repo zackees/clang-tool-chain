@@ -514,6 +514,58 @@ kcachegrind callgrind.out.*   # Open in GUI (Linux)
 qcachegrind callgrind.out.*   # Open in GUI (macOS/Windows)
 ```
 
+### Callgrind End-to-End Example
+
+Write a program with an intentionally expensive function:
+
+```c
+// profile_test.c
+#include <stdio.h>
+
+__attribute__((noinline))
+int expensive_compute(int n) {
+    volatile int sum = 0;
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
+            sum += (i * j) % 17;
+    return sum;
+}
+
+__attribute__((noinline))
+int cheap_compute(int n) {
+    volatile int sum = 0;
+    for (int i = 0; i < n; i++)
+        sum += i;
+    return sum;
+}
+
+int main() {
+    int a = expensive_compute(1000);  // ~1M iterations
+    int b = cheap_compute(100);       // 100 iterations
+    printf("expensive=%d cheap=%d\n", a, b);
+}
+```
+
+Compile and profile:
+
+```bash
+# Compile with debug symbols (cosmocc for cross-platform Linux ELF)
+clang-tool-chain-cosmocc profile_test.c -g -O0 -o profile_test.com
+
+# Run callgrind
+clang-tool-chain-callgrind ./profile_test.com
+```
+
+Callgrind output clearly identifies `expensive_compute` as the bottleneck:
+
+```
+Ir                   file:function
+------------------------------------------------------------
+22,009,013 (99.92%)  profile_test.c:expensive_compute [/workdir/profile_test.com.dbg]
+```
+
+The expensive O(n^2) function consumed 99.92% of all instructions, while `cheap_compute` and `main` together account for <0.1% — too small to appear above the default 95% annotation threshold.
+
 ### Works with Cosmopolitan (cosmocc)
 
 Both tools automatically detect APE `.com` files and use the `.dbg` sidecar:
