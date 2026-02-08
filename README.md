@@ -5,7 +5,9 @@
 ```cpp
 #!/usr/bin/env -S uvx clang-tool-chain-build-run --cached
 #include <iostream>
-int main() { std::cout << "Hello, World!\n"; }
+int main() {
+    std::cout << "Hello, World!\n";
+}
 ```
 
 ```bash
