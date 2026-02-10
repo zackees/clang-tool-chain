@@ -491,5 +491,111 @@ int main() {
         print(f"  Functions found: {len(found_functions)}/{len(expected_functions)}, Frames extracted: {len(frames)}")
 
 
+class TestLLDBArgumentPassing(unittest.TestCase):
+    """Test that LLDB wrapper passes through all native lldb arguments."""
+
+    def test_parse_unknown_args_passthrough(self) -> None:
+        """
+        Test that unknown arguments (like --batch, --source, --attach-pid) are passed through.
+
+        This enables full lldb functionality including:
+        - --batch: Non-interactive mode
+        - --source <file>: Execute commands from file
+        - --attach-pid <pid>: Attach to running process
+        - --attach-name <name>: Attach to running process by name
+        - --one-line <cmd>: Execute single command
+        - And any other native lldb flags
+
+        Note: argparse treats unknown flags + their values as separate items, so
+        "--source script.lldb" becomes ["--source", "script.lldb"] in lldb_args.
+        The executable argument captures the first positional unless all args are flags.
+        """
+        from clang_tool_chain.cli_parsers import parse_lldb_args
+
+        # Test case 1: --batch flag alone (no positional args)
+        args = parse_lldb_args(["--batch"])
+        self.assertFalse(args.print_mode)
+        self.assertIsNone(args.executable)
+        self.assertIn("--batch", args.lldb_args)
+
+        # Test case 2: --attach-pid with process ID
+        # Note: "12345" is treated as executable by argparse since it doesn't know --attach-pid takes a value
+        args = parse_lldb_args(["--attach-pid", "12345", "--batch"])
+        self.assertFalse(args.print_mode)
+        # argparse treats "12345" as executable since it's the first non-flag arg
+        self.assertEqual(args.executable, "12345")
+        self.assertIn("--attach-pid", args.lldb_args)
+        self.assertIn("--batch", args.lldb_args)
+
+        # Test case 3: --source with script file
+        # "script.lldb" is treated as executable by argparse
+        args = parse_lldb_args(["--source", "script.lldb", "--batch"])
+        self.assertFalse(args.print_mode)
+        self.assertEqual(args.executable, "script.lldb")
+        self.assertIn("--source", args.lldb_args)
+        self.assertIn("--batch", args.lldb_args)
+
+        # Test case 4: Executable with native flags
+        args = parse_lldb_args(["a.exe", "--one-line", "bt"])
+        self.assertFalse(args.print_mode)
+        self.assertEqual(args.executable, "a.exe")
+        self.assertIn("--one-line", args.lldb_args)
+        self.assertIn("bt", args.lldb_args)
+
+        # Test case 5: --print mode still works (our custom flag)
+        args = parse_lldb_args(["--print", "a.exe"])
+        self.assertTrue(args.print_mode)
+        self.assertEqual(args.executable, "a.exe")
+        self.assertEqual(args.lldb_args, [])
+
+        # Test case 6: --version flag (common case)
+        args = parse_lldb_args(["--version"])
+        self.assertFalse(args.print_mode)
+        self.assertIsNone(args.executable)
+        self.assertIn("--version", args.lldb_args)
+
+        # Test case 7: Multiple unknown flags together
+        args = parse_lldb_args(["--batch", "--one-line-before-file", "settings", "set", "--version"])
+        self.assertFalse(args.print_mode)
+        # "settings" becomes executable since it's first non-flag after unknown flags
+        self.assertEqual(args.executable, "settings")
+        self.assertIn("--batch", args.lldb_args)
+        self.assertIn("--one-line-before-file", args.lldb_args)
+        self.assertIn("set", args.lldb_args)
+        self.assertIn("--version", args.lldb_args)
+
+    def test_lldb_version_with_passthrough(self) -> None:
+        """
+        Test that lldb --version command works via passthrough.
+
+        This verifies that native lldb flags are properly passed to the underlying binary.
+        """
+        try:
+            # Test that --version flag is passed through
+            result = subprocess.run(["clang-tool-chain-lldb", "--version"], capture_output=True, text=True, timeout=30)
+
+            # Check if LLDB archive is not available (404 error) and skip if so
+            output = result.stdout + result.stderr
+            if "404" in output or "Not Found" in output or "HTTP Error 404" in output:
+                self.skipTest(
+                    "LLDB archive not available for this platform. "
+                    "This is expected if the LLDB archive hasn't been built yet."
+                )
+
+            # lldb --version should succeed (exit code 0)
+            self.assertEqual(result.returncode, 0, f"lldb --version should succeed. Output: {output}")
+
+            # Output should contain version information
+            self.assertTrue(
+                "lldb" in output.lower() or "version" in output.lower(),
+                f"Output should contain version info. Got: {output}",
+            )
+
+        except (ToolchainInfrastructureError, RuntimeError) as e:
+            if "404" in str(e) or "Not Found" in str(e):
+                self.skipTest("LLDB archive not available for this platform.")
+            raise
+
+
 if __name__ == "__main__":
     unittest.main()

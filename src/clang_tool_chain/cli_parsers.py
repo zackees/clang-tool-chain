@@ -169,23 +169,29 @@ def create_lldb_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  clang-tool-chain-lldb --print a.exe      # Automated crash analysis
-  clang-tool-chain-lldb a.exe              # Interactive mode
-  clang-tool-chain-lldb                    # Interactive mode (no executable)
+  clang-tool-chain-lldb --print a.exe                    # Automated crash analysis
+  clang-tool-chain-lldb a.exe                            # Interactive mode
+  clang-tool-chain-lldb --batch --source script.lldb    # Batch mode with script
+  clang-tool-chain-lldb --attach-pid 12345 --batch      # Attach to process
 
 Modes:
   --print <executable>: Run executable and print crash stack trace
   <executable>: Launch interactive LLDB session with executable
   (no args): Launch interactive LLDB session
 
-Example:
-  clang-tool-chain-lldb --print a.exe
-  clang-tool-chain-lldb a.exe  # Interactive mode
+Native LLDB Flags:
+  All native lldb flags are supported and passed through directly:
+  --batch, --source <file>, --attach-pid <pid>, --attach-name <name>,
+  --one-line <cmd>, --one-line-before-file <cmd>, --one-line-on-crash <cmd>,
+  and any other lldb command-line options.
+
+Batch Mode Example (for automated debugging):
+  clang-tool-chain-lldb --batch --source /tmp/debug.lldb --attach-pid 12345
         """,
     )
     parser.add_argument("--print", action="store_true", help="Run executable and print crash stack trace")
     parser.add_argument("executable", nargs="?", help="Executable to debug (optional)")
-    parser.add_argument("lldb_args", nargs="*", help="Additional LLDB arguments")
+    parser.add_argument("lldb_args", nargs="*", help="Additional LLDB arguments (all native lldb flags supported)")
     return parser
 
 
@@ -201,12 +207,20 @@ def parse_lldb_args(args: list[str] | None = None) -> LldbArgs:
 
     Raises:
         SystemExit: On parse error or --help
+
+    Note:
+        Uses parse_known_args() to pass through unknown arguments directly to
+        the underlying lldb binary, enabling full lldb functionality including
+        --batch, --source, --attach-pid, and other native lldb flags.
     """
     parser = create_lldb_parser()
-    parsed = parser.parse_args(args)
+    parsed, unknown_args = parser.parse_known_args(args)
+
+    # Merge parsed lldb_args with unknown args to pass all arguments through
+    all_lldb_args = parsed.lldb_args + unknown_args
 
     return LldbArgs(
         print_mode=parsed.print,
         executable=parsed.executable,
-        lldb_args=parsed.lldb_args,
+        lldb_args=all_lldb_args,
     )

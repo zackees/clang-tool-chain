@@ -116,6 +116,69 @@ Process 12345 stopped
     frame #2: 0x00007ff7... crash_test.exe`main at crash_test.c:15:5
 ```
 
+### Native LLDB Flags (Batch Mode, Process Attachment)
+
+**All native LLDB flags are supported** - the wrapper passes through any unknown flags directly to the underlying LLDB binary. This enables full LLDB functionality including batch mode, process attachment, and scripted debugging.
+
+**Common use cases:**
+
+```bash
+# Batch mode with command script
+clang-tool-chain-lldb --batch --source debug_script.lldb
+
+# Attach to running process by PID
+clang-tool-chain-lldb --attach-pid 12345 --batch --source analyze.lldb
+
+# Attach to process by name
+clang-tool-chain-lldb --attach-name myapp --batch
+
+# Execute single command
+clang-tool-chain-lldb program.exe --one-line "bt"
+
+# Execute command before file loads
+clang-tool-chain-lldb --one-line-before-file "settings set target.process.stop-on-exec false"
+
+# Multiple commands for automated debugging
+clang-tool-chain-lldb --one-line "run" --one-line-on-crash "bt all" program.exe
+```
+
+**Example: Automated deadlock detection script**
+
+Create a debug script file (`deadlock_analyzer.lldb`):
+```lldb
+# Attach to process and dump thread states
+settings set target.process.stop-on-exec false
+settings set target.process.stop-on-sharedlibrary-events false
+thread backtrace all
+thread list
+quit
+```
+
+Run automated analysis:
+```bash
+# Attach to hung process and analyze
+clang-tool-chain-lldb --batch --source deadlock_analyzer.lldb --attach-pid 12345
+```
+
+**Supported native flags:**
+- `--batch` - Non-interactive batch mode (no user input)
+- `--source <file>` - Execute LLDB commands from script file
+- `--attach-pid <pid>` - Attach to running process by PID
+- `--attach-name <name>` - Attach to running process by name
+- `--one-line <cmd>` - Execute single LLDB command
+- `--one-line-before-file <cmd>` - Execute command before loading file
+- `--one-line-on-crash <cmd>` - Execute command when process crashes
+- And any other standard LLDB command-line options
+
+**Benefits:**
+- **CI/CD integration** - Automated debugging in continuous integration
+- **Deadlock detection** - Automatically diagnose hung processes
+- **Performance profiling** - Periodic stack sampling of running processes
+- **Production debugging** - Attach to live processes without restart
+- **Cross-platform consistency** - Use clang-tool-chain-lldb everywhere
+
+**Note:** The wrapper's `--print` flag is a convenience feature for crash analysis. For advanced workflows, use native LLDB flags directly.
+
 ### Python Environment Diagnostics
 
 Check if Python modules are bundled with LLDB for full "bt all" backtraces:

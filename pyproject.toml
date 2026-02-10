@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clang-tool-chain"
-version = "1.1.8"
+version = "1.1.9"
 description = "Clang Tool Chain - C/C++ compilation toolchain utilities"
 readme = "README.md"
 license = "Apache-2.0"
