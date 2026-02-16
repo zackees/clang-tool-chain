@@ -4,6 +4,7 @@ LLD linker configuration and flag translation for cross-platform linking.
 This module provides functions for:
 - Forcing LLVM's lld linker for consistent cross-platform behavior
 - Translating GNU ld flags to ld64.lld equivalents on macOS
+- Translating GNU ld flags to MSVC/lld-link equivalents on Windows
 - Managing linker selection based on platform and user preferences
 - Ensuring ld64.lld symlink exists on macOS (runtime fallback)
 """
@@ -283,6 +284,162 @@ def _translate_linker_flags_for_macos_lld(args: list[str]) -> list[str]:
     return result
 
 
+def _translate_single_linker_flag(
+    flag: str,
+    flag_translations: dict[str, str | None],
+    translated_flags: list[tuple[str, str]],
+    removed_flags: list[str],
+) -> str | None:
+    """
+    Translate a single GNU linker flag to MSVC equivalent.
+
+    Args:
+        flag: GNU linker flag to translate
+        flag_translations: Dictionary mapping GNU flags to MSVC equivalents
+        translated_flags: List to append (gnu_flag, msvc_flag) tuples for reporting
+        removed_flags: List to append removed flags for reporting
+
+    Returns:
+        MSVC flag if translated, None if removed, or original flag if no translation needed
+    """
+    # Skip MSVC flags (backward compatibility)
+    if flag.startswith("/"):
+        return flag
+
+    # Handle flags with = syntax (e.g., --icf=all)
+    if "=" in flag:
+        flag_name, _flag_value = flag.split("=", 1)
+        if flag_name in flag_translations:
+            msvc_flag = flag_translations[flag_name]
+            if msvc_flag is not None:
+                translated_flags.append((flag, msvc_flag))
+                return msvc_flag
+            removed_flags.append(flag)
+            return None
+
+    # Check if flag needs translation
+    if flag in flag_translations:
+        msvc_flag = flag_translations[flag]
+        if msvc_flag is None:
+            removed_flags.append(flag)
+            return None
+        translated_flags.append((flag, msvc_flag))
+        return msvc_flag
+
+    # Pass through unchanged
+    return flag
+
+
+def _translate_linker_flags_for_windows_lld(args: list[str], msvc_mode: bool = True) -> list[str]:
+    """
+    Translate GNU ld linker flags to Windows lld equivalents.
+
+    For MSVC ABI (msvc_mode=True), translates to lld-link (MSVC-style) flags:
+    - --allow-shlib-undefined → /FORCE:UNRESOLVED
+    - --gc-sections → /OPT:REF
+    - -shared → /DLL
+
+    For GNU ABI (msvc_mode=False), handles flags for ld.lld MinGW mode:
+    - -shared → kept as-is (natively supported)
+    - --allow-shlib-undefined → removed (not supported by ld.lld MinGW)
+    - --gc-sections → kept as-is (natively supported)
+
+    This function processes both direct linker flags and flags passed via -Wl,
+
+    A warning is printed to stderr when flags are translated/removed, unless
+    silenced via CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1.
+
+    Args:
+        args: Original compiler arguments
+        msvc_mode: True for MSVC ABI (lld-link), False for GNU ABI (ld.lld MinGW)
+
+    Returns:
+        Modified arguments with translated linker flags
+    """
+    # Flag mapping dictionary - varies by ABI
+    if msvc_mode:
+        # MSVC ABI: Translate to lld-link (MSVC-style) flags
+        flag_translations: dict[str, str | None] = {
+            # Priority 0: Symbol Resolution (CRITICAL)
+            "--allow-shlib-undefined": "/FORCE:UNRESOLVED",
+            "--allow-multiple-definition": "/FORCE:MULTIPLE",
+            "--no-undefined": None,  # Remove (MSVC default behavior)
+            # Priority 1: Optimization
+            "--gc-sections": "/OPT:REF",
+            "--no-gc-sections": "/OPT:NOREF",
+            # Priority 1: Output Control
+            "-shared": "/DLL",
+        }
+    else:
+        # GNU ABI: Handle flags for ld.lld MinGW mode
+        # MinGW mode supports many GNU flags natively, but not all
+        flag_translations: dict[str, str | None] = {
+            # Flags NOT supported by ld.lld MinGW - remove them
+            "--allow-shlib-undefined": None,  # Not supported, remove
+            "--allow-multiple-definition": None,  # Not supported, remove
+            "--no-undefined": None,  # Not needed (MinGW default)
+            # Flags natively supported by ld.lld MinGW - keep as-is
+            # (not in translation dict, so they pass through unchanged):
+            # "-shared", "--gc-sections", "--no-gc-sections"
+        }
+
+    # Track translated/removed flags for warning
+    translated_flags: list[tuple[str, str]] = []  # (gnu_flag, msvc_flag)
+    removed_flags: list[str] = []
+
+    result = []
+    for arg in args:
+        # Handle -Wl, prefixed flags (comma-separated linker flags)
+        if arg.startswith("-Wl,"):
+            linker_flags = arg[4:].split(",")
+            translated_linker_flags = []
+
+            for flag in linker_flags:
+                translated_flag = _translate_single_linker_flag(
+                    flag, flag_translations, translated_flags, removed_flags
+                )
+                if translated_flag is not None:
+                    translated_linker_flags.append(translated_flag)
+
+            # Rejoin with commas if any flags remain
+            if translated_linker_flags:
+                result.append("-Wl," + ",".join(translated_linker_flags))
+
+        # Handle standalone linker flags passed directly
+        elif arg in flag_translations:
+            translated_flag = _translate_single_linker_flag(arg, flag_translations, translated_flags, removed_flags)
+            if translated_flag is not None and translated_flag != arg:
+                # Wrap in -Wl, to pass to linker (only if actually translated)
+                result.append("-Wl," + translated_flag)
+            elif translated_flag == arg:
+                # Flag wasn't in translations, pass through as-is
+                result.append(arg)
+            # else: flag was removed (translated_flag is None), don't add to result
+
+        else:
+            result.append(arg)
+
+    # Emit warning for translated/removed flags (unless silenced)
+    if (translated_flags or removed_flags) and not is_note_disabled("LINKER_COMPAT_NOTE", "LINKER_NOTE"):
+        if msvc_mode:
+            message_parts = ["clang-tool-chain: note: translated GNU linker flags to MSVC equivalents:"]
+            for gnu_flag, msvc_flag in translated_flags:
+                message_parts.append(f"  {gnu_flag} → {msvc_flag}")
+            for flag in removed_flags:
+                message_parts.append(f"  {flag} → (removed, MSVC default)")
+        else:
+            message_parts = ["clang-tool-chain: note: removed GNU linker flags not supported by ld.lld MinGW mode:"]
+            for flag in removed_flags:
+                message_parts.append(f"  {flag} → (removed, not supported)")
+            # In GNU mode, we shouldn't have any translated_flags (only removed)
+            for gnu_flag, _replacement in translated_flags:
+                message_parts.append(f"  {gnu_flag} → (unexpected translation in GNU mode)")
+        message_parts.append("(disable with CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1)")
+        print("\n".join(message_parts), file=sys.stderr)
+
+    return result
+
+
 def _user_specified_lld_on_macos(args: list[str]) -> bool:
     """
     Check if the user explicitly specified LLD linker on macOS.
@@ -337,7 +494,7 @@ def _convert_ld64_lld_to_lld(args: list[str]) -> list[str]:
 # pyright: reportUnusedFunction=false
 def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     """
-    Add platform-specific lld linker flag for macOS and Linux if needed.
+    Add platform-specific lld linker flag and translate GNU flags if needed.
 
     This forces the use of LLVM's lld linker instead of platform-specific
     system linkers (ld64 on macOS, GNU ld on Linux). This provides:
@@ -350,22 +507,24 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     - Uses -fuse-ld=lld on all platforms (clang driver auto-dispatches)
     - macOS: Clang driver finds ld64.lld (Mach-O linker)
     - Linux: Clang driver finds ld.lld (ELF linker)
+    - Windows: -fuse-ld=lld added by GNUABITransformer (for GNU ABI)
 
     The function is skipped when:
     - User sets CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1
     - User already specified -fuse-ld= in arguments (but flag translation still applies on macOS)
     - Compile-only operation (-c flag present)
-    - Platform is Windows (already handled separately)
 
-    On macOS, this function also translates GNU ld flags to ld64.lld equivalents,
-    even when the user explicitly specifies -fuse-ld=lld or -fuse-ld=ld64.lld.
+    Flag translation:
+    - macOS: GNU ld flags → ld64.lld equivalents (e.g., --no-undefined → -undefined error)
+    - Windows: GNU ld flags → MSVC/lld-link equivalents (e.g., --allow-shlib-undefined → /FORCE:UNRESOLVED)
+    - Linux: No translation needed (ld.lld understands GNU ld flags natively)
 
     Args:
         platform_name: Platform name ("win", "linux", "darwin")
         args: Original compiler arguments
 
     Returns:
-        Modified arguments with -fuse-ld=lld flag prepended if needed
+        Modified arguments with -fuse-ld=lld flag prepended if needed and flags translated
     """
     # On macOS, if user explicitly specified LLD, we still need to translate flags
     # and ensure ld64.lld symlink exists, even though we don't inject the -fuse-ld flag ourselves
@@ -387,6 +546,36 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
             args = _convert_ld64_lld_to_lld(args)
 
         return _translate_linker_flags_for_macos_lld(args)
+
+    # On Windows, handle GNU linker flags for both MSVC and GNU ABI
+    # - MSVC ABI: Translate to lld-link (MSVC-style) flags
+    # - GNU ABI: Remove unsupported flags, keep supported ones for ld.lld MinGW mode
+    if platform_name == "win" and "-c" not in args:
+        # Check for MSVC-style linker flags to determine if we're using MSVC ABI
+        args_str = " ".join(args)
+        msvc_linker_patterns = [
+            "-Wl,/MACHINE:",
+            "-Wl,/OUT:",
+            "-Wl,/SUBSYSTEM:",
+            "-Wl,/DEBUG",
+            "-Wl,/PDB:",
+            "-Wl,/NOLOGO",
+            "/MACHINE:",
+            "/OUT:",
+            "/SUBSYSTEM:",
+            "/DEBUG",
+            "/PDB:",
+            "/NOLOGO",
+        ]
+        # Also check for MSVC target triple
+        is_msvc_abi = any(pattern in args_str for pattern in msvc_linker_patterns) or "-pc-windows-msvc" in args_str
+
+        if is_msvc_abi:
+            logger.debug("MSVC ABI detected, translating GNU ld flags to MSVC equivalents for lld-link")
+            return _translate_linker_flags_for_windows_lld(args, msvc_mode=True)
+        else:
+            logger.debug("GNU ABI detected, processing linker flags for ld.lld MinGW mode")
+            return _translate_linker_flags_for_windows_lld(args, msvc_mode=False)
 
     if not _should_force_lld(platform_name, args):
         return args

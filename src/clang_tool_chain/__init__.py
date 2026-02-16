@@ -1,4 +1,4 @@
-__version__ = "1.1.7"
+__version__ = "1.1.10"
 
 # Re-export commonly used functions for convenient access
 from clang_tool_chain.env_utils import (

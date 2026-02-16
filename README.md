@@ -735,12 +735,13 @@ clang-tool-chain install clang-env   # Use 'clang' directly
 
 ## ✨ Features
 
-43 wrapper commands • Auto-download • 94% size reduction • Cross-platform • Auto library deployment
+43 wrapper commands • Auto-download • 94% size reduction • Cross-platform • Auto library deployment • **Universal linker flags**
 
 - **Zero Configuration** - Auto-downloads to `~/.clang-tool-chain/`
 - **Ultra-Compact** - 71-91 MB (94% smaller via zstd-22)
 - **43 Commands** - Clang/LLVM, Emscripten, IWYU, LLDB, Valgrind, formatters, binary utils
 - **Cross-Platform** - Windows x64, macOS x64/ARM64, Linux x64/ARM64
+- **🎯 Universal Linker Flags** - Write GNU-style linker flags once, run everywhere (auto-translates to MSVC on Windows, ld64 on macOS)
 - **Auto Library Deployment** - Windows DLLs, Linux .so, macOS .dylib copied automatically
 - **Concurrent-Safe** - File locking for parallel builds
 - **Python Native** - Seamless Python integration
@@ -765,6 +766,86 @@ clang-tool-chain-c main.c utils.c math.c -o program
 ```
 
 **📖 [Complete Documentation](docs/EXAMPLES.md)** - Multi-file projects, static libraries, CMake, WebAssembly, Cosmopolitan, executable scripts, directives, Windows examples, IWYU, formatting, debugging, sccache, binary utilities.
+
+---
+
+## 🎯 Cross-Platform Linker Flags
+
+**Write linker flags once, run everywhere** - clang-tool-chain automatically translates GNU-style linker flags to platform-native equivalents.
+
+### The Problem (Before)
+
+Platform-specific linker flags force you to write conditional code:
+
+```python
+# build.py - platform-specific nightmare
+if platform == "windows":
+    link_flags = ["-Wl,/FORCE:UNRESOLVED"]  # MSVC style
+elif platform == "darwin":
+    link_flags = ["-Wl,-undefined,dynamic_lookup"]  # macOS ld64 style
+else:
+    link_flags = ["-Wl,--allow-shlib-undefined"]  # GNU ld style
+```
+
+### The Solution (After)
+
+Use GNU-style flags everywhere - automatic translation:
+
+```python
+# build.py - universal flags
+link_flags = ["-Wl,--allow-shlib-undefined"]  # Works on ALL platforms!
+```
+
+### How It Works
+
+clang-tool-chain automatically translates flags based on the target platform:
+
+- **Windows**: GNU ld flags → MSVC/lld-link equivalents (`--allow-shlib-undefined` → `/FORCE:UNRESOLVED`)
+- **macOS**: GNU ld flags → ld64.lld equivalents (`--no-undefined` → `-undefined error`)
+- **Linux**: GNU ld flags pass through unchanged (native support)
+
+### Examples
+
+```bash
+# Shared library with undefined symbols - works everywhere!
+clang-tool-chain-cpp -shared -Wl,--allow-shlib-undefined plugin.cpp -o plugin.dll
+
+# Dead code elimination - universal syntax
+clang-tool-chain-cpp -Wl,--gc-sections main.cpp -o optimized
+
+# Combined flags - automatic translation
+clang-tool-chain-cpp -shared -Wl,--allow-shlib-undefined,--gc-sections lib.cpp -o lib.so
+```
+
+### Supported Flag Translations
+
+| GNU ld Flag | Windows (MSVC) | macOS (ld64) | Linux |
+|-------------|----------------|--------------|-------|
+| `--allow-shlib-undefined` | `/FORCE:UNRESOLVED` | *(removed)* | *(pass through)* |
+| `--no-undefined` | *(removed, default)* | `-undefined error` | *(pass through)* |
+| `--gc-sections` | `/OPT:REF` | *(pass through)* | *(pass through)* |
+| `-shared` | `/DLL` | *(pass through)* | *(pass through)* |
+
+**📖 [Complete Flag Mapping](docs/LINKER_FLAG_TRANSLATION.md)** - Full translation table, environment variables, advanced usage.
+
+### Backward Compatibility
+
+Platform-native flags still work (MSVC on Windows, ld64 on macOS):
+
+```bash
+# MSVC-style flags still work on Windows
+clang-tool-chain-cpp -Wl,/FORCE:UNRESOLVED plugin.cpp -o plugin.dll  # Windows only
+
+# Mixed GNU/MSVC flags supported for migration
+clang-tool-chain-cpp -Wl,--gc-sections,/FORCE:UNRESOLVED lib.cpp  # Translates --gc-sections only
+```
+
+### Disable Translation
+
+```bash
+# Suppress translation warnings
+export CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1
+```
 
 ---
 

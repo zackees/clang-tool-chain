@@ -42,7 +42,7 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 | Cosmopolitan | 4.0.2 | All 5 | [docs/COSMOCC.md](docs/COSMOCC.md) |
 | Valgrind | 3.24.0 | Linux x64/ARM64 (via Docker) | [docs/VALGRIND.md](docs/VALGRIND.md) |
 
-**Linker:** Uses `ld64.lld` on macOS, `ld.lld` on Linux/Windows. Opt-out: `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1`. GNU-style flags auto-translated on macOS. See [docs/CLANG_LLVM.md](docs/CLANG_LLVM.md) for details.
+**Linker:** Uses `ld64.lld` on macOS, `ld.lld` on Linux/Windows. Opt-out: `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1`. GNU-style flags auto-translated on macOS and Windows. See [docs/LINKER_FLAG_TRANSLATION.md](docs/LINKER_FLAG_TRANSLATION.md) for details.
 
 **Key Features:**
 - Pre-built Clang/LLVM binaries (~50-400 MB per platform)
@@ -71,6 +71,7 @@ All detailed documentation lives in `docs/`. Read the file matching your task.
 | Document | Read when... |
 |----------|-------------|
 | **[Clang/LLVM](docs/CLANG_LLVM.md)** | Working on compiler wrappers, sanitizers (ASAN/UBSAN), LLD linker, macOS SDK, Windows GNU/MSVC ABI, sccache |
+| **[Linker Flag Translation](docs/LINKER_FLAG_TRANSLATION.md)** | Working on GNU-to-MSVC/ld64 flag translation, cross-platform linking |
 | **[Inlined Directives](docs/DIRECTIVES.md)** | Working on `@link`, `@std`, `@cflags`, `@platform` directives in source files |
 | **[Library Deployment](docs/SHARED_LIBRARY_DEPLOYMENT.md)** | Working on DLL/SO/dylib deployment, `--deploy-dependencies` flag |
 | **[Bundled libunwind](docs/LIBUNWIND.md)** | Working on stack unwinding, backtraces, Windows symbol resolution |
