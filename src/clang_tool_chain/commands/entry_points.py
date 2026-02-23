@@ -222,6 +222,20 @@ def llvm_readelf_main() -> NoReturn:
     execute_tool("llvm-readelf")
 
 
+def llvm_dlltool_main() -> NoReturn:
+    """Entry point for llvm-dlltool wrapper (generates Windows import libraries from .def files)."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-dlltool")
+
+
+def llvm_lib_main() -> NoReturn:
+    """Entry point for llvm-lib wrapper (MSVC-compatible library manager)."""
+    from ..execution.core import execute_tool
+
+    execute_tool("llvm-lib")
+
+
 def llvm_as_main() -> NoReturn:
     """Entry point for llvm-as wrapper."""
     from ..execution.core import execute_tool
@@ -234,6 +248,18 @@ def llvm_dis_main() -> NoReturn:
     from ..execution.core import execute_tool
 
     execute_tool("llvm-dis")
+
+
+# ============================================================================
+# Def File Generation Entry Points
+# ============================================================================
+
+
+def gendef_main() -> int:
+    """Entry point for clang-tool-chain-gendef (generates .def files from DLLs)."""
+    from ..execution.gendef import gendef_main as _gendef_main
+
+    return _gendef_main()
 
 
 # ============================================================================

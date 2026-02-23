@@ -25,6 +25,8 @@ Binary Utilities:
     - llvm_readelf_main: ELF reader
     - llvm_as_main: LLVM assembler
     - llvm_dis_main: LLVM disassembler
+    - llvm_dlltool_main: Import library generator (.def -> .dll.a/.lib)
+    - llvm_lib_main: MSVC-compatible library manager
 
 Clang Tools:
     - clang_format_main: Code formatter
@@ -65,6 +67,7 @@ from clang_tool_chain.commands.entry_points import (
     emcc_main,
     empp_main,
     fix_includes_main,
+    gendef_main,
     iwyu_main,
     iwyu_tool_main,
     lld_main,
@@ -73,6 +76,8 @@ from clang_tool_chain.commands.entry_points import (
     llvm_ar_main,
     llvm_as_main,
     llvm_dis_main,
+    llvm_dlltool_main,
+    llvm_lib_main,
     llvm_nm_main,
     llvm_objcopy_main,
     llvm_objdump_main,
@@ -105,6 +110,10 @@ __all__ = [
     "llvm_readelf_main",
     "llvm_as_main",
     "llvm_dis_main",
+    "llvm_dlltool_main",
+    "llvm_lib_main",
+    # Def File Generation
+    "gendef_main",
     # Clang Tools
     "clang_format_main",
     "clang_tidy_main",

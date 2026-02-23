@@ -118,7 +118,7 @@ Comprehensive reference of all available commands organized by category.
 | `clang-tool-chain-build-run` | Build and execute with caching |
 | `clang-tool-chain-run` | Execute cached binary (no rebuild) |
 
-### Binary Utilities (11)
+### Binary Utilities (14)
 
 | Command | Description |
 |---------|-------------|
@@ -133,6 +133,9 @@ Comprehensive reference of all available commands organized by category.
 | `clang-tool-chain-strip` | Remove symbols from binaries (llvm-strip) |
 | `clang-tool-chain-cxxfilt` | Demangle C++ symbols (llvm-cxxfilt) |
 | `clang-tool-chain-symbolizer` | Symbolize stack traces (llvm-symbolizer) |
+| `clang-tool-chain-dlltool` | Generate import libraries from .def files (llvm-dlltool) |
+| `clang-tool-chain-lib` | MSVC-compatible library manager (llvm-lib) |
+| `clang-tool-chain-gendef` | Generate .def files from DLL export tables |
 
 ### Format & Lint (2)
 
@@ -199,7 +202,7 @@ Comprehensive reference of all available commands organized by category.
 ### Tools by Category
 - [Clang/LLVM Toolchain](#️-clangllvm-toolchain) - C/C++ compilation (17 commands)
 - [Build Utilities](#-build-utilities) - build, build-run, run (3 commands)
-- [Binary Utilities](#-binary-utilities) - ar, nm, objdump, strip, readelf (11 commands)
+- [Binary Utilities](#-binary-utilities) - ar, nm, objdump, strip, readelf, dlltool, gendef (14 commands)
 - [Format & Lint](#-format--lint) - clang-format, clang-tidy (2 commands)
 - [IWYU](#-iwyu-include-what-you-use) - Include analyzer (3 commands)
 - [LLDB](#-lldb-debugger) - Debugger with Python support (2 commands)
@@ -300,12 +303,30 @@ chmod +x script.cpp && ./script.cpp
 
 ## 🔧 Binary Utilities
 
-**11 commands** • LLVM binary tools • ELF/PE/Mach-O support • Archives & symbols
+**14 commands** • LLVM binary tools • ELF/PE/Mach-O support • Archives & symbols • Import library generation
 
 ```bash
 clang-tool-chain-ar rcs libmylib.a obj1.o obj2.o
 clang-tool-chain-nm --demangle program
 clang-tool-chain-objdump -d program
+```
+
+### Filtering DLL Export Tables
+
+When building shared libraries with `--export-all-symbols`, unwanted symbols (e.g. `std::` template instantiations) leak into the export table, bloating the import library. Use `gendef` + `dlltool` to filter them:
+
+```bash
+# 1. Build DLL (exports everything, including std:: symbols)
+clang-tool-chain-cpp -shared -Wl,--export-all-symbols -o mylib.dll mylib.cpp
+
+# 2. Extract .def file from DLL
+clang-tool-chain-gendef mylib.dll              # -> mylib.def
+
+# 3. Filter unwanted symbols (remove std:: mangled names)
+grep -v '_ZN\?K\?St' mylib.def > mylib_filtered.def
+
+# 4. Regenerate a clean import library
+clang-tool-chain-dlltool -d mylib_filtered.def -D mylib.dll -l mylib.dll.a -m i386:x86-64
 ```
 
 **📖 [Complete Documentation](docs/BINARY_UTILS.md)** - All commands, symbol inspection, archive creation, disassembly.

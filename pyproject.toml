@@ -85,6 +85,11 @@ clang-tool-chain-objcopy = "clang_tool_chain.wrapper:llvm_objcopy_main"
 clang-tool-chain-ranlib = "clang_tool_chain.wrapper:llvm_ranlib_main"
 clang-tool-chain-strip = "clang_tool_chain.wrapper:llvm_strip_main"
 clang-tool-chain-readelf = "clang_tool_chain.wrapper:llvm_readelf_main"
+# Import Library Tools
+clang-tool-chain-dlltool = "clang_tool_chain.wrapper:llvm_dlltool_main"
+clang-tool-chain-lib = "clang_tool_chain.wrapper:llvm_lib_main"
+# Def File Generation
+clang-tool-chain-gendef = "clang_tool_chain.wrapper:gendef_main"
 # Additional Tools
 clang-tool-chain-as = "clang_tool_chain.wrapper:llvm_as_main"
 clang-tool-chain-dis = "clang_tool_chain.wrapper:llvm_dis_main"
