@@ -16,7 +16,9 @@ Architecture:
     ArgumentTransformer (ABC)
         ├── DirectivesTransformer (priority=50)
         ├── MacOSSDKTransformer (priority=100)
+        ├── MacOSSysrootTransformer (priority=105)
         ├── MacOSUnwindTransformer (priority=125)
+        ├── LinuxSysrootTransformer (priority=140)
         ├── LinuxUnwindTransformer (priority=150)
         ├── LLDLinkerTransformer (priority=200)
         ├── ASANRuntimeTransformer (priority=250)
@@ -209,6 +211,83 @@ class MacOSSDKTransformer(ArgumentTransformer):
         return _add_macos_sysroot_if_needed(args)
 
 
+class MacOSSysrootTransformer(ArgumentTransformer):
+    """
+    Transformer for adding bundled macOS sysroot headers as a fallback.
+
+    Priority: 105 (runs immediately after MacOSSDKTransformer at 100)
+
+    On macOS, system headers (stdio.h, etc.) live inside the Xcode SDK.
+    The MacOSSDKTransformer (priority 100) tries to locate the system SDK
+    via xcrun and adds -isysroot. When that fails (no Xcode/CLT installed,
+    e.g., on minimal CI runners), this transformer provides a fallback by
+    injecting -isystem paths pointing to bundled SDK headers.
+
+    Only headers are bundled (no libraries). Users still link against system
+    dylibs which are always present on macOS.
+
+    When sysroot/usr/include/stdio.h exists in the clang toolchain directory
+    and no -isysroot is present:
+    - Adds -isystem<clang_root>/sysroot/usr/include (C/POSIX headers)
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_BUNDLED_SYSROOT: Set to '1' to disable bundled sysroot
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to '1' to disable all automatic features
+    """
+
+    def priority(self) -> int:
+        return 105
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Add bundled sysroot header paths if available on macOS (fallback)."""
+        # Only applies to macOS clang/clang++
+        if context.platform_name != "darwin" or context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Check if disabled (via NO_BUNDLED_SYSROOT or NO_AUTO)
+        if is_feature_disabled("BUNDLED_SYSROOT"):
+            return args
+
+        # Skip if MacOSSDKTransformer already added -isysroot (system SDK found)
+        if "-isysroot" in args:
+            logger.debug("Skipping MacOSSysrootTransformer: -isysroot already present")
+            return args
+
+        # Skip if user has their own sysroot or is explicitly avoiding standard includes
+        skip_flags = ("--sysroot", "-nostdinc", "-nostdinc++", "-nostdlib", "-ffreestanding")
+        for arg in args:
+            if any(arg == flag or arg.startswith(flag + "=") for flag in skip_flags):
+                logger.debug(f"Skipping MacOSSysrootTransformer: found {arg}")
+                return args
+
+        try:
+            from clang_tool_chain.platform.detection import get_platform_binary_dir
+
+            clang_bin = get_platform_binary_dir()
+            clang_root = clang_bin.parent
+
+            # Check if bundled sysroot exists
+            sysroot_include = clang_root / "sysroot" / "usr" / "include"
+            marker = sysroot_include / "stdio.h"
+            if not marker.exists():
+                logger.debug("Bundled macOS sysroot headers not found, skipping MacOSSysrootTransformer")
+                return args
+
+            result = list(args)
+
+            # Add include path for bundled headers
+            isystem_flag = f"-isystem{sysroot_include}"
+            if isystem_flag not in args:
+                result = [isystem_flag] + result
+                logger.debug(f"Adding bundled macOS sysroot include path: {isystem_flag}")
+
+            return result
+
+        except Exception as e:
+            logger.debug(f"MacOSSysrootTransformer error: {e}")
+            return args
+
+
 class MacOSUnwindTransformer(ArgumentTransformer):
     """
     Transformer for handling -lunwind on macOS.
@@ -253,6 +332,91 @@ class MacOSUnwindTransformer(ArgumentTransformer):
             logger.info("Removed -lunwind on macOS (libunwind is built into libSystem, no standalone library exists)")
 
         return result
+
+
+class LinuxSysrootTransformer(ArgumentTransformer):
+    """
+    Transformer for adding bundled Linux sysroot headers (libc development headers).
+
+    Priority: 140 (runs after macOS unwind but before Linux unwind transformer)
+
+    On minimal Linux images (Docker, CI runners), C library headers like stdio.h,
+    sys/socket.h, netinet/in.h are missing because libc6-dev isn't installed.
+    This transformer adds -isystem paths to the bundled sysroot headers so that
+    compilation works without requiring system libc6-dev.
+
+    The bundled sysroot contains headers only (no libraries). Users still link
+    against the system libc.so which is always present even on minimal images.
+
+    When sysroot/usr/include/stdio.h exists in the clang toolchain directory:
+    - Adds -isystem<clang_root>/sysroot/usr/include/{multiarch} (bits/, asm/, gnu/)
+    - Adds -isystem<clang_root>/sysroot/usr/include (common headers)
+
+    The multiarch path is added first so architecture-specific headers (like
+    bits/types.h) are found before generic ones.
+
+    Environment Variables:
+        CLANG_TOOL_CHAIN_NO_BUNDLED_SYSROOT: Set to '1' to disable bundled sysroot
+        CLANG_TOOL_CHAIN_NO_AUTO: Set to '1' to disable all automatic features
+    """
+
+    def priority(self) -> int:
+        return 140
+
+    def transform(self, args: list[str], context: ToolContext) -> list[str]:
+        """Add bundled sysroot header paths if available on Linux."""
+        # Only applies to Linux clang/clang++
+        if context.platform_name != "linux" or context.tool_name not in ("clang", "clang++"):
+            return args
+
+        # Check if disabled (via NO_BUNDLED_SYSROOT or NO_AUTO)
+        if is_feature_disabled("BUNDLED_SYSROOT"):
+            return args
+
+        # Skip if user has their own sysroot or is explicitly avoiding standard includes
+        skip_flags = ("--sysroot", "-nostdinc", "-nostdinc++", "-nostdlib", "-ffreestanding")
+        for arg in args:
+            if any(arg == flag or arg.startswith(flag + "=") for flag in skip_flags):
+                logger.debug(f"Skipping LinuxSysrootTransformer: found {arg}")
+                return args
+
+        try:
+            from clang_tool_chain.platform.detection import get_platform_binary_dir
+
+            clang_bin = get_platform_binary_dir()
+            clang_root = clang_bin.parent
+
+            # Check if bundled sysroot exists
+            sysroot_include = clang_root / "sysroot" / "usr" / "include"
+            marker = sysroot_include / "stdio.h"
+            if not marker.exists():
+                logger.debug("Bundled sysroot headers not found, skipping LinuxSysrootTransformer")
+                return args
+
+            result = list(args)
+
+            # Determine multiarch directory name
+            multiarch = "aarch64-linux-gnu" if context.arch in ("arm64", "aarch64") else "x86_64-linux-gnu"
+
+            # Add multiarch path first (contains bits/, asm/, gnu/)
+            multiarch_dir = sysroot_include / multiarch
+            if multiarch_dir.is_dir():
+                isystem_multiarch = f"-isystem{multiarch_dir}"
+                if isystem_multiarch not in args:
+                    result = [isystem_multiarch] + result
+                    logger.debug(f"Adding bundled sysroot multiarch path: {isystem_multiarch}")
+
+            # Add common include path (stdio.h, stdlib.h, etc.)
+            isystem_common = f"-isystem{sysroot_include}"
+            if isystem_common not in args:
+                result = [isystem_common] + result
+                logger.debug(f"Adding bundled sysroot include path: {isystem_common}")
+
+            return result
+
+        except Exception as e:
+            logger.debug(f"LinuxSysrootTransformer error: {e}")
+            return args
 
 
 class LinuxUnwindTransformer(ArgumentTransformer):
@@ -674,13 +838,15 @@ def create_default_pipeline() -> ArgumentPipeline:
     This includes all standard transformers in their default priority order:
     1. DirectivesTransformer (priority=50)
     2. MacOSSDKTransformer (priority=100)
-    3. MacOSUnwindTransformer (priority=125)
-    4. LinuxUnwindTransformer (priority=150)
-    5. LLDLinkerTransformer (priority=200)
-    6. ASANRuntimeTransformer (priority=250)
-    7. RPathTransformer (priority=275)
-    8. GNUABITransformer (priority=300)
-    9. MSVCABITransformer (priority=300)
+    3. MacOSSysrootTransformer (priority=105)
+    4. MacOSUnwindTransformer (priority=125)
+    5. LinuxSysrootTransformer (priority=140)
+    6. LinuxUnwindTransformer (priority=150)
+    7. LLDLinkerTransformer (priority=200)
+    8. ASANRuntimeTransformer (priority=250)
+    9. RPathTransformer (priority=275)
+    10. GNUABITransformer (priority=300)
+    11. MSVCABITransformer (priority=300)
 
     Returns:
         Configured ArgumentPipeline ready for use
@@ -689,7 +855,9 @@ def create_default_pipeline() -> ArgumentPipeline:
         [
             DirectivesTransformer(),
             MacOSSDKTransformer(),
+            MacOSSysrootTransformer(),
             MacOSUnwindTransformer(),
+            LinuxSysrootTransformer(),
             LinuxUnwindTransformer(),
             LLDLinkerTransformer(),
             ASANRuntimeTransformer(),

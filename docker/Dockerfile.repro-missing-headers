@@ -1,0 +1,57 @@
+# Dockerfile to reproduce missing sys/socket.h (and all libc headers) on Linux
+# Minimal image: only Python + clang-tool-chain, NO build-essential/libc6-dev
+#
+# Build:  docker build -f docker/Dockerfile.repro-missing-headers -t repro-headers .
+# Run:    docker run --rm repro-headers
+#
+# Expected output: fatal error: 'sys/socket.h' file not found
+# Root cause: Ubuntu minimal images don't include libc6-dev (C library headers)
+# Even stdio.h is missing without libc6-dev.
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install ONLY Python and curl — deliberately skip build-essential / libc6-dev
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-venv \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:/root/.cargo/bin:${PATH}"
+
+WORKDIR /workspace
+
+# Create venv and install clang-tool-chain
+RUN uv venv /opt/venv && uv pip install --python /opt/venv/bin/python clang-tool-chain
+ENV PATH="/opt/venv/bin:${PATH}"
+
+# Pre-download the toolchain
+RUN clang-tool-chain install clang
+
+# Write test files
+RUN cat > /workspace/test_socket.c << 'EOF'
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <stdio.h>
+
+int main(void) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    printf("socket fd: %d\n", fd);
+    return 0;
+}
+EOF
+
+RUN cat > /workspace/test_basic.c << 'EOF'
+#include <stdio.h>
+int main(void) {
+    printf("hello\n");
+    return 0;
+}
+EOF
+
+# Demonstrate the failure
+CMD ["bash", "-c", "echo '=== Test 1: stdio.h ===' && clang-tool-chain-c test_basic.c -o test_basic 2>&1 || true && echo && echo '=== Test 2: sys/socket.h ===' && clang-tool-chain-c test_socket.c -o test_socket 2>&1 || true && echo && echo '=== Missing: /usr/include/stdio.h ===' && ls /usr/include/stdio.h 2>&1 || echo 'NOT FOUND' && echo '=== Fix: apt-get install libc6-dev ==='"]

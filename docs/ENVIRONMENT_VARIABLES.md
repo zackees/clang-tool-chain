@@ -53,6 +53,7 @@ When `CLANG_TOOL_CHAIN_NO_AUTO=1` is set, the following features are disabled:
 | Rpath Injection | `NO_RPATH` | Auto `-rpath` for library loading |
 | macOS Sysroot | `NO_SYSROOT` | Auto `-isysroot` SDK detection |
 | Bundled libunwind | `NO_BUNDLED_UNWIND` | Bundled libunwind headers/libs on Linux |
+| Bundled sysroot | `NO_BUNDLED_SYSROOT` | Bundled C/POSIX dev headers on Linux and macOS |
 | Library Deployment | `NO_DEPLOY_LIBS` | Auto copy of runtime libraries (all outputs) |
 | Shared Lib Deployment | `NO_DEPLOY_SHARED_LIB` | Library deployment for .dll/.so/.dylib outputs only |
 
@@ -157,9 +158,9 @@ clang-tool-chain-cpp main.cpp -o program
 
 ---
 
-## Bundled Libraries (Linux)
+## Bundled Libraries
 
-Environment variables for controlling bundled libraries on Linux.
+Environment variables for controlling bundled libraries and headers.
 
 ### libunwind
 
@@ -195,6 +196,57 @@ clang-tool-chain-cpp backtrace.cpp -lunwind -o backtrace
 - Works on minimal Docker images and CI runners
 
 **See Also:** [Bundled libunwind Documentation](LIBUNWIND.md)
+
+### Sysroot Headers (C/POSIX development headers)
+
+On Linux and macOS, clang-tool-chain bundles C/POSIX development headers so that C/C++ code can be compiled on minimal environments without installing system packages.
+
+- **Linux**: Bundles headers from `libc6-dev` + `linux-libc-dev` (extracted via Docker from Ubuntu 22.04)
+- **macOS**: Bundles headers from the macOS SDK `usr/include/` (fallback when Xcode/CLT is not installed)
+
+| Variable | Platforms | Type | Default | Description |
+|----------|-----------|------|---------|-------------|
+| `CLANG_TOOL_CHAIN_NO_BUNDLED_SYSROOT` | Linux, macOS | Boolean | `0` | Disable bundled sysroot headers (use system headers) |
+
+**Usage:**
+
+```bash
+# Default behavior - bundled sysroot headers automatically used
+clang-tool-chain-cc hello.c -o hello
+# Automatically adds -isystem paths for bundled stdio.h, sys/socket.h, etc.
+
+# Linux: No apt-get install libc6-dev required!
+# macOS: Falls back to bundled headers if xcrun fails (no Xcode/CLT)
+
+# Disable bundled sysroot (use system headers)
+export CLANG_TOOL_CHAIN_NO_BUNDLED_SYSROOT=1
+clang-tool-chain-cc hello.c -o hello
+# Linux: requires apt-get install libc6-dev
+# macOS: requires xcode-select --install
+```
+
+**What Gets Injected (When Bundled):**
+
+*Linux:*
+- `-isystem/path/to/clang-tool-chain/sysroot/usr/include` - Find stdio.h, stdlib.h, etc.
+- `-isystem/path/to/clang-tool-chain/sysroot/usr/include/{multiarch}` - Find bits/, asm/, gnu/ headers
+
+*macOS (only when no system SDK found):*
+- `-isystem/path/to/clang-tool-chain/sysroot/usr/include` - Find stdio.h, stdlib.h, etc.
+
+**Automatic Skip Conditions:**
+The transformer does NOT inject paths when any of these flags are present:
+- `--sysroot` - User has their own sysroot
+- `-isysroot` - macOS SDK already found (macOS only)
+- `-nostdinc` / `-nostdinc++` - User is avoiding standard includes
+- `-nostdlib` - User is avoiding standard library
+- `-ffreestanding` - Freestanding environment (no hosted headers)
+
+**Why Bundled Sysroot:**
+- No need to install `libc6-dev` (Linux) or Xcode Command Line Tools (macOS)
+- Works on minimal Docker images and CI runners
+- Consistent headers across systems
+- Only headers are bundled (~3-5 MB compressed), linking uses system libc
 
 ---
 
@@ -429,6 +481,7 @@ Some components have dedicated verbose flags (see [Library Deployment](#library-
 | `CLANG_TOOL_CHAIN_NO_RPATH` | Linux | Linker | Boolean | `0` | Disable automatic rpath injection |
 | `CLANG_TOOL_CHAIN_NO_SYSROOT` | macOS | SDK | Boolean | `0` | Disable automatic -isysroot injection |
 | `CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND` | Linux | Libraries | Boolean | `0` | Disable bundled libunwind (use system) |
+| `CLANG_TOOL_CHAIN_NO_BUNDLED_SYSROOT` | Linux, macOS | Libraries | Boolean | `0` | Disable bundled sysroot headers (use system) |
 | `CLANG_TOOL_CHAIN_NO_SHARED_ASAN` | Linux, Windows | Sanitizer | Boolean | `0` | Disable automatic `-shared-libasan` injection |
 | `CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE` | Linux, Windows | Sanitizer | Boolean | `0` | Suppress sanitizer flag injection note |
 | `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV` | All | Sanitizer | Boolean | `0` | Disable automatic ASAN/LSAN options injection |

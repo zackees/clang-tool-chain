@@ -31,6 +31,7 @@ CONTROLLABLE_FEATURES = {
     "DEPLOY_LIBS": "Cross-platform library deployment (all outputs)",
     "DEPLOY_SHARED_LIB": "Library deployment for shared library outputs only (.dll, .so, .dylib)",
     "BUNDLED_UNWIND": "Bundled libunwind paths on Linux",
+    "BUNDLED_SYSROOT": "Bundled sysroot headers on Linux and macOS (stdio.h, sys/socket.h, etc.)",
     "MACOS_UNWIND_FIX": "Automatic -lunwind removal on macOS (libunwind in libSystem)",
     # Sanitizer notes (hierarchical)
     "SANITIZER_NOTE": "All sanitizer-related notes (category master)",

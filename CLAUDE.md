@@ -60,6 +60,7 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 - **Cosmopolitan Libc support for Actually Portable Executables (APE)**
 - **Inlined Build Directives for self-contained source files**
 - **Bundled libunwind for Linux** (headers + shared library, no system packages required)
+- **Bundled sysroot headers** (Linux: libc dev headers, macOS: SDK headers — no `libc6-dev` or Xcode CLT required)
 - **Valgrind memory error detector** (runs via Docker from any host platform)
 
 ## Documentation Index
