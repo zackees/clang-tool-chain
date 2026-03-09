@@ -23,7 +23,7 @@ clang-tool-chain-cosmocc hello.c -o hello.com
 # This .com file runs natively on Windows, Linux, macOS, FreeBSD - unchanged.
 ```
 
-**One `pip install`, 35+ tools auto-download:** Full Clang/LLVM 21 • Complete Emscripten/WASM pipeline • IWYU • clang-format/tidy • LLDB debugger • Cosmopolitan libc • No admin rights needed • Works offline after first use
+**One `pip install`, 35+ tools auto-download:** Full Clang/LLVM 21 • Complete Emscripten/WASM pipeline • IWYU • clang-format/tidy • LLDB debugger • Cosmopolitan libc • Native C++ launcher for zero-overhead builds • No admin rights needed • Works offline after first use
 
 [![PyPI version](https://img.shields.io/pypi/v/clang-tool-chain.svg)](https://pypi.org/project/clang-tool-chain/)
 [![Downloads](https://pepy.tech/badge/clang-tool-chain)](https://pepy.tech/project/clang-tool-chain)
@@ -85,7 +85,7 @@ Comprehensive test coverage across all platforms and tool categories ensures rel
 
 ---
 
-## 📋 All Commands (43 Total)
+## 📋 All Commands (44 Total)
 
 Comprehensive reference of all available commands organized by category.
 
@@ -176,7 +176,7 @@ Comprehensive reference of all available commands organized by category.
 | `clang-tool-chain-valgrind` | Memory error detector (via Docker) |
 | `clang-tool-chain-callgrind` | Call graph profiler with auto-annotation (via Docker) |
 
-### Management & Diagnostics (5)
+### Management & Diagnostics (6)
 
 | Command | Description |
 |---------|-------------|
@@ -185,8 +185,9 @@ Comprehensive reference of all available commands organized by category.
 | `clang-tool-chain-fetch` | Download toolchain components |
 | `clang-tool-chain-paths` | Display installation paths |
 | `clang-tool-chain-libdeploy` | Deploy runtime library dependencies after the fact |
+| `clang-tool-chain-compile-native` | Compile native C++ launcher for zero-overhead builds |
 
-**Total: 43 commands** providing complete C/C++/WebAssembly toolchain capabilities.
+**Total: 44 commands** providing complete C/C++/WebAssembly toolchain capabilities.
 
 ---
 
@@ -212,6 +213,7 @@ Comprehensive reference of all available commands organized by category.
 - [Management CLI](#️-management-cli) - install, purge, info, test (4 commands)
 
 ### Cross-Cutting Features
+- [Native C++ Launcher](#-native-c-launcher-zero-overhead) - Eliminate Python startup overhead
 - [Inlined Build Directives](#-inlined-build-directives)
 - [Executable C++ Scripts](#-executable-c-scripts-shebang-support)
 - [Windows DLL Deployment](#-windows-dll-deployment)
@@ -677,6 +679,56 @@ chmod +x script.cpp && ./script.cpp
 
 ---
 
+## 🚀 Native C++ Launcher (Zero Overhead)
+
+Compile a native C++ launcher that replaces the Python wrapper, eliminating Python startup overhead entirely. Ideal for build systems that invoke the compiler hundreds or thousands of times.
+
+### Why Native?
+
+The default `clang-tool-chain-c` / `clang-tool-chain-cpp` commands are Python scripts that locate and invoke the bundled Clang binary. Each invocation pays ~50-100ms of Python startup cost. For a single compilation this is negligible, but in a large build with thousands of translation units, it adds up.
+
+The native launcher (`ctc-clang` / `ctc-clang++`) is a single-file C++17 program compiled to a standalone binary. It provides **all the same features** as the Python wrapper -- directive parsing, sysroot injection, linker flag translation, sanitizer setup, DLL/SO deployment -- with near-zero startup overhead.
+
+### Quick Start
+
+```bash
+# Compile the native launcher (uses the bundled clang to compile itself)
+clang-tool-chain-compile-native ./native-tools
+
+# Use the native launcher directly
+./native-tools/ctc-clang hello.c -o hello
+./native-tools/ctc-clang++ hello.cpp -o hello
+
+# Or use in build systems
+export CC=/path/to/native-tools/ctc-clang
+export CXX=/path/to/native-tools/ctc-clang++
+cmake -B build && cmake --build build
+```
+
+### Features
+
+The native launcher supports everything the Python wrapper does:
+
+- **Inlined directives** - `@link`, `@std`, `@cflags`, `@platform` parsed in a background thread
+- **Sysroot injection** - Bundled headers for Windows (MinGW), Linux, macOS
+- **Linker flag translation** - GNU flags auto-translated to platform-native equivalents
+- **LLD linker** - Forces fast LLD linker across all platforms
+- **Sanitizer setup** - ASAN/LSAN environment variables and symbolizer paths
+- **DLL/SO deployment** - Post-link dependency copying on Windows and Linux
+- **Path caching** - Writes a `.ctc-cache` file for instant toolchain discovery on subsequent runs
+- **Auto-install** - Downloads and installs the toolchain on first use if not present
+
+### Environment Variables
+
+| Variable | Effect |
+|----------|--------|
+| `CLANG_TOOL_CHAIN_NO_AUTO` | Bypass all auto-injection (sysroot, flags, directives) |
+| `CLANG_TOOL_CHAIN_NO_DIRECTIVES` | Skip directive parsing |
+| `CLANG_TOOL_CHAIN_NO_SYSROOT` | Skip sysroot injection |
+| `CTC_DEBUG` | Enable verbose debug output |
+
+---
+
 ## 📝 Inlined Build Directives
 
 Embed build configuration in source files - no makefiles needed.
@@ -756,12 +808,13 @@ clang-tool-chain install clang-env   # Use 'clang' directly
 
 ## ✨ Features
 
-43 wrapper commands • Auto-download • 94% size reduction • Cross-platform • Auto library deployment • **Universal linker flags**
+44 wrapper commands • Auto-download • 94% size reduction • Cross-platform • Auto library deployment • **Universal linker flags** • **Native C++ launcher**
 
 - **Zero Configuration** - Auto-downloads to `~/.clang-tool-chain/`
 - **Ultra-Compact** - 71-91 MB (94% smaller via zstd-22)
-- **43 Commands** - Clang/LLVM, Emscripten, IWYU, LLDB, Valgrind, formatters, binary utils
+- **44 Commands** - Clang/LLVM, Emscripten, IWYU, LLDB, Valgrind, formatters, binary utils
 - **Cross-Platform** - Windows x64, macOS x64/ARM64, Linux x64/ARM64
+- **🚀 Native C++ Launcher** - Compile `ctc-clang`/`ctc-clang++` for zero Python overhead in large builds
 - **🎯 Universal Linker Flags** - Write GNU-style linker flags once, run everywhere (auto-translates to MSVC on Windows, ld64 on macOS)
 - **Auto Library Deployment** - Windows DLLs, Linux .so, macOS .dylib copied automatically
 - **Concurrent-Safe** - File locking for parallel builds
@@ -1063,6 +1116,8 @@ jobs:
 ## ⚡ Performance
 
 **Compilation:** Identical to official LLVM (native binaries, zero wrapper overhead).
+
+**Native launcher:** Compile `ctc-clang`/`ctc-clang++` with `clang-tool-chain-compile-native` to eliminate Python startup overhead (~50-100ms per invocation). Essential for large builds with thousands of compiler invocations. See [Native C++ Launcher](#-native-c-launcher-zero-overhead).
 
 **Downloads:** ~5 seconds (100 Mbps) or ~25 seconds (20 Mbps). Subsequent use: instant.
 

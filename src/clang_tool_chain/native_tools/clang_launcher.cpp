@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -48,6 +49,38 @@ enum class CompilerMode { C, CXX };
 static constexpr const char* CTC_CACHE_FILENAME = ".ctc-cache";
 static constexpr const char* DONE_FILENAME = "done.txt";
 static constexpr const char* CTC_TAG = "[ctc] ";
+
+// Lightweight profiler: records named time spans, prints on request.
+// Zero overhead when not used (no allocations until mark() is called).
+struct Profiler {
+    using Clock = std::chrono::high_resolution_clock;
+    Clock::time_point start;
+    struct Entry { const char* name; double us; };
+    std::vector<Entry> entries;
+    Clock::time_point last;
+    bool active = false;
+
+    void begin() { start = last = Clock::now(); active = true; }
+    void mark(const char* name) {
+        if (!active) return;
+        auto now = Clock::now();
+        double us = std::chrono::duration<double, std::micro>(now - last).count();
+        entries.push_back({name, us});
+        last = now;
+    }
+    void report() const {
+        if (!active) return;
+        double total = std::chrono::duration<double, std::micro>(
+            Clock::now() - start).count();
+        fprintf(stderr, "[ctc-profile] Phase breakdown:\n");
+        for (const auto& e : entries) {
+            fprintf(stderr, "[ctc-profile]   %-30s %7.0f us  (%4.1f%%)\n",
+                    e.name, e.us, e.us / total * 100.0);
+        }
+        fprintf(stderr, "[ctc-profile]   %-30s %7.0f us\n", "TOTAL", total);
+    }
+};
+static Profiler g_prof;
 
 static Platform get_platform() {
 #ifdef _WIN32
@@ -339,6 +372,111 @@ static bool copy_file_atomic(const std::string& src, const std::string& dst) {
 #endif
 }
 
+// Escape newlines for single-line cache storage
+static std::string escape_newlines(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        if (c == '\n') { out += "\\n"; }
+        else if (c == '\\') { out += "\\\\"; }
+        else if (c != '\r') { out += c; }
+    }
+    return out;
+}
+
+static std::string unescape_newlines(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (size_t i = 0; i < s.size(); i++) {
+        if (s[i] == '\\' && i + 1 < s.size()) {
+            if (s[i + 1] == 'n') { out += '\n'; i++; }
+            else if (s[i + 1] == '\\') { out += '\\'; i++; }
+            else out += s[i];
+        } else {
+            out += s[i];
+        }
+    }
+    return out;
+}
+
+// Capture stdout from a command. Returns empty string on failure.
+// On Windows, uses CreateProcess with pipe redirection (avoids cmd.exe quoting issues).
+// On Unix, uses popen.
+static std::string capture_process_stdout(const std::vector<std::string>& cmd) {
+    std::string result;
+#ifdef _WIN32
+    // Build command line using proper Windows quoting
+    std::string cmdline;
+    for (size_t i = 0; i < cmd.size(); i++) {
+        if (i > 0) cmdline += ' ';
+        // Quote args that contain spaces or special chars
+        bool needs_quote = cmd[i].find(' ') != std::string::npos ||
+                           cmd[i].find('\t') != std::string::npos;
+        if (needs_quote) { cmdline += '"'; cmdline += cmd[i]; cmdline += '"'; }
+        else cmdline += cmd[i];
+    }
+
+    // Create pipe for stdout capture
+    HANDLE read_pipe = nullptr, write_pipe = nullptr;
+    SECURITY_ATTRIBUTES sa = {};
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+    if (!CreatePipe(&read_pipe, &write_pipe, &sa, 0)) return result;
+    SetHandleInformation(read_pipe, HANDLE_FLAG_INHERIT, 0);
+
+    STARTUPINFOA si = {};
+    si.cb = sizeof(si);
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput = write_pipe;
+    si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+    si.dwFlags = STARTF_USESTDHANDLES;
+
+    PROCESS_INFORMATION pi = {};
+    std::vector<char> cmdline_buf(cmdline.begin(), cmdline.end());
+    cmdline_buf.push_back('\0');
+
+    if (!CreateProcessA(nullptr, cmdline_buf.data(), nullptr, nullptr, TRUE,
+                        0, nullptr, nullptr, &si, &pi)) {
+        CloseHandle(read_pipe);
+        CloseHandle(write_pipe);
+        return result;
+    }
+    CloseHandle(write_pipe);  // Close write end so reads will terminate
+
+    // Read all stdout
+    char buf[4096];
+    DWORD bytes_read;
+    while (ReadFile(read_pipe, buf, sizeof(buf), &bytes_read, nullptr) && bytes_read > 0) {
+        result.append(buf, bytes_read);
+    }
+    CloseHandle(read_pipe);
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+#else
+    // Build command line for popen
+    std::string cmdline;
+    for (size_t i = 0; i < cmd.size(); i++) {
+        if (i > 0) cmdline += ' ';
+        cmdline += '\'';
+        for (char c : cmd[i]) {
+            if (c == '\'') cmdline += "'\\''";
+            else cmdline += c;
+        }
+        cmdline += '\'';
+    }
+    FILE* pipe = popen(cmdline.c_str(), "r");
+    if (!pipe) return result;
+    char buf[4096];
+    while (fgets(buf, sizeof(buf), pipe)) result += buf;
+    pclose(pipe);
+#endif
+    while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
+        result.pop_back();
+    return result;
+}
+
 // ============================================================================
 // Section 2: Cache File
 // ============================================================================
@@ -364,6 +502,9 @@ struct CtcCache {
 
     // macOS-only
     std::string macos_sdk_path;
+
+    // Cached --version output (avoids spawning clang for version queries)
+    std::string version_output;
 
     bool is_valid() const {
         return !clang_bin.empty() && path_exists(clang_bin);
@@ -399,6 +540,7 @@ static CtcCache read_cache(const std::string& cache_path) {
         else if (key == "libunwind_include") cache.libunwind_include = val;
         else if (key == "libunwind_lib") cache.libunwind_lib = val;
         else if (key == "macos_sdk_path") cache.macos_sdk_path = val;
+        else if (key == "version_output") cache.version_output = unescape_newlines(val);
     }
     return cache;
 }
@@ -435,6 +577,26 @@ static std::string discover_macos_sdk_path() {
     return "";
 }
 #endif
+
+static void write_cache(const CtcCache& cache, const std::string& cache_path) {
+    std::ostringstream ss;
+    ss << "clang_root=" << cache.clang_root << "\n";
+    ss << "clang_bin=" << cache.clang_bin << "\n";
+    ss << "clangpp_bin=" << cache.clangpp_bin << "\n";
+    if (!cache.resource_dir.empty()) ss << "resource_dir=" << cache.resource_dir << "\n";
+    if (!cache.resource_include.empty()) ss << "resource_include=" << cache.resource_include << "\n";
+    if (!cache.cxx_include.empty()) ss << "cxx_include=" << cache.cxx_include << "\n";
+    if (!cache.sysroot.empty()) ss << "sysroot=" << cache.sysroot << "\n";
+    if (!cache.mingw_include.empty()) ss << "mingw_include=" << cache.mingw_include << "\n";
+    if (!cache.sysroot_bin.empty()) ss << "sysroot_bin=" << cache.sysroot_bin << "\n";
+    if (!cache.sysroot_include.empty()) ss << "sysroot_include=" << cache.sysroot_include << "\n";
+    if (!cache.sysroot_multiarch.empty()) ss << "sysroot_multiarch=" << cache.sysroot_multiarch << "\n";
+    if (!cache.libunwind_include.empty()) ss << "libunwind_include=" << cache.libunwind_include << "\n";
+    if (!cache.libunwind_lib.empty()) ss << "libunwind_lib=" << cache.libunwind_lib << "\n";
+    if (!cache.macos_sdk_path.empty()) ss << "macos_sdk_path=" << cache.macos_sdk_path << "\n";
+    if (!cache.version_output.empty()) ss << "version_output=" << escape_newlines(cache.version_output) << "\n";
+    write_file_atomic(cache_path, ss.str());
+}
 
 static CtcCache discover_and_write_cache(const std::string& install_dir,
                                           const std::string& cache_path,
@@ -508,24 +670,7 @@ static CtcCache discover_and_write_cache(const std::string& install_dir,
         }
     }
 
-    // Write cache atomically
-    std::ostringstream ss;
-    ss << "clang_root=" << cache.clang_root << "\n";
-    ss << "clang_bin=" << cache.clang_bin << "\n";
-    ss << "clangpp_bin=" << cache.clangpp_bin << "\n";
-    if (!cache.resource_dir.empty()) ss << "resource_dir=" << cache.resource_dir << "\n";
-    if (!cache.resource_include.empty()) ss << "resource_include=" << cache.resource_include << "\n";
-    if (!cache.cxx_include.empty()) ss << "cxx_include=" << cache.cxx_include << "\n";
-    if (!cache.sysroot.empty()) ss << "sysroot=" << cache.sysroot << "\n";
-    if (!cache.mingw_include.empty()) ss << "mingw_include=" << cache.mingw_include << "\n";
-    if (!cache.sysroot_bin.empty()) ss << "sysroot_bin=" << cache.sysroot_bin << "\n";
-    if (!cache.sysroot_include.empty()) ss << "sysroot_include=" << cache.sysroot_include << "\n";
-    if (!cache.sysroot_multiarch.empty()) ss << "sysroot_multiarch=" << cache.sysroot_multiarch << "\n";
-    if (!cache.libunwind_include.empty()) ss << "libunwind_include=" << cache.libunwind_include << "\n";
-    if (!cache.libunwind_lib.empty()) ss << "libunwind_lib=" << cache.libunwind_lib << "\n";
-    if (!cache.macos_sdk_path.empty()) ss << "macos_sdk_path=" << cache.macos_sdk_path << "\n";
-
-    write_file_atomic(cache_path, ss.str());
+    write_cache(cache, cache_path);
     return cache;
 }
 
@@ -549,6 +694,8 @@ static CompilerMode detect_mode(const char* argv0) {
 
 struct ParsedArgs {
     bool compile_only = false;
+    bool dry_run = false;
+    bool no_print = false;
     bool deploy_dependencies = false;
     bool has_fsanitize_address = false;
     bool has_shared_flag = false;
@@ -589,6 +736,14 @@ static ParsedArgs parse_user_args(int argc, char* argv[]) {
 
         if (arg == "--deploy-dependencies") {
             p.deploy_dependencies = true;
+            continue;  // Strip from filtered_args
+        }
+        if (arg == "--dry-run") {
+            p.dry_run = true;
+            continue;  // Strip from filtered_args
+        }
+        if (arg == "--no-print") {
+            p.no_print = true;
             continue;  // Strip from filtered_args
         }
 
@@ -1505,14 +1660,10 @@ static int create_process_and_wait(const std::vector<std::string>& cmd) {
 
 [[noreturn]] static void exec_process(const std::vector<std::string>& cmd) {
 #ifdef _WIN32
-    // Build argv array for _execv
-    std::vector<const char*> argv_ptrs;
-    for (const auto& s : cmd) argv_ptrs.push_back(s.c_str());
-    argv_ptrs.push_back(nullptr);
-    _execv(cmd[0].c_str(), const_cast<char* const*>(argv_ptrs.data()));
-    // If exec fails
-    fprintf(stderr, "%sFailed to exec: %s\n", CTC_TAG, cmd[0].c_str());
-    exit(127);
+    // Use CreateProcessA with explicit handle inheritance instead of _execv,
+    // which can lose stdout in some Windows environments (MSYS2, etc.)
+    int rc = create_process_and_wait(cmd);
+    exit(rc);
 #else
     std::vector<const char*> argv_ptrs;
     for (const auto& s : cmd) argv_ptrs.push_back(s.c_str());
@@ -1529,12 +1680,16 @@ static int create_process_and_wait(const std::vector<std::string>& cmd) {
 // ============================================================================
 
 int main(int argc, char* argv[]) {
+    bool profile = env_is_truthy("CTC_PROFILE");
+    if (profile) g_prof.begin();
+
     bool debug = env_is_truthy("CTC_DEBUG");
 
     // 1. Detect mode from argv[0]
     CompilerMode mode = detect_mode(argv[0]);
     Platform platform = get_platform();
     Arch arch = get_arch();
+    g_prof.mark("detect mode/platform/arch");
 
     if (debug) {
         fprintf(stderr, "[ctc-debug] argv[0]=%s\n", argv[0]);
@@ -1556,11 +1711,20 @@ int main(int argc, char* argv[]) {
         install_toolchain_and_reexec(argc, argv, install_dir);
         // Does not return
     }
+    g_prof.mark("resolve dirs + done.txt check");
 
     // 4. Read or discover cache
     CtcCache cache = read_cache(cache_path);
     if (!cache.is_valid()) {
         cache = discover_and_write_cache(install_dir, cache_path, platform, arch);
+    }
+    g_prof.mark("read cache");
+
+    // 4b. Fast path: cached --version (avoids all flag building and process spawning)
+    //     Skip when CTC_DEBUG is set so full debug output is visible.
+    if (argc == 2 && std::string(argv[1]) == "--version" && !cache.version_output.empty() && !debug) {
+        printf("%s\n", cache.version_output.c_str());
+        return 0;
     }
 
     // 5. Background thread: validate cache still valid
@@ -1577,6 +1741,7 @@ int main(int argc, char* argv[]) {
         }
     });
     validator.detach();
+    g_prof.mark("spawn validator thread");
 
     // 6. Check NO_AUTO early exit
     if (env_is_truthy("CLANG_TOOL_CHAIN_NO_AUTO")) {
@@ -1589,23 +1754,18 @@ int main(int argc, char* argv[]) {
 
     // 7. Parse user args
     ParsedArgs parsed = parse_user_args(argc, argv);
+    g_prof.mark("parse user args");
 
-    // 8. Start directive thread (if not disabled and has source files)
+    // 8. Parse directives (synchronous — thread overhead on Windows exceeds the work)
     DirectiveResult directives;
-    std::thread directive_thread;
     if (!is_feature_disabled("DIRECTIVES") && !parsed.source_files.empty()) {
-        directive_thread = std::thread([&]() {
-            directives = parse_all_directives(parsed.source_files, platform);
-        });
+        directives = parse_all_directives(parsed.source_files, platform);
     }
+    g_prof.mark("parse directives");
 
-    // 9. Build platform flags (main thread)
+    // 9. Build platform flags
     auto platform_flags = build_platform_flags(cache, parsed, mode, platform, arch);
-
-    // 10. Join directive thread
-    if (directive_thread.joinable()) {
-        directive_thread.join();
-    }
+    g_prof.mark("build platform flags");
 
     // 10b. Directive verbose output
     if (env_is_truthy("CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE")) {
@@ -1630,9 +1790,42 @@ int main(int argc, char* argv[]) {
     }
 
     auto cmd = build_final_command(clang_bin, platform_flags, directives, parsed.filtered_args);
+    g_prof.mark("build final command");
 
-    // 11b. Set up sanitizer environment variables before exec
+    // 11b. Handle --dry-run / --no-print: build command but don't execute
+    if (parsed.dry_run || parsed.no_print) {
+        g_prof.report();
+        if (parsed.dry_run) {
+            for (size_t i = 0; i < cmd.size(); i++) {
+                if (i > 0) printf(" ");
+                bool needs_quote = false;
+                for (char c : cmd[i]) {
+                    if (c == ' ' || c == '\t' || c == '"' || c == '\'') { needs_quote = true; break; }
+                }
+                if (needs_quote) printf("\"%s\"", cmd[i].c_str());
+                else printf("%s", cmd[i].c_str());
+            }
+            printf("\n");
+        }
+        return 0;
+    }
+
+    // 11c. Cache --version output on first invocation (cache miss at step 4b)
+    if (argc == 2 && std::string(argv[1]) == "--version" && cache.version_output.empty()) {
+        std::string ver = capture_process_stdout(cmd);
+        if (!ver.empty()) {
+            cache.version_output = ver;
+            write_cache(cache, cache_path);
+            printf("%s\n", ver.c_str());
+            return 0;
+        }
+        // If capture failed, fall through to normal exec
+    }
+
+    // 11d. Set up sanitizer environment variables before exec
     setup_sanitizer_environment(cache, parsed.has_fsanitize_address, platform);
+    g_prof.mark("sanitizer env setup");
+    g_prof.report();
 
     // 12. Execute
 #ifdef _WIN32
