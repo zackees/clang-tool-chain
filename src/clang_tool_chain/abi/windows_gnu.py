@@ -31,11 +31,19 @@ def _should_use_gnu_abi(platform_name: str, args: list[str]) -> bool:  # pyright
         return False
 
     # Check if user explicitly specified a target
-    args_str = " ".join(args)
-    if "--target=" in args_str or "--target " in args_str:
-        # User specified target explicitly
-        # Check if it's a GNU/MinGW target (contains "-gnu" or "mingw")
-        if "-gnu" in args_str.lower() or "mingw" in args_str.lower():
+    # Extract only the target value, not all args (BUG-005: avoid matching filenames like test-gnu.c)
+    target_value = ""
+    for i, arg in enumerate(args):
+        if arg.startswith("--target="):
+            target_value = arg[len("--target=") :]
+            break
+        elif arg == "--target" and i + 1 < len(args):
+            target_value = args[i + 1]
+            break
+    if target_value:
+        # User specified target explicitly — check only the target value
+        lower_target = target_value.lower()
+        if "-gnu" in lower_target or "mingw" in lower_target:
             logger.debug("User specified GNU/MinGW target, will use GNU ABI")
             return True
         else:
@@ -60,7 +68,7 @@ def _should_use_gnu_abi(platform_name: str, args: list[str]) -> bool:  # pyright
         "/PDB:",
         "/NOLOGO",
     ]
-    if any(pattern in args_str for pattern in msvc_linker_patterns):
+    if any(pattern in arg for arg in args for pattern in msvc_linker_patterns):
         logger.info("MSVC-style linker flags detected in args, skipping GNU ABI injection")
         return False
 
@@ -124,9 +132,8 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
             f"https://github.com/zackees/clang-tool-chain/issues"
         )
 
-    # Check if user already specified --target
-    args_str = " ".join(args)
-    user_specified_target = "--target=" in args_str or "--target " in args_str
+    # Check if user already specified --target (check actual args, not joined string)
+    user_specified_target = any(arg.startswith("--target=") or arg == "--target" for arg in args)
 
     logger.info(f"Using GNU target: {target} with sysroot: {sysroot_path}")
 
@@ -142,11 +149,8 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
     # Add -static-libgcc -static-libstdc++ to link runtime libraries statically (link-time only)
     # This avoids DLL dependency issues at runtime
 
-    # Detect if this is a compile-only operation (has -c flag but no linking flags)
-    is_compile_only = "-c" in args and not any(arg in args for arg in ["-o", "--output"])
-    # Actually, better check: if -c is present, it's compile-only unless there's also a link output
-    # The presence of -c means "compile only, don't link"
-    is_compile_only = "-c" in args
+    # Detect if this is a compile-only operation: -c, -S, or -E all skip linking
+    is_compile_only = "-c" in args or "-S" in args or "-E" in args
 
     # Build the argument list, conditionally including --target if not already specified
     gnu_args = []
@@ -157,67 +161,26 @@ def _get_gnu_target_args(platform_name: str, arch: str, args: list[str]) -> list
         logger.debug("User already specified --target, skipping auto-injection")
 
     # Always add sysroot and stdlib (needed for both compilation and linking)
-    #
-    # NOTE: We do NOT set -D_LIBCPP_HAS_THREAD_API_PTHREAD here.
-    # The Windows LLVM's libc++ __config_site already defines this macro (as 0),
-    # indicating it uses Windows native threading rather than pthread.
-    # Overriding this causes macro redefinition warnings and conflicts with
-    # the upstream LLVM configuration.
-    #
-    # INCLUDE PATH ORDERING RATIONALE:
-    # We carefully order include paths to ensure Clang's headers take precedence over MinGW headers.
-    # This prevents GCC-specific headers from interfering with Clang compilation.
-    #
-    # Search order (high to low priority):
-    # 1. libc++ C++ standard library headers (include/c++/v1) - HIGH priority via -I
-    # 2. Clang resource headers (lib/clang/*/include) - HIGH priority via -I
-    # 3. MinGW platform headers (include/) - SYSTEM priority via -isystem
-    # 4. Sysroot libraries and binaries - via --sysroot
-    #
-    # We use -isystem for MinGW headers (instead of -I) to give them lower search priority.
-    # This ensures Clang's intrinsic headers (stddef.h, stdarg.h, etc.) are found first,
-    # while still making MinGW platform headers (windows.h, pthread.h) available.
-    cxx_include_path = clang_root / "include" / "c++" / "v1"
-    mingw_include_path = clang_root / "include"
-
-    # Find the clang resource directory (lib/clang/<version>/include)
-    # This contains compiler intrinsic headers like mm_malloc.h, stddef.h, etc.
-    clang_lib_dir = clang_root / "lib" / "clang"
-    resource_include_path = None
-    if clang_lib_dir.exists():
-        # Find the version directory (e.g., "19", "21")
-        version_dirs = [d for d in clang_lib_dir.iterdir() if d.is_dir()]
-        if version_dirs:
-            # Use the first (and typically only) version directory
-            version_dir = version_dirs[0]
-            resource_include_path = version_dir / "include"
-            if not resource_include_path.exists():
-                resource_include_path = None
-
-    # Build include path arguments in correct priority order
     gnu_args.extend(
         [
             f"--sysroot={sysroot_path}",
             "-stdlib=libc++",
-            f"-I{cxx_include_path}",  # 1. libc++ headers (HIGH priority)
         ]
     )
 
-    # Add resource directory if found (needed for both headers and libraries)
-    # This sets the base directory for clang's resource files (includes and libs)
-    if resource_include_path:
-        gnu_args.append(f"-I{resource_include_path}")  # 2. Clang resource headers (HIGH priority)
-        logger.debug(f"Added clang resource include path: {resource_include_path}")
-        # Also set the resource-dir to point to the correct version directory
-        # This is critical for linking with libclang_rt.builtins.a and other runtime libs
-        resource_dir = resource_include_path.parent  # lib/clang/<version>/
-        gnu_args.append(f"-resource-dir={resource_dir}")
-        logger.debug(f"Set resource directory: {resource_dir}")
-
-    # Add MinGW headers with -isystem (SYSTEM priority, lower than -I)
-    # This prevents MinGW/GCC headers from overriding Clang's standard headers
-    gnu_args.append(f"-isystem{mingw_include_path}")  # 3. MinGW headers (SYSTEM priority)
-    logger.debug(f"Added MinGW include path with -isystem: {mingw_include_path}")
+    # Include paths: skip when -nostdinc or -ffreestanding (user wants no system headers)
+    has_nostdinc = "-nostdinc" in args or "-nostdinc++" in args
+    has_ffreestanding = "-ffreestanding" in args
+    if not has_nostdinc and not has_ffreestanding:
+        # libc++ headers are not in the sysroot, so we must add them explicitly
+        cxx_include_path = clang_root / "include" / "c++" / "v1"
+        gnu_args.append(f"-I{cxx_include_path}")
+        # NOTE: Do NOT add -I<resource_include> or -resource-dir here.
+        # Clang auto-detects resource dir from its binary location and adds
+        # -internal-isystem for resource headers automatically. See BUG-001 in BUG.md.
+        # MinGW headers use -isystem for lower priority than clang's intrinsic headers
+        mingw_include_path = clang_root / "include"
+        gnu_args.append(f"-isystem{mingw_include_path}")
 
     # Only add link-time flags if not compiling only
     if not is_compile_only:

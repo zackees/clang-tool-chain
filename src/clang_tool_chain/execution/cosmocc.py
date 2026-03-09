@@ -288,7 +288,9 @@ def execute_cosmocc_tool(tool_name: str, args: list[str] | None = None) -> NoRet
             logger.debug("No bash/sh found in PATH, trying direct execution")
             cmd = [str(tool_path)] + args
 
-    logger.info(f"Executing Cosmocc tool: {' '.join(cmd)}")
+    import shlex
+
+    logger.info(f"Executing Cosmocc tool: {shlex.join(cmd)}")
 
     try:
         result = subprocess.run(cmd, env=env)

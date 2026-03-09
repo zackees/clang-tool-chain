@@ -896,7 +896,9 @@ exec "{real_clangpp}" "$@"
     # Execute with periodic progress updates
     return_code: int = 1  # Default error code if execution fails
     try:
-        logger.debug(f"Subprocess command: {' '.join(cmd[:2])} [+ {len(args)} args]")
+        import shlex
+
+        logger.debug(f"Subprocess command: {shlex.join(cmd[:2])} [+ {len(args)} args]")
 
         # Run with output streaming to see progress
         import threading
@@ -995,7 +997,9 @@ def execute_emscripten_binary_tool(tool_name: str, args: list[str] | None = None
     cmd = [str(tool_path)] + args
 
     logger.info(f"Executing command: {tool_path} (with {len(args)} args)")
-    logger.debug(f"Full command: {' '.join(cmd[:5])}{'...' if len(cmd) > 5 else ''}")
+    import shlex
+
+    logger.debug(f"Full command: {shlex.join(cmd[:5])}{'...' if len(cmd) > 5 else ''}")
 
     # Execute directly (native binary, no Python interpreter needed)
     try:

@@ -17,6 +17,7 @@ Example directives:
 from __future__ import annotations
 
 import re
+import shlex
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -325,11 +326,11 @@ def main():
         print(f"pkg-config: {', '.join(directives.pkg_config)}")
 
     print()
-    print("Compiler args:", " ".join(directives.get_compiler_args()))
-    print("Linker args:", " ".join(directives.get_linker_args()))
+    print("Compiler args:", shlex.join(directives.get_compiler_args()))
+    print("Linker args:", shlex.join(directives.get_linker_args()))
     print()
     print("Full command line addition:")
-    print(" ".join(directives.get_all_args()))
+    print(shlex.join(directives.get_all_args()))
 
 
 if __name__ == "__main__":

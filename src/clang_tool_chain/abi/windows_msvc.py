@@ -36,8 +36,7 @@ def _should_use_msvc_abi(platform_name: str, args: list[str]) -> bool:  # pyrigh
         return False
 
     # Check if user explicitly specified target
-    args_str = " ".join(args)
-    if "--target=" in args_str or "--target " in args_str:
+    if any(a.startswith("--target=") or a == "--target" for a in args):
         # User specified target explicitly, don't override
         logger.debug("User specified explicit target, skipping MSVC ABI injection")
         return False

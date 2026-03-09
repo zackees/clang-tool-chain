@@ -153,8 +153,7 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
         return False
 
     # Check if user already specified a linker
-    args_str = " ".join(args)
-    if "-fuse-ld=" in args_str:
+    if any(a.startswith("-fuse-ld=") for a in args):
         logger.debug("User specified -fuse-ld, skipping lld injection")
         return False
 
@@ -176,7 +175,7 @@ def _should_force_lld(platform_name: str, args: list[str]) -> bool:
         "/PDB:",
         "/NOLOGO",
     ]
-    if any(pattern in args_str for pattern in msvc_linker_patterns):
+    if any(pattern in arg for arg in args for pattern in msvc_linker_patterns):
         logger.info("MSVC-style linker flags detected, skipping lld injection (will use lld-link)")
         return False
 
@@ -453,9 +452,8 @@ def _user_specified_lld_on_macos(args: list[str]) -> bool:
     Returns:
         True if user explicitly specified LLD linker
     """
-    args_str = " ".join(args)
     # Check for explicit LLD specification (both generic and macOS-specific variants)
-    return "-fuse-ld=lld" in args_str or "-fuse-ld=ld64.lld" in args_str
+    return any(a in ("-fuse-ld=lld", "-fuse-ld=ld64.lld") for a in args)
 
 
 def _user_specified_ld64_lld(args: list[str]) -> bool:
@@ -552,7 +550,6 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
     # - GNU ABI: Remove unsupported flags, keep supported ones for ld.lld MinGW mode
     if platform_name == "win" and "-c" not in args:
         # Check for MSVC-style linker flags to determine if we're using MSVC ABI
-        args_str = " ".join(args)
         msvc_linker_patterns = [
             "-Wl,/MACHINE:",
             "-Wl,/OUT:",
@@ -568,7 +565,9 @@ def _add_lld_linker_if_needed(platform_name: str, args: list[str]) -> list[str]:
             "/NOLOGO",
         ]
         # Also check for MSVC target triple
-        is_msvc_abi = any(pattern in args_str for pattern in msvc_linker_patterns) or "-pc-windows-msvc" in args_str
+        is_msvc_abi = any(pattern in arg for arg in args for pattern in msvc_linker_patterns) or any(
+            "-pc-windows-msvc" in a for a in args
+        )
 
         if is_msvc_abi:
             logger.debug("MSVC ABI detected, translating GNU ld flags to MSVC equivalents for lld-link")

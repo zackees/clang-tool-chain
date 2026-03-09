@@ -197,7 +197,9 @@ def execute_iwyu_tool(tool_name: str, args: list[str] | None = None) -> NoReturn
     else:
         cmd = [str(tool_path)] + args
 
-    logger.info(f"Executing IWYU tool: {' '.join(cmd)}")
+    import shlex
+
+    logger.info(f"Executing IWYU tool: {shlex.join(cmd)}")
 
     # Execute tool
     if platform_name == "win":

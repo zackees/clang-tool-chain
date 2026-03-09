@@ -60,7 +60,7 @@ def safe_print(*args: Any, **kwargs: Any) -> None:
         except (UnicodeEncodeError, UnicodeDecodeError):
             # Last resort: write to buffer with error handling
             if hasattr(file, "buffer"):
-                output = " ".join(safe_args)
+                output = " ".join(safe_args)  # noqa: print emulation, not CLI args
                 end_value = kwargs.get("end")
                 if end_value is not None:
                     output += str(end_value)
@@ -386,6 +386,13 @@ def cmd_install_clang(args: argparse.Namespace) -> int:
         print()
         safe_print(f"✗ Installation failed: {e}")
         return 1
+
+
+def cmd_compile_native(args: argparse.Namespace) -> int:
+    """Compile the native C++ clang launcher binary."""
+    from .commands.compile_native import compile_native
+
+    return compile_native(args.output_dir)
 
 
 def cmd_purge(args: argparse.Namespace) -> int:
@@ -1282,6 +1289,17 @@ def main() -> int:
         help="Skip confirmation prompt and remove immediately",
     )
     parser_purge.set_defaults(func=cmd_purge)
+
+    # compile-native command
+    parser_compile_native = subparsers.add_parser(
+        "compile-native",
+        help="Compile the native C++ clang launcher binary",
+    )
+    parser_compile_native.add_argument(
+        "output_dir",
+        help="Directory to write ctc-clang and ctc-clang++ binaries",
+    )
+    parser_compile_native.set_defaults(func=cmd_compile_native)
 
     # Parse arguments
     args = parser.parse_args()

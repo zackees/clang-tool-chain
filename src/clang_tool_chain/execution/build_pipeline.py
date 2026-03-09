@@ -139,7 +139,9 @@ def _get_directive_args(source_path: Path) -> list[str]:
                 print(f"  @ldflags: {directives.ldflags}", file=sys.stderr)
             if directives.includes:
                 print(f"  @include: {directives.includes}", file=sys.stderr)
-            print(f"  Effective args: {' '.join(all_args)}", file=sys.stderr)
+            import shlex
+
+            print(f"  Effective args: {shlex.join(all_args)}", file=sys.stderr)
 
         return all_args
     except KeyboardInterrupt:

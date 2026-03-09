@@ -431,7 +431,9 @@ def execute_lldb_tool(tool_name: str, args: list[str] | None = None, print_mode:
 
     cmd = [str(tool_path)] + args
 
-    logger.info(f"Executing LLDB tool: {' '.join(cmd)}")
+    import shlex
+
+    logger.info(f"Executing LLDB tool: {shlex.join(cmd)}")
 
     # Execute tool
     if platform_name == "win":
