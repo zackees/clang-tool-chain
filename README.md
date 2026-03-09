@@ -208,6 +208,7 @@ Comprehensive reference of all available commands organized by category.
 - [IWYU](#-iwyu-include-what-you-use) - Include analyzer (3 commands)
 - [LLDB](#-lldb-debugger) - Debugger with Python support (2 commands)
 - [Emscripten](#-emscripten-webassembly) - WebAssembly compiler (5 commands)
+- [Native Emscripten Launchers](#-native-emscripten-launchers) - Zero-overhead emcc/wasm-ld (3 binaries)
 - [Cosmopolitan](#-cosmopolitan-actually-portable-executables) - APE compiler (2 commands)
 - [Valgrind & Callgrind](#-valgrind--callgrind-dynamic-analysis) - Dynamic analysis (2 commands)
 - [Management CLI](#️-management-cli) - install, purge, info, test (4 commands)
@@ -443,6 +444,106 @@ clang-tool-chain-sccache-emcc main.c -o main.js
 ```
 
 **📖 [Complete Documentation](docs/EMSCRIPTEN.md)** - Usage guide, optimization, browser integration, [Node.js details](docs/NODEJS.md).
+
+---
+
+## 🚀 Native Emscripten Launchers
+
+**3 binaries** • Zero Python/Node startup overhead • Drop-in emcc/em++/wasm-ld replacements
+
+Native C++ launchers that bypass Python and Node.js startup overhead when compiling with Emscripten. Standard `emcc` invocations go through Python (~200ms overhead per call). These native launchers eliminate that overhead entirely after a one-time setup.
+
+### Binaries
+
+| Binary | Description | Aliases |
+|--------|-------------|---------|
+| `ctc-emcc` | Native emcc launcher | `ctc-em++` (auto-detected via argv[0]) |
+| `ctc-wasm-ld` | Native wasm-ld launcher | -- |
+
+Build all with:
+```bash
+clang-tool-chain compile-native <output-dir>
+```
+
+### How It Works
+
+#### ctc-emcc / ctc-em++
+
+Three execution tiers, fastest to slowest:
+
+**Tier 1 -- User Template** (zero Python, both compile AND link):
+```bash
+# Compile: provide pre-cached clang args template
+ctc-emcc --compile-commands=compile_args.json -c foo.cpp -o foo.o
+
+# Link: provide pre-cached wasm-ld args template
+ctc-emcc --link-args=link_args.json foo.o -o foo.wasm
+```
+
+**Tier 2 -- Auto-Cache** (compile `-c` only, zero Python after first run):
+- First compile: runs `emcc` with `EMCC_VERBOSE=1`, parses the actual `clang` command from stderr, templatizes it, caches per flag-hash
+- Subsequent compiles with same flags: reads cache, calls `clang` directly
+
+**Tier 3 -- Python Fallback** (link, preprocess, uncached):
+- Sets up env (EMSCRIPTEN, EM_CONFIG, PATH) and execs `python emcc.py` with user args
+
+#### ctc-wasm-ld
+
+- First run: invokes Python once to discover the native `wasm-ld` binary path
+- All subsequent runs: reads cache, execs `wasm-ld` directly (zero Python/Node)
+
+### Generating Template Files
+
+Use the built-in capture flags to generate templates automatically:
+
+```bash
+# Capture compile template (runs emcc once, parses the native clang command)
+ctc-emcc --capture-compile-commands=compile_args.json -c foo.cpp -o foo.o
+
+# Capture link template (runs emcc once, parses the native wasm-ld command)
+ctc-emcc --capture-link-args=link_args.json foo.o -o foo.wasm
+```
+
+This runs emcc normally, intercepts the native clang/wasm-ld command from verbose output, templatizes file paths with `{input}`/`{output}` placeholders, and saves the result as a JSON array.
+
+Example generated template:
+```json
+[
+  "~/.clang-tool-chain/emscripten/win/x86_64/bin/clang.exe",
+  "-target", "wasm32-unknown-emscripten",
+  "--sysroot=.../emscripten/cache/sysroot",
+  "-DEMSCRIPTEN",
+  "-c", "{input}",
+  "-o", "{output}",
+  "-std=c++20", "-O2"
+]
+```
+
+### ctc-emcc Flags
+
+All launcher flags are consumed by the launcher and **not** passed to emcc:
+
+| Flag | Description |
+|------|-------------|
+| `--compile-commands=<file>` | Use pre-cached clang compile template (Tier 1) |
+| `--link-args=<file>` | Use pre-cached wasm-ld link template (Tier 1) |
+| `--capture-compile-commands=<file>` | Run emcc, save clang template to file |
+| `--capture-link-args=<file>` | Run emcc, save wasm-ld template to file |
+| `--dry-run` | Print the command that would be exec'd |
+| `--help` / `-h` | Show launcher help |
+
+### ctc-wasm-ld Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Print the command that would be exec'd |
+| `--help` / `-h` | Show launcher help |
+
+All other arguments are passed directly to `wasm-ld`.
+
+### Debug
+
+Set `CTC_DEBUG=1` to see which tier is executing and cache hit/miss info.
 
 ---
 

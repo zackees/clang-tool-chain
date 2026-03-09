@@ -1658,6 +1658,18 @@ static int create_process_and_wait(const std::vector<std::string>& cmd) {
 }
 #endif
 
+static void print_command(const std::vector<std::string>& cmd) {
+    for (size_t i = 0; i < cmd.size(); i++) {
+        if (i > 0) printf(" ");
+        bool needs_quote = cmd[i].find(' ') != std::string::npos ||
+                           cmd[i].find('\t') != std::string::npos;
+        if (needs_quote) printf("\"");
+        printf("%s", cmd[i].c_str());
+        if (needs_quote) printf("\"");
+    }
+    printf("\n");
+}
+
 [[noreturn]] static void exec_process(const std::vector<std::string>& cmd) {
 #ifdef _WIN32
     // Use CreateProcessA with explicit handle inheritance instead of _execv,
@@ -1695,6 +1707,23 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ctc-debug] argv[0]=%s\n", argv[0]);
         fprintf(stderr, "[ctc-debug] basename=%s\n", get_exe_basename(argv[0]).c_str());
         fprintf(stderr, "[ctc-debug] mode=%s\n", mode == CompilerMode::CXX ? "CXX" : "C");
+    }
+
+    // --ctc-help: print launcher usage (--help is passed to clang)
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--ctc-help") == 0) {
+            const char* name = (mode == CompilerMode::CXX) ? "ctc-clang++" : "ctc-clang";
+            printf("Usage: %s [launcher-flags] [clang-args...]\n\n", name);
+            printf("Native Clang launcher — bypasses Python wrapper overhead.\n\n");
+            printf("Launcher flags (consumed by the launcher, not passed to clang):\n");
+            printf("  --deploy-dependencies   Deploy runtime DLLs alongside output binary\n");
+            printf("  --dry-run               Print the command that would be exec'd\n");
+            printf("  --ctc-help              Show this help (--help is forwarded to clang)\n\n");
+            printf("Environment:\n");
+            printf("  CTC_DEBUG=1             Debug output\n");
+            printf("  CLANG_TOOL_CHAIN_NO_AUTO=1  Skip directive parsing, exec clang directly\n");
+            return 0;
+        }
     }
 
     // 2. Resolve install directory
@@ -1748,7 +1777,12 @@ int main(int argc, char* argv[]) {
         const std::string& bin = (mode == CompilerMode::CXX) ? cache.clangpp_bin : cache.clang_bin;
         std::vector<std::string> cmd;
         cmd.push_back(bin);
-        for (int i = 1; i < argc; i++) cmd.push_back(argv[i]);
+        bool early_dry_run = false;
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--dry-run") == 0) { early_dry_run = true; continue; }
+            cmd.push_back(argv[i]);
+        }
+        if (early_dry_run) { print_command(cmd); return 0; }
         exec_process(cmd);
     }
 

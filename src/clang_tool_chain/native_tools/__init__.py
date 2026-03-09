@@ -27,4 +27,13 @@ TOOL_REGISTRY: dict[str, NativeTool] = {
         output="ctc-clang",
         aliases=["ctc-clang++"],
     ),
+    "emcc": NativeTool(
+        source="launcher_emcc.cpp",
+        output="ctc-emcc",
+        aliases=["ctc-em++"],
+    ),
+    "wasmld": NativeTool(
+        source="launcher_wasmld.cpp",
+        output="ctc-wasm-ld",
+    ),
 }

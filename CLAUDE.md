@@ -109,6 +109,15 @@ All detailed documentation lives in `docs/`. Read the file matching your task.
 | **[Maintainer Tools](docs/MAINTAINER.md)** | Packaging binaries, building archives, IWYU DLL bundling |
 | **[Binary Archive Building](downloads-bins/CLAUDE.md)** | Building IWYU/Clang/LLVM archives, updating LLVM versions |
 
+## Native C++ Tools Convention
+
+Native C++ launchers live in `src/clang_tool_chain/native_tools/`. Every `.cpp` tool **must** implement:
+
+- **`--help` / `-h`**: Print launcher usage and exit. For `ctc-clang`, use `--ctc-help` (since `--help` is forwarded to clang).
+- **`--dry-run`**: Print the full command that would be exec'd (space-separated, with quoting) and exit 0 without executing.
+
+Register new tools in `TOOL_REGISTRY` in `native_tools/__init__.py`. See `TODO_README.md` for the emcc launcher's flag reference.
+
 ## Development Commands
 
 ### Initial Setup
