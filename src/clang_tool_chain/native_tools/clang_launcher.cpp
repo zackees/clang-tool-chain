@@ -721,6 +721,10 @@ static bool starts_with(const std::string& s, const char* prefix) {
     return s.compare(0, strlen(prefix), prefix) == 0;
 }
 
+static bool starts_with(const std::string& s, const std::string& prefix) {
+    return s.compare(0, prefix.size(), prefix) == 0;
+}
+
 static ParsedArgs parse_user_args(int argc, char* argv[]) {
     ParsedArgs p;
 
