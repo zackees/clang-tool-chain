@@ -19,22 +19,22 @@ class TestMacOSLLDFlagTranslation(unittest.TestCase):
     """Test cases for macOS ld64.lld flag translation."""
 
     def test_no_undefined_flag_in_wl(self):
-        """Test translation of --no-undefined in -Wl, flags."""
+        """Test that --no-undefined is stripped from -Wl, flags on macOS."""
         args = ["-Wl,--no-undefined"]
         result = _translate_linker_flags_for_macos_lld(args)
-        self.assertEqual(result, ["-Wl,-undefined,error"])
+        self.assertEqual(result, [])
 
     def test_no_undefined_flag_standalone(self):
-        """Test translation of standalone --no-undefined flag."""
+        """Test that standalone --no-undefined flag is stripped on macOS."""
         args = ["--no-undefined"]
         result = _translate_linker_flags_for_macos_lld(args)
-        self.assertEqual(result, ["-Wl,-undefined,error"])
+        self.assertEqual(result, [])
 
     def test_multiple_flags_in_wl(self):
-        """Test translation with multiple flags in -Wl,."""
+        """Test stripping/translation with multiple flags in -Wl,."""
         args = ["-Wl,--no-undefined,--fatal-warnings,-rpath,/usr/lib"]
         result = _translate_linker_flags_for_macos_lld(args)
-        self.assertEqual(result, ["-Wl,-undefined,error,-fatal_warnings,-rpath,/usr/lib"])
+        self.assertEqual(result, ["-Wl,-fatal_warnings,-rpath,/usr/lib"])
 
     def test_fatal_warnings_flag(self):
         """Test translation of --fatal-warnings flag."""
@@ -46,7 +46,7 @@ class TestMacOSLLDFlagTranslation(unittest.TestCase):
         """Test mix of flags that need and don't need translation."""
         args = ["-O2", "-Wl,--no-undefined", "-std=c++17", "-Wl,-rpath,/lib"]
         result = _translate_linker_flags_for_macos_lld(args)
-        self.assertEqual(result, ["-O2", "-Wl,-undefined,error", "-std=c++17", "-Wl,-rpath,/lib"])
+        self.assertEqual(result, ["-O2", "-std=c++17", "-Wl,-rpath,/lib"])
 
     def test_no_translation_needed(self):
         """Test that args without GNU ld flags are unchanged."""
@@ -64,7 +64,7 @@ class TestMacOSLLDFlagTranslation(unittest.TestCase):
         """Test with multiple -Wl, arguments."""
         args = ["-Wl,--no-undefined", "-Wl,--fatal-warnings", "-Wl,-L/usr/lib"]
         result = _translate_linker_flags_for_macos_lld(args)
-        self.assertEqual(result, ["-Wl,-undefined,error", "-Wl,-fatal_warnings", "-Wl,-L/usr/lib"])
+        self.assertEqual(result, ["-Wl,-fatal_warnings", "-Wl,-L/usr/lib"])
 
     def test_allow_shlib_undefined_removed_in_wl(self):
         """Test that --allow-shlib-undefined is removed from -Wl, flags (no macOS equivalent)."""
@@ -81,11 +81,11 @@ class TestMacOSLLDFlagTranslation(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_allow_shlib_undefined_removed_with_other_flags(self):
-        """Test that --allow-shlib-undefined is removed while preserving other flags."""
+        """Test that --allow-shlib-undefined and --no-undefined are both stripped."""
         args = ["-Wl,--no-undefined,--allow-shlib-undefined,-rpath,/lib"]
         result = _translate_linker_flags_for_macos_lld(args)
-        # --allow-shlib-undefined should be removed, others preserved
-        self.assertEqual(result, ["-Wl,-undefined,error,-rpath,/lib"])
+        # Both --no-undefined and --allow-shlib-undefined should be removed
+        self.assertEqual(result, ["-Wl,-rpath,/lib"])
 
     def test_allow_shlib_undefined_warning_suppressed(self):
         """Test that warning for removed flags can be suppressed via env var."""
@@ -117,7 +117,6 @@ class TestMacOSLLDFlagTranslation(unittest.TestCase):
             "-g",
             "-Wall",
             "-Wextra",
-            "-Wl,-undefined,error",
             "-o",
             "output.exe",
             "main.cpp",
@@ -154,21 +153,21 @@ class TestMacOSLLDIntegration(unittest.TestCase):
         # Should have -fuse-ld=lld first (NOT -fuse-ld=ld64.lld which is invalid)
         # The clang driver dispatches to ld64.lld automatically on Darwin
         self.assertEqual(result[0], "-fuse-ld=lld")
-        # Flags should be translated to ld64.lld equivalents
-        self.assertIn("-Wl,-undefined,error", result)
-        self.assertIn("-Wl,-fatal_warnings", result)
-        # Original GNU flags should not be present
+        # --no-undefined should be stripped, --fatal-warnings translated
         self.assertNotIn("-Wl,--no-undefined", result)
+        self.assertNotIn("-Wl,-undefined,error", result)
+        self.assertIn("-Wl,-fatal_warnings", result)
         self.assertNotIn("-Wl,--fatal-warnings", result)
 
     def test_macos_user_lld_triggers_flag_translation(self):
-        """Test that user-specified -fuse-ld=lld triggers flag translation on macOS."""
+        """Test that user-specified -fuse-ld=lld triggers flag stripping/translation on macOS."""
         args = ["-fuse-ld=lld", "-Wl,--no-undefined", "main.cpp", "-o", "main"]
         result = _add_lld_linker_if_needed("darwin", args)
         # User's -fuse-ld=lld should be preserved
         self.assertEqual(result[0], "-fuse-ld=lld")
-        # Flags should be translated
-        self.assertEqual(result[1], "-Wl,-undefined,error")
+        # --no-undefined should be stripped entirely
+        self.assertNotIn("-Wl,--no-undefined", result)
+        self.assertNotIn("-Wl,-undefined,error", result)
         # No additional -fuse-ld flag should be added
         self.assertEqual(result.count("-fuse-ld=lld"), 1)
         self.assertNotIn("-fuse-ld=ld64.lld", result)

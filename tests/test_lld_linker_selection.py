@@ -74,19 +74,21 @@ class TestLLDLinkerSelection(unittest.TestCase):
         """
         args = ["-Wl,--no-undefined", "main.cpp", "-o", "main"]
         result = _add_lld_linker_if_needed("darwin", args)
-        # Should inject -fuse-ld=lld (NOT -fuse-ld=ld64.lld) and translate flags
+        # Should inject -fuse-ld=lld (NOT -fuse-ld=ld64.lld) and strip --no-undefined
         self.assertEqual(result[0], "-fuse-ld=lld")
-        self.assertEqual(result[1], "-Wl,-undefined,error")
-        self.assertEqual(result[2:], ["main.cpp", "-o", "main"])
+        self.assertNotIn("-Wl,--no-undefined", result)
+        self.assertNotIn("-Wl,-undefined,error", result)
+        self.assertIn("main.cpp", result)
 
-    def test_macos_user_specified_lld_translates_flags(self):
-        """Test that macOS translates flags when user explicitly specifies -fuse-ld=lld."""
+    def test_macos_user_specified_lld_strips_no_undefined(self):
+        """Test that macOS strips --no-undefined when user explicitly specifies -fuse-ld=lld."""
         args = ["-fuse-ld=lld", "-Wl,--no-undefined", "main.cpp", "-o", "main"]
         result = _add_lld_linker_if_needed("darwin", args)
-        # Should translate flags but not add another -fuse-ld flag
+        # Should strip --no-undefined but not add another -fuse-ld flag
         self.assertEqual(result[0], "-fuse-ld=lld")
-        self.assertEqual(result[1], "-Wl,-undefined,error")
-        self.assertEqual(result[2:], ["main.cpp", "-o", "main"])
+        self.assertNotIn("-Wl,--no-undefined", result)
+        self.assertNotIn("-Wl,-undefined,error", result)
+        self.assertIn("main.cpp", result)
 
     def test_macos_user_specified_ld64_lld_auto_converts_to_lld(self):
         """Test that macOS auto-converts -fuse-ld=ld64.lld to -fuse-ld=lld.

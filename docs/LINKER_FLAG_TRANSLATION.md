@@ -51,7 +51,7 @@ On Linux, clang-tool-chain uses LLVM's `ld.lld` (ELF linker), which natively und
 
 | GNU ld Flag | ld64 Equivalent | Purpose |
 |-------------|-----------------|---------|
-| `--no-undefined` | `-undefined error` | Disallow undefined symbols (strict linking) |
+| `--no-undefined` | *(removed)* | Not supported by ld64.lld — stripped entirely |
 | `--fatal-warnings` | `-fatal_warnings` | Treat linker warnings as errors |
 | `--allow-shlib-undefined` | *(removed)* | No-op on macOS — ld64 allows undefined symbols in dylibs by default |
 

@@ -1052,8 +1052,7 @@ static std::vector<std::string> build_platform_flags(
                     std::vector<std::string> translated;
                     for (auto& f : parts) {
                         if (f == "--no-undefined") {
-                            translated.push_back("-undefined");
-                            translated.push_back("error");
+                            // not supported by ld64.lld, strip entirely
                         } else if (f == "--fatal-warnings") {
                             translated.push_back("-fatal_warnings");
                         } else if (f == "--allow-shlib-undefined") {
@@ -1071,7 +1070,7 @@ static std::vector<std::string> build_platform_flags(
                         new_args.push_back(joined);
                     }
                 } else if (arg == "--no-undefined") {
-                    new_args.push_back("-Wl,-undefined,error");
+                    // not supported by ld64.lld, strip entirely
                 } else if (arg == "--fatal-warnings") {
                     new_args.push_back("-Wl,-fatal_warnings");
                 } else if (arg == "--allow-shlib-undefined") {

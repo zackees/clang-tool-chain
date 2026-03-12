@@ -324,7 +324,7 @@ CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1 clang-tool-chain-cpp main.cpp -o main
 
 **macOS Specifics:**
 - Uses `ld64.lld` (LLVM's Mach-O linker) for both ARM64 and x86_64
-- GNU-style flags like `--no-undefined` are automatically translated to ld64 equivalents (`-undefined error`)
+- GNU-style flags like `--no-undefined` are automatically stripped (not supported by ld64.lld)
 
 **Linux Specifics:**
 - lld's ELF support is mature and well-tested

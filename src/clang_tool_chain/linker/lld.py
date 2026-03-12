@@ -189,7 +189,7 @@ def _translate_linker_flags_for_macos_lld(args: list[str]) -> list[str]:
 
     When using lld on macOS (ld64.lld), certain GNU ld flags need to be
     translated to their Mach-O equivalents or removed:
-    - --no-undefined -> -undefined error
+    - --no-undefined -> (removed, not supported by ld64.lld)
     - --fatal-warnings -> -fatal_warnings
     - --allow-shlib-undefined -> (removed, ld64 allows undefined symbols by default)
 
@@ -207,7 +207,8 @@ def _translate_linker_flags_for_macos_lld(args: list[str]) -> list[str]:
     # Map of GNU ld flags to ld64.lld equivalents
     # None means the flag should be removed (no equivalent needed)
     flag_translations: dict[str, str | None] = {
-        "--no-undefined": "-undefined error",
+        # --no-undefined: not supported by ld64.lld, strip it entirely
+        "--no-undefined": None,
         "--fatal-warnings": "-fatal_warnings",
         # --allow-shlib-undefined: ld64 allows undefined symbols in dylibs by default,
         # so this flag is a no-op on macOS. We remove it entirely.

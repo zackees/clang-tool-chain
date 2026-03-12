@@ -117,7 +117,7 @@ xcode-select --install
 **Linker Notes:**
 - **macOS**: Uses `-fuse-ld=ld64.lld` on LLVM 21.x+ (explicit Mach-O linker)
   - Older LLVM versions automatically fall back to `-fuse-ld=lld` with compatibility notice
-  - GNU-style flags like `--no-undefined` auto-translate to ld64 equivalents (`-undefined error`)
+  - GNU-style flags like `--no-undefined` are automatically stripped (not supported by ld64.lld)
 - **Linux/Windows**: Uses LLVM lld for faster linking and cross-platform consistency
 - **Opt-out**: Set `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1` to use system linker
 

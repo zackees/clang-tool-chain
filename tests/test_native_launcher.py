@@ -854,8 +854,8 @@ class TestMacOSFlagTranslation(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
-    def test_no_undefined_translated(self) -> None:
-        """--no-undefined should be translated to -undefined error for ld64.lld."""
+    def test_no_undefined_stripped(self) -> None:
+        """--no-undefined should be stripped on macOS (not supported by ld64.lld)."""
         stderr = _dry_run_flags(
             _exe("ctc-clang"),
             ["-Wl,--no-undefined", self.test_c, "-o", str(self.tmp_path / "test")],
