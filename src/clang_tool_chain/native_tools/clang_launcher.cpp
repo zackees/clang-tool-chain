@@ -1367,6 +1367,118 @@ static void deploy_dlls(const CtcCache& cache, const std::string& output_path,
 
 // --- Linux/macOS shared library deployment ---
 #ifndef _WIN32
+
+// Build list of directories to search for shared libraries, including
+// compiler-rt subdirectories where sanitizer runtimes live on LLVM 16+.
+// Search order: compiler-rt dirs first, then top-level lib/.
+static std::vector<std::string> build_lib_search_dirs(const std::string& lib_dir,
+                                                       const std::string& resource_dir,
+                                                       Platform platform) {
+    std::vector<std::string> search_dirs;
+
+    // Search compiler-rt directories first (for sanitizer runtimes like libclang_rt.asan.so)
+    // Path pattern: lib/clang/<version>/lib/<target>/
+    // resource_dir is already lib/clang/<version>/
+    if (!resource_dir.empty()) {
+        std::string rt_lib = path_join(resource_dir, "lib");
+        if (is_directory(rt_lib)) {
+            // Determine target triples based on architecture
+            Arch arch = get_arch();
+            std::vector<std::string> targets;
+            if (platform == Platform::Linux) {
+                if (arch == Arch::X86_64) {
+                    targets = {"x86_64-unknown-linux-gnu", "linux"};
+                } else {
+                    targets = {"aarch64-unknown-linux-gnu", "linux"};
+                }
+            } else if (platform == Platform::Darwin) {
+                if (arch == Arch::X86_64) {
+                    targets = {"darwin"};
+                } else {
+                    targets = {"darwin"};
+                }
+            }
+            for (const auto& target : targets) {
+                std::string target_dir = path_join(rt_lib, target);
+                if (is_directory(target_dir)) {
+                    search_dirs.push_back(target_dir);
+                }
+            }
+        }
+    } else {
+        // Fallback: scan lib/clang/*/lib/<target>/ if resource_dir not set
+        std::string clang_ver_dir = path_join(lib_dir, "clang");
+        if (is_directory(clang_ver_dir)) {
+            auto versions = list_directory(clang_ver_dir);
+            Arch arch = get_arch();
+            std::vector<std::string> targets;
+            if (platform == Platform::Linux) {
+                if (arch == Arch::X86_64) {
+                    targets = {"x86_64-unknown-linux-gnu", "linux"};
+                } else {
+                    targets = {"aarch64-unknown-linux-gnu", "linux"};
+                }
+            }
+            for (const auto& ver : versions) {
+                std::string ver_path = path_join(clang_ver_dir, ver);
+                if (!is_directory(ver_path)) continue;
+                std::string rt_lib = path_join(ver_path, "lib");
+                if (!is_directory(rt_lib)) continue;
+                for (const auto& target : targets) {
+                    std::string target_dir = path_join(rt_lib, target);
+                    if (is_directory(target_dir)) {
+                        search_dirs.push_back(target_dir);
+                    }
+                }
+            }
+        }
+    }
+
+    // Then search top-level lib directory
+    if (is_directory(lib_dir)) {
+        search_dirs.push_back(lib_dir);
+    }
+
+    return search_dirs;
+}
+
+// Try to find a shared library in the given search directories.
+// For sanitizer runtimes, also tries architecture-suffixed variants
+// (e.g., libclang_rt.asan.so -> libclang_rt.asan-x86_64.so).
+static std::string find_lib_in_search_dirs(const std::string& lib_name,
+                                            const std::vector<std::string>& search_dirs) {
+    for (const auto& dir : search_dirs) {
+        // Exact match
+        std::string candidate = path_join(dir, lib_name);
+        if (path_exists(candidate)) return candidate;
+
+        // Try versioned .so match (e.g., libc++.so.1 -> libc++.so.1.0)
+        auto entries = list_directory(dir);
+        for (const auto& e : entries) {
+            if (starts_with(e, lib_name) || starts_with(lib_name, e)) {
+                std::string match = path_join(dir, e);
+                if (path_exists(match)) return match;
+            }
+        }
+
+        // For sanitizer runtimes, try architecture-suffixed variants
+        // e.g., libclang_rt.asan.so -> libclang_rt.asan-x86_64.so
+        if (starts_with(lib_name, "libclang_rt.")) {
+            size_t dot_so = lib_name.rfind(".so");
+            if (dot_so != std::string::npos) {
+                std::string base = lib_name.substr(0, dot_so);
+                const char* suffixes[] = {"-x86_64", "-aarch64", "-arm64"};
+                for (const char* suffix : suffixes) {
+                    std::string arch_name = base + suffix + ".so";
+                    std::string arch_path = path_join(dir, arch_name);
+                    if (path_exists(arch_path)) return arch_path;
+                }
+            }
+        }
+    }
+    return "";  // not found
+}
+
 static void deploy_shared_libs(const CtcCache& cache, const std::string& output_path,
                                 bool has_asan, Platform platform) {
     if (is_feature_disabled("DEPLOY_LIBS")) return;
@@ -1375,6 +1487,9 @@ static void deploy_shared_libs(const CtcCache& cache, const std::string& output_
     std::string output_dir = get_dir_name(output_path);
     if (output_dir.empty()) output_dir = ".";
     std::string lib_dir = path_join(cache.clang_root, "lib");
+
+    // Build search directories including compiler-rt subdirectories
+    auto search_dirs = build_lib_search_dirs(lib_dir, cache.resource_dir, platform);
 
     // Determine which libraries to deploy
     // Use ldd/readelf on Linux, otool on macOS to find actual dependencies
@@ -1414,39 +1529,36 @@ static void deploy_shared_libs(const CtcCache& cache, const std::string& output_
 
     // If readelf/otool failed or returned nothing, use known patterns
     if (needed.empty()) {
-        auto entries = list_directory(lib_dir);
+        // Search all dirs (including compiler-rt) for known patterns
         const char* so_ext = (platform == Platform::Darwin) ? ".dylib" : ".so";
-        for (const auto& entry : entries) {
-            std::string lower = to_lower(entry);
-            if (starts_with(lower, "libc++") && str_contains(lower, so_ext)) {
-                needed.push_back(entry);
-            } else if (starts_with(lower, "libunwind") && str_contains(lower, so_ext)) {
-                needed.push_back(entry);
-            } else if (has_asan && str_contains(lower, "asan") && str_contains(lower, so_ext)) {
-                needed.push_back(entry);
+        for (const auto& dir : search_dirs) {
+            auto entries = list_directory(dir);
+            for (const auto& entry : entries) {
+                std::string lower = to_lower(entry);
+                if (starts_with(lower, "libc++") && str_contains(lower, so_ext)) {
+                    needed.push_back(entry);
+                } else if (starts_with(lower, "libunwind") && str_contains(lower, so_ext)) {
+                    needed.push_back(entry);
+                } else if (has_asan && str_contains(lower, "asan") && str_contains(lower, so_ext)) {
+                    needed.push_back(entry);
+                }
             }
         }
     }
 
     // Deploy each needed library
     for (const auto& lib_name : needed) {
-        // Search in clang lib dir
-        std::string src = path_join(lib_dir, lib_name);
-        if (!path_exists(src)) {
-            // Try with glob-like search for versioned .so (e.g., libc++.so.1 -> libc++.so.1.0)
-            auto entries = list_directory(lib_dir);
-            for (const auto& e : entries) {
-                if (starts_with(e, lib_name) || starts_with(lib_name, e)) {
-                    src = path_join(lib_dir, e);
-                    if (path_exists(src)) break;
-                }
-            }
-        }
-        if (path_exists(src)) {
+        std::string src = find_lib_in_search_dirs(lib_name, search_dirs);
+        if (!src.empty()) {
             std::string dst = path_join(output_dir, lib_name);
             if (!path_exists(dst)) {
-                copy_file_atomic(src, dst);
+                if (copy_file_atomic(src, dst)) {
+                    fprintf(stderr, "%sDeployed %s -> %s\n", CTC_TAG, lib_name.c_str(), output_dir.c_str());
+                }
             }
+        } else {
+            fprintf(stderr, "%sWarning: needed library %s not found in search paths\n",
+                    CTC_TAG, lib_name.c_str());
         }
     }
 }
@@ -1515,6 +1627,27 @@ static void setup_sanitizer_environment(const CtcCache& cache, bool has_asan,
             set_env("PATH", prepend + ";" + current_path);
         } else {
             set_env("PATH", prepend);
+        }
+    }
+#else
+    // Linux: add runtime library directories to LD_LIBRARY_PATH so ASAN .so is found at runtime
+    // This mirrors the Windows PATH logic above and provides a fallback when
+    // rpath/$ORIGIN deployment isn't available.
+    {
+        std::string lib_dir = path_join(cache.clang_root, "lib");
+        auto search_dirs = build_lib_search_dirs(lib_dir, cache.resource_dir, platform);
+        if (!search_dirs.empty()) {
+            std::string prepend_ld;
+            for (const auto& dir : search_dirs) {
+                if (!prepend_ld.empty()) prepend_ld += ":";
+                prepend_ld += dir;
+            }
+            std::string current_ld = get_env("LD_LIBRARY_PATH");
+            if (!current_ld.empty()) {
+                set_env("LD_LIBRARY_PATH", prepend_ld + ":" + current_ld);
+            } else {
+                set_env("LD_LIBRARY_PATH", prepend_ld);
+            }
         }
     }
 #endif

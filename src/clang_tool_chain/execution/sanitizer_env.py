@@ -167,6 +167,66 @@ def get_runtime_dll_paths() -> list[str]:
     return paths
 
 
+def get_runtime_lib_paths() -> list[str]:
+    """
+    Get paths to directories containing runtime shared libraries (Linux only).
+
+    On Linux, when using shared ASAN runtime, the libclang_rt.asan.so must be
+    findable at runtime. This function returns the paths that should be added
+    to LD_LIBRARY_PATH, including compiler-rt subdirectories where sanitizer
+    runtimes live on LLVM 16+.
+
+    Returns:
+        List of directory paths containing runtime libraries, or empty list
+        if not applicable (non-Linux or libraries not found).
+
+    Example:
+        >>> paths = get_runtime_lib_paths()
+        >>> if paths:
+        ...     os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(paths)
+    """
+    if platform.system() != "Linux":
+        return []
+
+    paths = []
+
+    try:
+        from clang_tool_chain.platform.detection import get_platform_binary_dir, get_platform_info
+
+        _platform_name, arch = get_platform_info()
+
+        clang_bin_dir = get_platform_binary_dir()
+        clang_root = clang_bin_dir.parent
+        clang_lib = clang_root / "lib"
+
+        # Add top-level lib directory (for libc++, libunwind)
+        if clang_lib.exists():
+            paths.append(str(clang_lib))
+
+        # Search compiler-rt directories for sanitizer runtimes
+        # Path pattern: lib/clang/<version>/lib/<target>/
+        if arch == "x86_64":
+            compiler_rt_targets = ["x86_64-unknown-linux-gnu", "linux"]
+        elif arch in ("arm64", "aarch64"):
+            compiler_rt_targets = ["aarch64-unknown-linux-gnu", "linux"]
+        else:
+            compiler_rt_targets = ["linux"]
+
+        clang_version_dir = clang_lib / "clang"
+        if clang_version_dir.exists():
+            for version_dir in clang_version_dir.iterdir():
+                if version_dir.is_dir():
+                    for target in compiler_rt_targets:
+                        rt_lib_dir = version_dir / "lib" / target
+                        if rt_lib_dir.exists():
+                            paths.append(str(rt_lib_dir))
+
+    except (ImportError, RuntimeError) as e:
+        logger.debug(f"Could not get runtime lib paths: {e}")
+
+    return paths
+
+
 def get_asan_runtime_dll() -> Path | None:
     """
     Get the full path to the ASAN runtime DLL (Windows only).
@@ -496,6 +556,20 @@ def prepare_sanitizer_environment(
             else:
                 env["PATH"] = new_path
             logger.info(f"Injecting runtime DLL paths to PATH: {dll_paths}")
+
+    # On Linux, add runtime library paths to LD_LIBRARY_PATH for shared ASAN runtime
+    # This ensures libclang_rt.asan.so can be found at runtime when libraries
+    # aren't deployed via rpath/$ORIGIN (mirrors the Windows PATH logic above)
+    if asan_enabled and platform.system() == "Linux":
+        lib_paths = get_runtime_lib_paths()
+        if lib_paths:
+            current_ld_path = env.get("LD_LIBRARY_PATH", "")
+            new_path = os.pathsep.join(lib_paths)
+            if current_ld_path:
+                env["LD_LIBRARY_PATH"] = new_path + os.pathsep + current_ld_path
+            else:
+                env["LD_LIBRARY_PATH"] = new_path
+            logger.info(f"Injecting runtime lib paths to LD_LIBRARY_PATH: {lib_paths}")
 
     # Add platform-specific LSan suppressions if LSAN is enabled
     if lsan_enabled:
