@@ -562,6 +562,77 @@ class TestSysrootOverride(unittest.TestCase):
         self.assertIn("fake_sysroot", stderr)
 
 
+@unittest.skipUnless(_has_native_launcher(), SKIP_REASON)
+class TestPCHCompileOnly(unittest.TestCase):
+    """Test that -x c++-header is treated as compile-only (no link step).
+
+    BUG: The MinGW driver plans a link job after PCH emission unless the
+    launcher sets compile_only=true. Without this, `-o` fails with
+    "cannot specify -o when generating multiple output files" and omitting
+    `-o` creates a spurious .pch next to the source header.
+    """
+
+    def setUp(self) -> None:
+        self.tmp_dir = tempfile.mkdtemp()
+        self.tmp_path = Path(self.tmp_dir)
+        self.header = self.tmp_path / "test.h"
+        self.header.write_text("// empty header\n")
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_pch_with_output_flag_succeeds(self) -> None:
+        """ctc-clang++ -x c++-header test.h -o test.h.pch must succeed."""
+        pch_out = self.tmp_path / "test.h.pch"
+        result = _run(
+            [_exe("ctc-clang++"), "-x", "c++-header", str(self.header), "-o", str(pch_out)],
+            timeout=60,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"PCH compilation with -o failed:\n{result.stderr}",
+        )
+        self.assertTrue(pch_out.exists(), "PCH output file was not created")
+
+    def test_pch_no_spurious_file_next_to_source(self) -> None:
+        """ctc-clang++ -x c++-header test.h -o out.pch must NOT create test.h.pch next to source."""
+        pch_out = self.tmp_path / "output" / "test.h.pch"
+        pch_out.parent.mkdir()
+        result = _run(
+            [_exe("ctc-clang++"), "-x", "c++-header", str(self.header), "-o", str(pch_out)],
+            timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, f"PCH compilation failed:\n{result.stderr}")
+        spurious = self.tmp_path / "test.h.pch"
+        self.assertFalse(
+            spurious.exists(),
+            f"Spurious .pch created next to source header: {spurious}",
+        )
+
+    def test_pch_no_linker_invocation(self) -> None:
+        """-x c++-header must not produce a linker command in -### output."""
+        stderr = _dry_run_flags(
+            _exe("ctc-clang++"),
+            ["-x", "c++-header", str(self.header), "-o", str(self.tmp_path / "t.pch")],
+        )
+        # The linker (ld.lld) should NOT appear in -### output for PCH compilation
+        self.assertNotIn("ld.lld", stderr, f"Linker invoked for PCH compilation:\n{stderr}")
+
+    def test_c_header_also_compile_only(self) -> None:
+        """ctc-clang -x c-header test.h -o test.h.pch must also work."""
+        pch_out = self.tmp_path / "test.h.pch"
+        result = _run(
+            [_exe("ctc-clang"), "-x", "c-header", str(self.header), "-o", str(pch_out)],
+            timeout=60,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"C-header PCH compilation failed:\n{result.stderr}",
+        )
+
+
 # ==========================================================================
 # Windows-only tests
 # ==========================================================================

@@ -753,6 +753,16 @@ static ParsedArgs parse_user_args(int argc, char* argv[]) {
 
         // Detect flags
         if (arg == "-c" || arg == "-S" || arg == "-E") p.compile_only = true;
+        // PCH generation (-x c++-header / -x c-header) is compile-only — no link step.
+        // Without this, the MinGW driver plans a linker invocation after PCH emission,
+        // which either errors ("cannot specify -o with multiple output files") or
+        // creates a spurious .pch next to the source header when -o is absent.
+        if (arg == "-x" && i + 1 < argc) {
+            std::string lang = argv[i + 1];
+            if (lang == "c++-header" || lang == "c-header") {
+                p.compile_only = true;
+            }
+        }
         if (arg == "-shared") p.has_shared_flag = true;
         if (str_contains(arg, "-fsanitize=address")) p.has_fsanitize_address = true;
         if (starts_with(arg, "--target=")) {
