@@ -171,21 +171,17 @@ class CosmoccInstaller(BaseToolchainInstaller):
                 with tempfile.NamedTemporaryFile(mode="wb", suffix=".tar.zst", delete=False) as tmp:
                     archive_file = Path(tmp.name)
 
-                # Get file size information and print to stderr before download
-                from ..parallel_download import check_server_capabilities
-
                 print("Downloading Cosmocc toolchain for first-time installation...", file=sys.stderr, flush=True)
-                capabilities = check_server_capabilities(version_info.href, timeout=10)
-                if capabilities.content_length:
-                    size_mb = capabilities.content_length / (1024 * 1024)
-                    print(f"Download size: {size_mb:.1f} MB", file=sys.stderr, flush=True)
-                else:
-                    print("Download size: (size unknown, checking...)", file=sys.stderr, flush=True)
 
                 # Download the archive (handles both single-file and multi-part)
                 download_archive(version_info, archive_file)
 
-                print("Download complete. Caching and extracting toolchain...", file=sys.stderr, flush=True)
+                actual_size_mb = archive_file.stat().st_size / (1024 * 1024)
+                print(
+                    f"Download complete ({actual_size_mb:.1f} MB). Caching and extracting toolchain...",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
                 # Save to cache for future use (use "universal" as platform/arch)
                 save_archive_to_cache(archive_file, "cosmocc", "universal", "universal", version_info.sha256)
