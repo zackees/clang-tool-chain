@@ -913,6 +913,66 @@ static int create_process_and_wait(const std::vector<std::string>& cmd) {
 }
 
 // ============================================================================
+// Section 11b: Windows Path Normalization
+// ============================================================================
+// On Windows, build systems (especially Meson) may pass include paths with
+// inconsistent slash forms: backslash in cpp_args but forward-slash in
+// custom_target commands.  This causes clang's #pragma once to fail across
+// PCH boundaries because it sees the same header resolved via different
+// canonical paths (e.g. C:\foo\bar.h vs C:/foo/bar.h).
+//
+// Fix: normalize all path-carrying arguments to forward slashes before
+// passing them to real clang.  Clang on Windows handles forward slashes
+// natively, so this is always safe.
+
+#ifdef _WIN32
+static std::string normalize_slashes(const std::string& s) {
+    std::string out = s;
+    for (auto& c : out) {
+        if (c == '\\') c = '/';
+    }
+    return out;
+}
+
+static void normalize_windows_paths(std::vector<std::string>& cmd) {
+    for (size_t i = 0; i < cmd.size(); i++) {
+        auto& arg = cmd[i];
+
+        // -I<path> or -isystem<path> (concatenated, no space)
+        if (starts_with(arg, "-I") && arg.size() > 2 && arg[2] != '=') {
+            arg = "-I" + normalize_slashes(arg.substr(2));
+        } else if (starts_with(arg, "-isystem") && arg.size() > 8) {
+            arg = "-isystem" + normalize_slashes(arg.substr(8));
+        }
+        // --sysroot=<path>
+        else if (starts_with(arg, "--sysroot=")) {
+            arg = "--sysroot=" + normalize_slashes(arg.substr(10));
+        }
+        // Flags followed by a separate path argument:
+        //   -I <path>, -isystem <path>, -include <path>,
+        //   -include-pch <path>, -isysroot <path>,
+        //   -o <path>, -MF <path>, -MQ <path>, -MT <path>
+        else if ((arg == "-I" || arg == "-isystem" || arg == "-include" ||
+                  arg == "-include-pch" || arg == "-isysroot" ||
+                  arg == "-o" || arg == "-MF" || arg == "-MQ" || arg == "-MT")
+                 && i + 1 < cmd.size()) {
+            cmd[i + 1] = normalize_slashes(cmd[i + 1]);
+            i++;  // skip the path we just normalized
+        }
+        // Source files and other bare paths (heuristic: contains backslash
+        // and looks like a file path — has a dot-extension or starts with
+        // a drive letter).
+        else if (arg.find('\\') != std::string::npos &&
+                 !starts_with(arg, "-") &&
+                 (arg.find('.') != std::string::npos ||
+                  (arg.size() >= 2 && arg[1] == ':'))) {
+            arg = normalize_slashes(arg);
+        }
+    }
+}
+#endif
+
+// ============================================================================
 // Section 12: main()
 // ============================================================================
 
@@ -984,6 +1044,9 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         auto cmd = apply_substitutions(tmpl, user.input_file, user.output_file);
+#ifdef _WIN32
+        normalize_windows_paths(cmd);
+#endif
         if (debug) {
             fprintf(stderr, "[ctc-emcc-debug] TEMPLATE compile: %s (%zu args)\n",
                     cmd[0].c_str(), cmd.size());
@@ -1000,6 +1063,9 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         auto cmd = apply_substitutions(tmpl, user.input_file, user.output_file);
+#ifdef _WIN32
+        normalize_windows_paths(cmd);
+#endif
         if (debug) {
             fprintf(stderr, "[ctc-emcc-debug] TEMPLATE link: %s (%zu args)\n",
                     cmd[0].c_str(), cmd.size());
@@ -1080,6 +1146,9 @@ int main(int argc, char* argv[]) {
             auto tmpl = read_arg_template(cached_file);
             if (!tmpl.empty()) {
                 auto cmd = apply_substitutions(tmpl, user.input_file, user.output_file);
+#ifdef _WIN32
+                normalize_windows_paths(cmd);
+#endif
                 if (debug) {
                     fprintf(stderr, "[ctc-emcc-debug] AUTO-CACHE HIT: %s\n", cached_file.c_str());
                 }
