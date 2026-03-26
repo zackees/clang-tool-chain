@@ -821,6 +821,95 @@ class TestSoDeployerLibunwind:
         assert not deployer.is_deployable_library("ld-linux-x86-64.so.2")
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux-specific libunwind symlink tests")
+class TestLibunwindSymlinkCreation:
+    """Test that versioned libunwind SO symlinks are created correctly.
+
+    The bundled Linux archive ships fully-versioned SO files (e.g.
+    libunwind.so.8.0.1) but not the soname (libunwind.so.8) or the
+    unversioned dev symlink (libunwind.so) needed by the linker.
+    These tests verify that the helper creates the full chain.
+    """
+
+    def test_create_versioned_so_symlinks_basic(self, tmp_path):
+        """Verify symlink chain is created for a basic versioned SO."""
+        from clang_tool_chain.installers.clang import _create_versioned_so_symlinks
+
+        # Create a fake versioned SO file
+        (tmp_path / "libunwind.so.8.0.1").write_bytes(b"fake")
+
+        _create_versioned_so_symlinks(tmp_path, prefix="libunwind")
+
+        soname_link = tmp_path / "libunwind.so.8"
+        dev_link = tmp_path / "libunwind.so"
+
+        assert soname_link.is_symlink(), "libunwind.so.8 symlink should be created"
+        assert dev_link.is_symlink(), "libunwind.so symlink should be created"
+        assert os.readlink(str(soname_link)) == "libunwind.so.8.0.1"
+        assert os.readlink(str(dev_link)) == "libunwind.so.8"
+
+    def test_create_versioned_so_symlinks_arch_specific(self, tmp_path):
+        """Verify symlinks are created for arch-specific libunwind SO."""
+        from clang_tool_chain.installers.clang import _create_versioned_so_symlinks
+
+        (tmp_path / "libunwind-x86_64.so.8.0.1").write_bytes(b"fake")
+
+        _create_versioned_so_symlinks(tmp_path, prefix="libunwind")
+
+        soname_link = tmp_path / "libunwind-x86_64.so.8"
+        dev_link = tmp_path / "libunwind-x86_64.so"
+
+        assert soname_link.is_symlink()
+        assert dev_link.is_symlink()
+        assert os.readlink(str(soname_link)) == "libunwind-x86_64.so.8.0.1"
+        assert os.readlink(str(dev_link)) == "libunwind-x86_64.so.8"
+
+    def test_create_versioned_so_symlinks_idempotent(self, tmp_path):
+        """Verify repeated calls do not raise errors or overwrite existing symlinks."""
+        from clang_tool_chain.installers.clang import _create_versioned_so_symlinks
+
+        (tmp_path / "libunwind.so.8.0.1").write_bytes(b"fake")
+
+        # Call twice — should not raise
+        _create_versioned_so_symlinks(tmp_path, prefix="libunwind")
+        _create_versioned_so_symlinks(tmp_path, prefix="libunwind")
+
+        assert (tmp_path / "libunwind.so").is_symlink()
+        assert (tmp_path / "libunwind.so.8").is_symlink()
+
+    def test_create_versioned_so_symlinks_missing_dir(self, tmp_path):
+        """Verify function silently skips missing directories."""
+        from clang_tool_chain.installers.clang import _create_versioned_so_symlinks
+
+        missing = tmp_path / "nonexistent"
+        # Should not raise
+        _create_versioned_so_symlinks(missing, prefix="libunwind")
+
+    def test_installed_toolchain_has_libunwind_dev_symlinks(self):
+        """Verify the installed toolchain lib directory has libunwind.so dev symlinks."""
+        try:
+            from clang_tool_chain.platform.detection import get_platform_binary_dir
+
+            clang_bin = get_platform_binary_dir()
+        except Exception:
+            pytest.skip("Clang toolchain not installed")
+
+        lib_dir = clang_bin.parent / "lib"
+        libunwind_so = lib_dir / "libunwind.so"
+        libunwind_so8 = lib_dir / "libunwind.so.8"
+        versioned = lib_dir / "libunwind.so.8.0.1"
+
+        if not versioned.exists():
+            pytest.skip("libunwind.so.8.0.1 not found in toolchain lib (archive rebuild needed)")
+
+        assert libunwind_so8.is_symlink() or libunwind_so8.is_file(), (
+            "libunwind.so.8 must exist as symlink or file so -lunwind can be resolved"
+        )
+        assert libunwind_so.is_symlink() or libunwind_so.is_file(), (
+            "libunwind.so dev-symlink must exist so the linker can resolve -lunwind"
+        )
+
+
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS-specific libunwind tests")
 class TestMacOSUnwindTransformer:
     """Unit tests for MacOSUnwindTransformer class (macOS only).
