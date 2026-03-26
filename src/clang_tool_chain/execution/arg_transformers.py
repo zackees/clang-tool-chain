@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,6 +48,9 @@ if TYPE_CHECKING:
     from clang_tool_chain.directives.parser import ParsedDirectives
 
 logger = logging.getLogger(__name__)
+
+# Pattern to match fully-versioned SO files: libXXX.so.MAJOR.MINOR.PATCH
+_SO_VERSIONED_RE = re.compile(r"^(.+\.so)\.(\d+)\.(\d+)\.(\d+)$")
 
 
 @dataclass
@@ -419,6 +423,48 @@ class LinuxSysrootTransformer(ArgumentTransformer):
             return args
 
 
+def _ensure_libunwind_dev_symlinks(lib_dir: Path) -> None:
+    """
+    Ensure unversioned libunwind.so dev-symlinks exist in *lib_dir*.
+
+    The bundled archive ships versioned SOs (e.g. ``libunwind.so.8.0.1``) but
+    not the soname (``libunwind.so.8``) or the unversioned dev symlink
+    (``libunwind.so``) required by the linker for ``-lunwind``.  This function
+    creates the full symlink chain as a best-effort fix for toolchains installed
+    before ``ClangInstaller.post_extract_hook`` started doing this automatically.
+
+    Args:
+        lib_dir: Path to the toolchain ``lib/`` directory.
+    """
+    if not lib_dir.exists():
+        return
+
+    for entry in sorted(lib_dir.iterdir()):
+        name = entry.name
+        if not name.startswith("libunwind"):
+            continue
+
+        m = _SO_VERSIONED_RE.match(name)
+        if not m:
+            continue
+
+        base = m.group(1)    # e.g. "libunwind.so"
+        major = m.group(2)   # e.g. "8"
+
+        soname = f"{base}.{major}"   # libunwind.so.8
+        devlink = base               # libunwind.so
+
+        for link_name, link_target in [(soname, name), (devlink, soname)]:
+            link_path = lib_dir / link_name
+            if link_path.exists() or link_path.is_symlink():
+                continue
+            try:
+                os.symlink(link_target, link_path)
+                logger.info(f"Created libunwind dev symlink: {link_path} -> {link_target}")
+            except OSError as e:
+                logger.debug(f"Could not create libunwind symlink {link_name}: {e}")
+
+
 class LinuxUnwindTransformer(ArgumentTransformer):
     """
     Transformer for adding bundled libunwind include/library paths on Linux.
@@ -470,6 +516,13 @@ class LinuxUnwindTransformer(ArgumentTransformer):
             result = list(args)
             include_dir = clang_root / "include"
             lib_dir = clang_root / "lib"
+
+            # Ensure the unversioned libunwind.so dev-symlink exists so the linker
+            # can resolve -lunwind.  The bundled archive ships libunwind.so.8 but
+            # not the unversioned symlink (normally provided by libunwind-dev).
+            # We create it here as a best-effort fix for toolchains that were
+            # installed before the post_extract_hook began doing this automatically.
+            _ensure_libunwind_dev_symlinks(lib_dir)
 
             # Add include path (always needed for compilation)
             include_flag = f"-I{include_dir}"

@@ -4,6 +4,7 @@ Clang/LLVM toolchain installer module.
 
 import contextlib
 import os
+import re
 import shutil
 import sys
 import time
@@ -18,6 +19,59 @@ from clang_tool_chain.path_utils import get_install_dir, get_lock_path
 
 logger = configure_logging(__name__)
 
+# Pattern to match fully-versioned SO files: libXXX.so.MAJOR.MINOR.PATCH
+_SO_VERSIONED_RE = re.compile(r"^(.+\.so)\.(\d+)\.(\d+)\.(\d+)$")
+
+
+def _create_versioned_so_symlinks(lib_dir: Path, prefix: str = "libunwind") -> None:
+    """
+    Create soname and dev symlinks for versioned shared-object files in *lib_dir*.
+
+    The bundled Linux archive ships fully-versioned SO files (e.g.
+    ``libunwind.so.8.0.1``) but not the soname symlink (``libunwind.so.8``) or
+    the unversioned dev symlink (``libunwind.so``) that the linker needs to
+    resolve ``-lunwind``.
+
+    For every ``<prefix>*.so.MAJOR.MINOR.PATCH`` file found this function creates:
+
+    - ``<prefix>*.so.MAJOR``  ->  ``<prefix>*.so.MAJOR.MINOR.PATCH``  (soname)
+    - ``<prefix>*.so``        ->  ``<prefix>*.so.MAJOR``              (dev link)
+
+    This mirrors what the ``libunwind8`` + ``libunwind-dev`` Ubuntu packages
+    provide on a normal system install.
+
+    Args:
+        lib_dir: Path to the toolchain ``lib/`` directory.
+        prefix: Filename prefix to filter (default ``"libunwind"``).
+    """
+    if not lib_dir.exists():
+        return
+
+    for entry in sorted(lib_dir.iterdir()):
+        name = entry.name
+        if not name.startswith(prefix):
+            continue
+
+        m = _SO_VERSIONED_RE.match(name)
+        if not m:
+            continue
+
+        base = m.group(1)          # e.g. "libunwind.so" or "libunwind-x86_64.so"
+        major = m.group(2)         # e.g. "8"
+
+        soname = f"{base}.{major}"          # libunwind.so.8
+        devlink = base                       # libunwind.so
+
+        for link_name, link_target in [(soname, name), (devlink, soname)]:
+            link_path = lib_dir / link_name
+            if link_path.exists() or link_path.is_symlink():
+                logger.debug(f"libunwind symlink already exists: {link_path}")
+                continue
+            try:
+                os.symlink(link_target, link_path)
+                logger.info(f"Created libunwind symlink: {link_path} -> {link_target}")
+            except OSError as exc:
+                logger.warning(f"Failed to create libunwind symlink {link_name}: {exc}")
 
 class ClangInstaller(BaseToolchainInstaller):
     """Installer for Clang/LLVM toolchain."""
@@ -176,6 +230,12 @@ class ClangInstaller(BaseToolchainInstaller):
                 logger.info("Copying clang++ to clang on Linux...")
                 shutil.copy2(clang_cpp, clang)
 
+            # Create unversioned libunwind.so symlinks so that -lunwind resolves correctly.
+            # The bundled archive ships versioned SOs (e.g. libunwind.so.8) but not the
+            # unversioned development symlink (libunwind.so) that the linker needs when
+            # a build system passes -lunwind.  This mirrors what libunwind-dev provides.
+            self._create_libunwind_symlinks(install_dir / "lib")
+
         # On macOS, create ld64.lld symlink for -fuse-ld=ld64.lld support
         if platform == "darwin":
             bin_dir = install_dir / "bin"
@@ -192,6 +252,27 @@ class ClangInstaller(BaseToolchainInstaller):
                     logger.warning(f"Failed to create ld64.lld symlink: {e}")
             elif ld64_lld_path.exists():
                 logger.info(f"ld64.lld already exists at {ld64_lld_path}")
+
+    def _create_libunwind_symlinks(self, lib_dir: Path) -> None:
+        """
+        Create unversioned libunwind.so symlinks from versioned ones in *lib_dir*.
+
+        The bundled archive ships versioned shared objects (e.g. ``libunwind.so.8.0.1``)
+        but NOT the soname (``libunwind.so.8``) or the unversioned development symlink
+        (``libunwind.so``) that the linker needs when a caller passes ``-lunwind``.
+        This method creates the full symlink chain, mirroring what the ``libunwind-dev``
+        (and ``libunwind8``) packages would provide on a normal Ubuntu/Debian system.
+
+        For each ``libXXX.so.MAJOR.MINOR.PATCH`` file found it creates:
+            ``libXXX.so.MAJOR``  ->  ``libXXX.so.MAJOR.MINOR.PATCH``   (soname link)
+            ``libXXX.so``        ->  ``libXXX.so.MAJOR``                (dev link)
+
+        Args:
+            lib_dir: Directory to search for versioned libunwind SO files.
+        """
+        if not lib_dir.exists():
+            return
+        _create_versioned_so_symlinks(lib_dir, prefix="libunwind")
 
     def _force_filesystem_sync(self, install_dir: Path) -> None:
         """
