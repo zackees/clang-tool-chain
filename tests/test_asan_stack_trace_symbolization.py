@@ -496,7 +496,7 @@ int main() {
 
         # Check for dlopen failure first
         if "dlopen failed" in full_output:
-            pytest.skip("dlopen failed - shared library not loadable in ASAN environment")
+            pytest.fail("dlopen failed - shared library not loadable in ASAN environment")
 
         # Should detect the overflow
         assert run_result.returncode != 0, "Expected ASAN to detect overflow in shared library"

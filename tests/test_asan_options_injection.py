@@ -996,7 +996,7 @@ leak:intentional_leak_function
 
         compile_result = subprocess.run(compile_cmd, capture_output=True, text=True)
         if compile_result.returncode != 0:
-            pytest.skip(f"Compilation failed: {compile_result.stderr}")
+            pytest.fail(f"Compilation failed: {compile_result.stderr}")
 
         assert output_exe.exists(), "Executable not created"
 
@@ -1041,7 +1041,7 @@ leak:intentional_leak_function
 
         compile_result = subprocess.run(compile_cmd, capture_output=True, text=True)
         if compile_result.returncode != 0:
-            pytest.skip(f"Compilation failed: {compile_result.stderr}")
+            pytest.fail(f"Compilation failed: {compile_result.stderr}")
 
         assert output_exe.exists(), "Executable not created"
 
@@ -1112,7 +1112,7 @@ int main(void) {
 
         compile_result = subprocess.run(compile_cmd, capture_output=True, text=True)
         if compile_result.returncode != 0:
-            pytest.skip(f"Compilation failed: {compile_result.stderr}")
+            pytest.fail(f"Compilation failed: {compile_result.stderr}")
 
         # Run with merge behavior
         env = prepare_sanitizer_environment(
@@ -1442,7 +1442,7 @@ int main() {
             )
 
             if compile_result.returncode != 0:
-                pytest.skip(f"ASAN compilation failed: {compile_result.stderr}")
+                pytest.fail(f"ASAN compilation failed: {compile_result.stderr}")
 
             assert exe_path.exists(), "Executable should exist"
 
@@ -1495,7 +1495,7 @@ int main() {
             )
 
             if compile_result.returncode != 0:
-                pytest.skip(f"ASAN compilation failed: {compile_result.stderr}")
+                pytest.fail(f"ASAN compilation failed: {compile_result.stderr}")
 
             assert exe_path.exists(), "Executable should exist"
 
@@ -1553,7 +1553,7 @@ extern "C" __declspec(dllexport) int add(int a, int b) {
             )
 
             if compile_result.returncode != 0:
-                pytest.skip(f"ASAN shared library compilation failed: {compile_result.stderr}")
+                pytest.fail(f"ASAN shared library compilation failed: {compile_result.stderr}")
 
             assert dll_path.exists(), "Shared library should exist"
 
@@ -1601,7 +1601,7 @@ int main() {
             )
 
             if compile_result.returncode != 0:
-                pytest.skip(f"ASAN compilation failed: {compile_result.stderr}")
+                pytest.fail(f"ASAN compilation failed: {compile_result.stderr}")
 
             # Run the executable without setting PATH
             # (to verify DLLs were deployed to the same directory)

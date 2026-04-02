@@ -94,19 +94,11 @@ int main() {
 
             src_file.write_text(test_code)
 
-            # Compile with ASAN using clang-tool-chain
-            try:
-                from clang_tool_chain.platform.paths import find_tool_binary
-
-                clang = find_tool_binary("clang++")
-            except (ImportError, RuntimeError) as e:
-                pytest.skip(f"clang++ not available: {e}")
-
+            # Compile with ASAN using clang-tool-chain wrapper
             compile_result = subprocess.run(
                 [
-                    str(clang),
+                    "clang-tool-chain-cpp",
                     "-fsanitize=address",
-                    "-shared-libasan",
                     str(src_file),
                     "-o",
                     str(exe_file),
@@ -116,7 +108,7 @@ int main() {
             )
 
             if compile_result.returncode != 0:
-                pytest.skip(f"Compilation failed: {compile_result.stderr}")
+                pytest.fail(f"Compilation failed: {compile_result.stderr}")
 
             # Run with our prepared environment (should not include detect_leaks=1)
             env = prepare_sanitizer_environment(

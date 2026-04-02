@@ -191,10 +191,10 @@ int main(void) {
     )
 
     if result.returncode != 0:
-        pytest.skip(f"Failed to compile native symbol test: {result.stderr}")
+        pytest.fail(f"Failed to compile native symbol test: {result.stderr}")
 
     if not exe_file.exists():
-        pytest.skip("Native symbol test binary was not created")
+        pytest.fail("Native symbol test binary was not created")
 
     return exe_file
 
@@ -343,7 +343,7 @@ class TestDLLBuild:
         )
 
         if result.returncode != 0:
-            pytest.skip(f"llvm-nm failed: {result.stderr}")
+            pytest.fail(f"llvm-nm failed: {result.stderr}")
 
         symbols = result.stdout
 

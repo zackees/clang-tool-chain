@@ -1443,7 +1443,7 @@ int main() {
 
             # Verify build succeeded
             if result != 0:
-                pytest.skip("AddressSanitizer build failed (sanitizer runtime may not be available)")
+                pytest.fail("AddressSanitizer build failed (sanitizer runtime may not be available)")
 
             assert exe_path.exists(), "Executable should exist"
 

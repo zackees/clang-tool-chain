@@ -90,11 +90,14 @@ int main() {
         )
 
         # Compile with verbose output to see which linker is used
+        # Use a longer timeout: sccache on Windows has retry logic (up to 3 retries
+        # with 2-second delays = 6s overhead) plus compile+link in one step is slower
+        # than separate compile-only steps used in other tests.
         result = subprocess.run(
             ["clang-tool-chain-sccache-cpp", str(test_cpp), "-o", "test_linker.exe", "-v"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=60,
         )
 
         # Verify compilation succeeded
