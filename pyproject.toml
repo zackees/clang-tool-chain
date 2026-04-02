@@ -95,6 +95,7 @@ clang-tool-chain-as = "clang_tool_chain.wrapper:llvm_as_main"
 clang-tool-chain-dis = "clang_tool_chain.wrapper:llvm_dis_main"
 clang-tool-chain-format = "clang_tool_chain.wrapper:clang_format_main"
 clang-tool-chain-tidy = "clang_tool_chain.wrapper:clang_tidy_main"
+clang-tool-chain-clang-query = "clang_tool_chain.wrapper:clang_query_main"
 # sccache Integration
 clang-tool-chain-sccache = "clang_tool_chain.cli:sccache_main"
 clang-tool-chain-sccache-c = "clang_tool_chain.cli:sccache_c_main"

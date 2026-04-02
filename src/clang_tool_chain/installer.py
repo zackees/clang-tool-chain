@@ -25,6 +25,14 @@ from clang_tool_chain.installers.clang import (
     is_toolchain_installed,
 )
 
+# Re-export Clang Extra installer
+from clang_tool_chain.installers.clang_extra import (
+    _subprocess_install_clang_extra,
+    download_and_install_clang_extra,
+    ensure_clang_extra,
+    is_clang_extra_installed,
+)
+
 # Re-export Cosmocc installer
 from clang_tool_chain.installers.cosmocc import (
     _subprocess_install_cosmocc,
@@ -87,6 +95,11 @@ __all__ = [
     "download_and_install_toolchain",
     "ensure_toolchain",
     "_subprocess_install_toolchain",
+    # Clang Extra
+    "is_clang_extra_installed",
+    "download_and_install_clang_extra",
+    "ensure_clang_extra",
+    "_subprocess_install_clang_extra",
     # IWYU
     "is_iwyu_installed",
     "download_and_install_iwyu",

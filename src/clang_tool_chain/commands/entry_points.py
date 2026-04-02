@@ -268,17 +268,24 @@ def gendef_main() -> int:
 
 
 def clang_format_main() -> NoReturn:
-    """Entry point for clang-format wrapper."""
-    from ..execution.core import execute_tool
+    """Entry point for clang-format wrapper (from clang-extra distribution)."""
+    from ..execution.clang_extra import execute_clang_extra_tool
 
-    execute_tool("clang-format")
+    execute_clang_extra_tool("clang-format")
 
 
 def clang_tidy_main() -> NoReturn:
-    """Entry point for clang-tidy wrapper."""
-    from ..execution.core import execute_tool
+    """Entry point for clang-tidy wrapper (from clang-extra distribution)."""
+    from ..execution.clang_extra import execute_clang_extra_tool
 
-    execute_tool("clang-tidy")
+    execute_clang_extra_tool("clang-tidy")
+
+
+def clang_query_main() -> NoReturn:
+    """Entry point for clang-query wrapper (from clang-extra distribution)."""
+    from ..execution.clang_extra import execute_clang_extra_tool
+
+    execute_clang_extra_tool("clang-query")
 
 
 # ============================================================================

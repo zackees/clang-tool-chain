@@ -414,6 +414,8 @@ def detect_required_dlls(exe_path: Path, platform_name: str = "win", arch: str =
         dependencies = deployer.detect_all_dependencies(exe_path, recursive=True)
         return sorted(dependencies)  # Sort for consistent ordering
 
+    except ImportError:
+        raise  # Installation is broken, don't silently degrade
     except Exception:
         return HEURISTIC_MINGW_DLLS.copy()
 
@@ -488,6 +490,37 @@ def find_dll_in_toolchain(dll_name: str, platform_name: str, arch: str) -> Path 
     return _find_dll_in_toolchain_impl(dll_name, arch)
 
 
+def _has_sanitizer_dependency(exe_path: Path) -> bool:
+    """Check if an executable imports any sanitizer runtime DLLs (e.g., libclang_rt.asan_dynamic)."""
+    if not exe_path.exists():
+        return False
+    try:
+        from ..platform.detection import get_platform_binary_dir
+
+        clang_bin_dir = get_platform_binary_dir()
+        objdump_path = clang_bin_dir / "llvm-objdump.exe"
+        if not objdump_path.exists():
+            return False
+
+        result = subprocess.run(
+            [str(objdump_path), "-p", str(exe_path)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+
+        dll_pattern = re.compile(r"DLL Name:\s+(\S+)", re.IGNORECASE)
+        sanitizer_patterns = [re.compile(p, re.IGNORECASE) for p in SANITIZER_DLL_PATTERNS]
+        for match in dll_pattern.finditer(result.stdout):
+            dll_name = match.group(1)
+            if any(sp.match(dll_name) for sp in sanitizer_patterns):
+                return True
+        return False
+    except Exception:
+        return False
+
+
 def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_abi: bool) -> None:
     """
     Deploy required MinGW runtime and sanitizer DLLs to the output binary directory after linking.
@@ -535,11 +568,6 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
         logger.debug(f"DLL deployment skipped: not Windows (platform={platform_name})")
         return
 
-    # Guard: only deploy for GNU ABI
-    if not use_gnu_abi:
-        logger.debug("DLL deployment skipped: not using GNU ABI")
-        return
-
     # Guard: only deploy for .exe and .dll files
     suffix = output_exe_path.suffix.lower()
     if suffix == ".dll":
@@ -553,6 +581,11 @@ def post_link_dll_deployment(output_exe_path: Path, platform_name: str, use_gnu_
     # Guard: check if executable exists
     if not output_exe_path.exists():
         logger.debug(f"DLL deployment skipped: executable not found: {output_exe_path}")
+        return
+
+    # Guard: only deploy for GNU ABI (unless exe has sanitizer dependencies)
+    if not use_gnu_abi and not _has_sanitizer_dependency(output_exe_path):
+        logger.debug("DLL deployment skipped: not using GNU ABI and no sanitizer dependencies")
         return
 
     try:

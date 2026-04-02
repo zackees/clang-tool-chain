@@ -64,10 +64,7 @@ def find_clang_extra_tool(tool_name: str) -> Path:
     bin_dir = get_clang_extra_binary_dir()
     platform_name, _ = get_platform_info()
 
-    if platform_name == "win":
-        tool_path = bin_dir / f"{tool_name}.exe"
-    else:
-        tool_path = bin_dir / tool_name
+    tool_path = bin_dir / f"{tool_name}.exe" if platform_name == "win" else bin_dir / tool_name
 
     if not tool_path.exists():
         available = [f.name for f in bin_dir.iterdir() if f.is_file()]

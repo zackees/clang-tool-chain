@@ -56,11 +56,11 @@ def _create_versioned_so_symlinks(lib_dir: Path, prefix: str = "libunwind") -> N
         if not m:
             continue
 
-        base = m.group(1)          # e.g. "libunwind.so" or "libunwind-x86_64.so"
-        major = m.group(2)         # e.g. "8"
+        base = m.group(1)  # e.g. "libunwind.so" or "libunwind-x86_64.so"
+        major = m.group(2)  # e.g. "8"
 
-        soname = f"{base}.{major}"          # libunwind.so.8
-        devlink = base                       # libunwind.so
+        soname = f"{base}.{major}"  # libunwind.so.8
+        devlink = base  # libunwind.so
 
         for link_name, link_target in [(soname, name), (devlink, soname)]:
             link_path = lib_dir / link_name
@@ -72,6 +72,7 @@ def _create_versioned_so_symlinks(lib_dir: Path, prefix: str = "libunwind") -> N
                 logger.info(f"Created libunwind symlink: {link_path} -> {link_target}")
             except OSError as exc:
                 logger.warning(f"Failed to create libunwind symlink {link_name}: {exc}")
+
 
 class ClangInstaller(BaseToolchainInstaller):
     """Installer for Clang/LLVM toolchain."""

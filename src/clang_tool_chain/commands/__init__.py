@@ -60,6 +60,7 @@ from clang_tool_chain.commands.entry_points import (
     clang_format_main,
     clang_main,
     clang_msvc_main,
+    clang_query_main,
     clang_tidy_main,
     cosmocc_main,
     cosmocpp_main,
@@ -116,6 +117,7 @@ __all__ = [
     "gendef_main",
     # Clang Tools
     "clang_format_main",
+    "clang_query_main",
     "clang_tidy_main",
     # Emscripten
     "emcc_main",

@@ -110,6 +110,24 @@ def get_iwyu_lock_path(platform: str, arch: str) -> Path:
 
 
 # ============================================================================
+# Clang Extra Paths
+# ============================================================================
+
+
+def get_clang_extra_install_dir(platform: str, arch: str) -> Path:
+    """Get the installation directory for clang-extra tools."""
+    toolchain_dir = get_home_toolchain_dir()
+    return toolchain_dir / "clang_extra" / platform / arch
+
+
+def get_clang_extra_lock_path(platform: str, arch: str) -> Path:
+    """Get the lock file path for clang-extra installation."""
+    toolchain_dir = get_home_toolchain_dir()
+    toolchain_dir.mkdir(parents=True, exist_ok=True)
+    return toolchain_dir / f"clang_extra-{platform}-{arch}.lock"
+
+
+# ============================================================================
 # Emscripten Paths
 # ============================================================================
 

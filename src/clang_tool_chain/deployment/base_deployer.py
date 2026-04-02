@@ -306,6 +306,10 @@ class BaseLibraryDeployer(ABC):
             return False
 
         # Deploy to output directory
+        if not output_dir.exists():
+            self.logger.warning(f"Output directory does not exist: {output_dir}")
+            return False
+
         dest_path = output_dir / lib_name
 
         try:

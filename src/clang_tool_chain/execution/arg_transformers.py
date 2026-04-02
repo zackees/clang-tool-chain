@@ -448,11 +448,11 @@ def _ensure_libunwind_dev_symlinks(lib_dir: Path) -> None:
         if not m:
             continue
 
-        base = m.group(1)    # e.g. "libunwind.so"
-        major = m.group(2)   # e.g. "8"
+        base = m.group(1)  # e.g. "libunwind.so"
+        major = m.group(2)  # e.g. "8"
 
-        soname = f"{base}.{major}"   # libunwind.so.8
-        devlink = base               # libunwind.so
+        soname = f"{base}.{major}"  # libunwind.so.8
+        devlink = base  # libunwind.so
 
         for link_name, link_target in [(soname, name), (devlink, soname)]:
             link_path = lib_dir / link_name

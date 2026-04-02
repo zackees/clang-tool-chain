@@ -34,12 +34,14 @@ from clang_tool_chain.archive import (
 # Re-exports from installer.py
 # ============================================================================
 from clang_tool_chain.installer import (
+    download_and_install_clang_extra,
     download_and_install_cosmocc,
     download_and_install_emscripten,
     download_and_install_iwyu,
     download_and_install_lldb,
     download_and_install_nodejs,
     download_and_install_toolchain,
+    ensure_clang_extra,
     ensure_cosmocc,
     ensure_emscripten_available,
     ensure_iwyu,
@@ -48,6 +50,7 @@ from clang_tool_chain.installer import (
     ensure_toolchain,
     ensure_valgrind,
     get_latest_version_info,
+    is_clang_extra_installed,
     is_cosmocc_installed,
     is_emscripten_installed,
     is_iwyu_installed,
@@ -62,6 +65,7 @@ from clang_tool_chain.installer import (
 # ============================================================================
 from clang_tool_chain.logging_config import configure_logging
 from clang_tool_chain.manifest import (
+    CLANG_EXTRA_MANIFEST_BASE_URL,
     EMSCRIPTEN_MANIFEST_BASE_URL,
     IWYU_MANIFEST_BASE_URL,
     LLDB_MANIFEST_BASE_URL,
@@ -76,6 +80,8 @@ from clang_tool_chain.manifest import (
     _fetch_json_raw,
     _parse_manifest,
     _parse_root_manifest,
+    fetch_clang_extra_platform_manifest,
+    fetch_clang_extra_root_manifest,
     fetch_emscripten_platform_manifest,
     fetch_emscripten_root_manifest,
     fetch_iwyu_platform_manifest,
@@ -94,6 +100,8 @@ from clang_tool_chain.manifest import (
 # Re-exports from path_utils.py
 # ============================================================================
 from clang_tool_chain.path_utils import (
+    get_clang_extra_install_dir,
+    get_clang_extra_lock_path,
     get_cosmocc_install_dir,
     get_cosmocc_lock_path,
     get_emscripten_install_dir,
@@ -204,4 +212,13 @@ __all__ = [
     "get_valgrind_lock_path",
     "fetch_valgrind_root_manifest",
     "fetch_valgrind_platform_manifest",
+    # Clang Extra
+    "CLANG_EXTRA_MANIFEST_BASE_URL",
+    "is_clang_extra_installed",
+    "download_and_install_clang_extra",
+    "ensure_clang_extra",
+    "get_clang_extra_install_dir",
+    "get_clang_extra_lock_path",
+    "fetch_clang_extra_root_manifest",
+    "fetch_clang_extra_platform_manifest",
 ]

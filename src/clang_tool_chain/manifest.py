@@ -27,6 +27,9 @@ EMSCRIPTEN_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-
 NODEJS_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/nodejs"
 COSMOCC_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/cosmocc"
 VALGRIND_MANIFEST_BASE_URL = "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/valgrind"
+CLANG_EXTRA_MANIFEST_BASE_URL = (
+    "https://raw.githubusercontent.com/zackees/clang-tool-chain-bins/main/assets/clang-extra"
+)
 
 # Generic type variable for JSON deserialization
 T = TypeVar("T")
@@ -668,3 +671,51 @@ def fetch_valgrind_platform_manifest(platform: str, arch: str) -> Manifest:
 
     logger.error(f"Valgrind platform {platform}/{arch} not found in manifest")
     raise RuntimeError(f"Valgrind platform {platform}/{arch} not found in manifest")
+
+
+# ============================================================================
+# Clang Extra Manifest Functions
+# ============================================================================
+
+
+def fetch_clang_extra_root_manifest() -> RootManifest:
+    """Fetch the clang-extra root manifest file."""
+    logger.info("Fetching clang-extra root manifest")
+    url = f"{CLANG_EXTRA_MANIFEST_BASE_URL}/manifest.json"
+    data = _fetch_json_raw(url)
+    manifest = _parse_root_manifest(data)
+    logger.info(f"clang-extra root manifest loaded with {len(manifest.platforms)} platforms")
+    return manifest
+
+
+def fetch_clang_extra_platform_manifest(platform: str, arch: str) -> Manifest:
+    """
+    Fetch the clang-extra platform-specific manifest file.
+
+    Args:
+        platform: Platform name (e.g., "win", "linux")
+        arch: Architecture name (e.g., "x86_64", "arm64")
+
+    Returns:
+        Platform manifest as a Manifest object
+
+    Raises:
+        RuntimeError: If platform/arch combination is not found
+    """
+    logger.info(f"Fetching clang-extra platform manifest for {platform}/{arch}")
+    root_manifest = fetch_clang_extra_root_manifest()
+
+    for plat_entry in root_manifest.platforms:
+        if plat_entry.platform == platform:
+            for arch_entry in plat_entry.architectures:
+                if arch_entry.arch == arch:
+                    manifest_path = arch_entry.manifest_path
+                    logger.info(f"Found clang-extra manifest path: {manifest_path}")
+                    url = f"{CLANG_EXTRA_MANIFEST_BASE_URL}/{manifest_path}"
+                    data = _fetch_json_raw(url)
+                    manifest = _parse_manifest(data)
+                    logger.info(f"clang-extra platform manifest loaded for {platform}/{arch}")
+                    return manifest
+
+    logger.error(f"clang-extra platform {platform}/{arch} not found in manifest")
+    raise RuntimeError(f"clang-extra platform {platform}/{arch} not found in manifest")

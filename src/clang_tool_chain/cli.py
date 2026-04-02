@@ -182,6 +182,7 @@ def cmd_list_tools(args: argparse.Namespace) -> int:
         ("clang-tool-chain-dis", "LLVM disassembler (llvm-dis)"),
         ("clang-tool-chain-format", "Code formatter (clang-format)"),
         ("clang-tool-chain-tidy", "Static analyzer (clang-tidy)"),
+        ("clang-tool-chain-clang-query", "AST query tool (clang-query)"),
     ]
 
     for cmd, desc in tools:
