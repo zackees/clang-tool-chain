@@ -142,9 +142,6 @@ dev = [
     "flake8>=7.0.0",
 ]
 
-[tool.uv.sources]
-clang-tool-chain-bins = { path = "../clang-tool-chain-bins", editable = true }
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/clang_tool_chain"]
 # Include assets directory (LLVM binaries) if it exists
