@@ -8,7 +8,11 @@ import re
 import unittest
 from pathlib import Path
 
-from clang_tool_chain.__version__ import __version__
+# Read version from source file directly to avoid stale system-level installs
+# (system site-packages may have an older version that shadows the venv)
+_VERSION_FILE = Path(__file__).parent.parent / "src" / "clang_tool_chain" / "__version__.py"
+_match = re.search(r'__version__\s*=\s*"([^"]+)"', _VERSION_FILE.read_text(encoding="utf-8"))
+__version__ = _match.group(1) if _match else "unknown"
 
 
 class TestVersionConsistency(unittest.TestCase):
