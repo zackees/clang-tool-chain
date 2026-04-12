@@ -29,9 +29,7 @@ classifiers = [
     "Topic :: Software Development :: Compilers",
 ]
 dependencies = [
-    "fasteners>=0.19.0",
-    "httpx>=0.27.0",
-    "pyzstd>=0.16.0",
+    "clang-tool-chain-bins>=0.3.0",
     "uv-iso-env>=1.0.0",
     "setenvironment>=1.1.0",
     "meson>=1.0.0",
@@ -130,6 +128,22 @@ clang-tool-chain-callgrind = "clang_tool_chain.wrapper:callgrind_main"
 clang-tool-chain-libdeploy = "clang_tool_chain.deployment.libdeploy:main"
 # Native Launcher Compilation
 clang-tool-chain-compile-native = "clang_tool_chain.commands.compile_native:compile_native_main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.8.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-xdist>=3.5.0",
+    "ruff>=0.3.0",
+    "pyright>=1.1.350",
+    "sccache>=0.7.0",
+    "flake8>=7.0.0",
+]
+
+[tool.uv.sources]
+clang-tool-chain-bins = { path = "../clang-tool-chain-bins", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clang_tool_chain"]
