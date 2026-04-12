@@ -50,6 +50,19 @@ dev = [
     "sccache>=0.7.0",
     "flake8>=7.0.0",
 ]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.8.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-xdist>=3.5.0",
+    "ruff>=0.3.0",
+    "pyright>=1.1.350",
+    "sccache>=0.7.0",
+    "flake8>=7.0.0",
+]
 sccache = [
     "sccache>=0.7.0",
 ]
