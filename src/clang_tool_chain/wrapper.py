@@ -100,6 +100,26 @@ from clang_tool_chain.commands import (
     wasm_ld_main,
 )
 
+# New zccache-shim entry points (Phase 4). Imported directly from
+# entry_points because commands/__init__.py has not been updated yet —
+# P6 will refresh the package __all__ alongside deprecation work.
+from clang_tool_chain.commands.entry_points import (
+    clang_cpp_new_main,
+    clang_new_main,
+    clang_tidy_new_main,
+    emcc_new_main,
+    empp_new_main,
+    iwyu_new_main,
+    wasm_ld_new_main,
+    zccache_clang_cpp_main,
+    zccache_clang_main,
+    zccache_clang_tidy_main,
+    zccache_emcc_main,
+    zccache_empp_main,
+    zccache_iwyu_main,
+    zccache_wasm_ld_main,
+)
+
 # ============================================================================
 # Build Utilities
 # ============================================================================
@@ -309,4 +329,19 @@ __all__ = [
     "get_valgrind_binary_dir",
     # Callgrind
     "callgrind_main",
+    # Zccache-shim entry points (Phase 4)
+    "clang_new_main",
+    "clang_cpp_new_main",
+    "zccache_clang_main",
+    "zccache_clang_cpp_main",
+    "emcc_new_main",
+    "empp_new_main",
+    "zccache_emcc_main",
+    "zccache_empp_main",
+    "wasm_ld_new_main",
+    "zccache_wasm_ld_main",
+    "clang_tidy_new_main",
+    "zccache_clang_tidy_main",
+    "iwyu_new_main",
+    "zccache_iwyu_main",
 ]

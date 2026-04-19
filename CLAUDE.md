@@ -118,6 +118,18 @@ Native C++ launchers live in `src/clang_tool_chain/native_tools/`. Every `.cpp` 
 
 Register new tools in `TOOL_REGISTRY` in `native_tools/__init__.py`. See `TODO_README.md` for the emcc launcher's flag reference.
 
+## Zccache-Based Dispatch (v1.4+)
+
+All clang-dispatching console scripts — `clang-tool-chain-clang`, `-clang++`, `-zccache-clang`, `-zccache-clang++`, and the equivalents for emcc/em++/wasm-ld/clang-tidy/iwyu — are thin Python shims (`src/clang_tool_chain/zccache_shim.py`) that subprocess into the `zccache` Rust binary shipped as a PyPI dependency (`zccache>=1.2.12`).
+
+- **Dispatch contract**: see [docs/ZCCACHE_INTEGRATION_CONTRACTS.md](docs/ZCCACHE_INTEGRATION_CONTRACTS.md) for `profile.json` schema + shim API + the full entry-point matrix.
+- **Profile bake**: `clang-tool-chain install clang` writes `~/.clang-tool-chain/{platform}/{arch}/profile.json` with resolved ABI flag sets, sysroot paths, linker flags, and sanitizer env. The shim reads this once per invocation — no per-dispatch subprocess calls to `xcrun`.
+- **Caching**: `-zccache-*` variants leave caching enabled (zccache daemon handles cache-miss links via `ZCCACHE_LINK_DEPLOY_CMD=clang-tool-chain-libdeploy`). Non-cached variants set `ZCCACHE_DISABLE=1` for direct passthrough.
+- **MSVC ABI**: override with `CTC_ABI=msvc` or `--ctc-abi=msvc` argv flag — no separate MSVC entry points.
+- **Deprecated forwarders**: `-c`, `-cpp`, `-c-msvc`, `-cpp-msvc`, `-sccache-*` print a one-line stderr notice and forward to the new equivalents. Removal scheduled for the next minor release.
+
+Import-footprint guard: `src/clang_tool_chain/__init__.py` uses PEP-562 `__getattr__` to keep heavy re-exports lazy. The shim module itself must not import `execution.*`, `arg_transformers`, `platform.detection`, or anything that transitively loads them.
+
 ## Development Commands
 
 ### Initial Setup
