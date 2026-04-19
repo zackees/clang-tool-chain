@@ -162,8 +162,20 @@ def exec_via_zccache(
     try:
         profile = load_profile()
     except ProfileMissingError:
-        sys.stderr.write("error: toolchain not installed. Run `clang-tool-chain install clang` first.\n")
-        sys.exit(1)
+        # Auto-install (matches legacy `clang-tool-chain-c` first-use behavior).
+        # Also regenerates profile.json on pre-v1.4 installs that pre-date the
+        # profile-bake installer hook.
+        if _auto_install_or_regenerate_profile():
+            try:
+                profile = load_profile()
+            except ProfileMissingError:
+                sys.stderr.write(
+                    "error: profile.json still missing after install; run `clang-tool-chain install clang` manually.\n"
+                )
+                sys.exit(1)
+        else:
+            sys.stderr.write("error: toolchain install failed. Run `clang-tool-chain install clang` manually.\n")
+            sys.exit(1)
 
     user_args = list(sys.argv[1:])
     user_args, abi_override = _consume_ctc_abi_flag(user_args)
@@ -429,6 +441,56 @@ def _inject_shared_libasan_if_needed(args: list[str]) -> list[str]:
             "to silence.\n"
         )
     return out
+
+
+def _auto_install_or_regenerate_profile() -> bool:
+    """Install the clang toolchain if missing, or regenerate profile.json
+    for a pre-v1.4 install that pre-dates the profile-bake installer hook.
+
+    Preserves the legacy first-use-auto-installs behavior of
+    ``clang-tool-chain-c``. Heavyweight imports live here (not in the hot
+    path) so they only fire on the rare fallback.
+
+    Returns ``True`` on success, ``False`` on failure.
+    """
+    try:
+        from clang_tool_chain.path_utils import get_install_dir
+        from clang_tool_chain.platform.detection import get_platform_info
+    except Exception as exc:  # noqa: BLE001
+        sys.stderr.write(f"error: unable to resolve install paths: {exc}\n")
+        return False
+
+    try:
+        platform_name, arch = get_platform_info()
+    except Exception as exc:  # noqa: BLE001
+        sys.stderr.write(f"error: unable to detect platform: {exc}\n")
+        return False
+
+    install_dir = get_install_dir(platform_name, arch)
+    done_path = install_dir / "done.txt"
+
+    if done_path.exists():
+        # Toolchain present; just bake profile.json (matches the installer hook
+        # that runs at the end of a fresh install).
+        try:
+            from clang_tool_chain.profile import generate_profile, write_profile
+
+            profile = generate_profile(install_dir, platform_name, arch)
+            write_profile(profile, install_dir)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            sys.stderr.write(f"error: failed to generate profile.json: {exc}\n")
+            return False
+
+    # Toolchain absent — full install. The installer hook will write profile.json.
+    try:
+        from clang_tool_chain import installer  # heavy import
+
+        installer.ensure_toolchain(platform_name, arch)
+    except Exception as exc:  # noqa: BLE001
+        sys.stderr.write(f"error: toolchain install failed: {exc}\n")
+        return False
+    return True
 
 
 def _consume_deploy_dependencies_flag(args: list[str]) -> tuple[list[str], bool]:
