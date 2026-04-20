@@ -7,7 +7,7 @@
 
 Target state: replace the custom `ctc-clang` native launcher and the legacy
 `execute_tool` Python pipeline with a thin Python shim that execs into
-`zccache` (PyPI package, Rust binary, `>=1.2.12`). Zero custom native code
+`zccache` (PyPI package, Rust binary, `>=1.3.0`). Zero custom native code
 in this repo.
 
 Read this doc alongside:

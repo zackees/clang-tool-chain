@@ -154,7 +154,7 @@ def exec_via_zccache(
     if zccache is None:
         sys.stderr.write(
             "error: `zccache` binary not found.\n"
-            "       Install it with: pip install 'zccache>=1.2.12'\n"
+            "       Install it with: pip install 'zccache>=1.3.0'\n"
             "       (installed alongside this package's venv, or anywhere on PATH).\n"
         )
         sys.exit(1)
