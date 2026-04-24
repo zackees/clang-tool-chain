@@ -277,8 +277,14 @@ class TestCLIMain(unittest.TestCase):
         self.assertTrue(re.search(r"\d+\.\d+\.\d+", output), "Should contain version number")
 
 
+@unittest.skip(
+    "sccache wrappers forward to zccache_shim as of v1.4. These tests mock "
+    "the legacy sccache execution path, which no longer runs. Covered by "
+    "tests/test_zccache_shim.py and tests/test_zccache_integration.py. Will "
+    "be deleted in Phase 7 along with cli.sccache_*_main."
+)
 class TestSccacheWrappers(unittest.TestCase):
-    """Test sccache wrapper commands."""
+    """Deprecated: test sccache wrapper commands (now zccache forwarders)."""
 
     @patch("sys.argv", ["clang-tool-chain-sccache", "--show-stats"])
     @patch("clang_tool_chain.sccache_runner.subprocess.run")

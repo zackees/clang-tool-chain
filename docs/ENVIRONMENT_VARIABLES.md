@@ -20,6 +20,7 @@ This document lists all environment variables recognized by clang-tool-chain for
 - [Toolchain Installation](#toolchain-installation)
 - [Download Configuration](#download-configuration)
 - [Debugging and Diagnostics](#debugging-and-diagnostics)
+- [Zccache Dispatch](#zccache-dispatch)
 
 ---
 
@@ -467,6 +468,27 @@ Some components have dedicated verbose flags (see [Library Deployment](#library-
 
 ---
 
+## Zccache Dispatch
+
+As of v1.4, the clang-dispatching console scripts are thin Python shims
+around the `zccache` Rust binary (from PyPI). The following env vars
+control shim and cache behavior:
+
+| Variable | Platforms | Type | Default | Description |
+|----------|-----------|------|---------|-------------|
+| `CTC_ABI` | Windows | String | `auto` | Override ABI selection: `gnu`, `msvc`, `auto` |
+| `CTC_SHIM_DEBUG` | All | Boolean | `0` | Trace argv construction to stderr |
+| `ZCCACHE_DISABLE` | All | Boolean | — | zccache passthrough (no caching). Set automatically by non-`-zccache-` entry points |
+| `ZCCACHE_DIR` | All | Path | — | Cache directory (see zccache docs) |
+| `ZCCACHE_LINK_DEPLOY_CMD` | All | Path | `clang-tool-chain-libdeploy` | Post-link deploy hook (set automatically) |
+
+Legacy `CLANG_TOOL_CHAIN_PY_TRAMPOLINE` was removed in v1.4 — the shim
+architecture no longer has a Python fallback path. If the zccache binary
+is unavailable the shim prints an actionable error pointing at
+`pip install zccache`.
+
+---
+
 ## Variable Summary Table
 
 ### All Environment Variables
@@ -487,6 +509,8 @@ Some components have dedicated verbose flags (see [Library Deployment](#library-
 | `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV` | All | Sanitizer | Boolean | `0` | Disable automatic ASAN/LSAN options injection |
 | `CLANG_TOOL_CHAIN_NO_DIRECTIVES` | All | Build | Boolean | `0` | Disable inlined directives |
 | `CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE` | All | Build | Boolean | `0` | Show parsed directives |
+| `CTC_ABI` | Windows | Zccache | String | `auto` | Override ABI (`gnu`, `msvc`, `auto`) |
+| `CTC_SHIM_DEBUG` | All | Zccache | Boolean | `0` | Trace zccache shim argv construction |
 | `CLANG_TOOL_CHAIN_HOME` | All | Install | Path | `~/.clang-tool-chain` | Toolchain installation directory |
 | `CLANG_TOOL_CHAIN_PARALLEL_CHUNKS` | All | Download | Integer | `8` | Parallel download chunks |
 | `CLANG_TOOL_CHAIN_CHUNK_SIZE` | All | Download | Integer | `8388608` | Download chunk size (bytes) |

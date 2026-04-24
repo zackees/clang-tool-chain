@@ -30,6 +30,7 @@ classifiers = [
 ]
 dependencies = [
     "clang-tool-chain-bins>=0.4.1",
+    "zccache>=1.3.0",
     "fasteners>=0.19.0",
     "httpx>=0.27.0",
     "pyzstd>=0.16.0",
@@ -144,6 +145,23 @@ clang-tool-chain-callgrind = "clang_tool_chain.wrapper:callgrind_main"
 clang-tool-chain-libdeploy = "clang_tool_chain.deployment.libdeploy:main"
 # Native Launcher Compilation
 clang-tool-chain-compile-native = "clang_tool_chain.commands.compile_native:compile_native_main"
+# ---------------------------------------------------------------------------
+# Zccache-shim console scripts (Phase 4)
+# New unified entry points that exec into zccache via zccache_shim. Legacy
+# scripts above (e.g. clang-tool-chain-c) remain in place; Phase 6 converts
+# them to deprecation forwarders.
+# ---------------------------------------------------------------------------
+clang-tool-chain-clang = "clang_tool_chain.commands.entry_points:clang_new_main"
+"clang-tool-chain-clang++" = "clang_tool_chain.commands.entry_points:clang_cpp_new_main"
+clang-tool-chain-zccache-clang = "clang_tool_chain.commands.entry_points:zccache_clang_main"
+"clang-tool-chain-zccache-clang++" = "clang_tool_chain.commands.entry_points:zccache_clang_cpp_main"
+"clang-tool-chain-em++" = "clang_tool_chain.commands.entry_points:empp_new_main"
+clang-tool-chain-zccache-emcc = "clang_tool_chain.commands.entry_points:zccache_emcc_main"
+"clang-tool-chain-zccache-em++" = "clang_tool_chain.commands.entry_points:zccache_empp_main"
+clang-tool-chain-zccache-wasm-ld = "clang_tool_chain.commands.entry_points:zccache_wasm_ld_main"
+clang-tool-chain-clang-tidy = "clang_tool_chain.commands.entry_points:clang_tidy_new_main"
+clang-tool-chain-zccache-clang-tidy = "clang_tool_chain.commands.entry_points:zccache_clang_tidy_main"
+clang-tool-chain-zccache-iwyu = "clang_tool_chain.commands.entry_points:zccache_iwyu_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clang_tool_chain"]

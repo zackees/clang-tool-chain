@@ -1,140 +1,64 @@
 """
 CLI entry point functions for clang-tool-chain commands.
 
-This module provides all the main() entry point functions that are registered
-as console scripts in pyproject.toml. These functions are thin wrappers that
-delegate to the execution modules.
+Legacy clang entry points (`clang-tool-chain-c`, `-cpp`, `-c-msvc`,
+`-cpp-msvc`) forward to the zccache shim and print a one-line stderr
+deprecation notice. They will be removed in Phase 7 of the zccache
+migration. New users should invoke `clang-tool-chain-clang`,
+`clang-tool-chain-clang++`, and the `CTC_ABI=msvc` env var instead.
 """
 
+import sys
 from typing import NoReturn
 
 # ============================================================================
-# Clang/Clang++ Entry Points
+# Deprecated legacy clang entry points (Phase 6 forwarders)
 # ============================================================================
+
+_DEPRECATION_WARNED: set[str] = set()
+
+
+def _warn_once(old: str, new: str) -> None:
+    if old in _DEPRECATION_WARNED:
+        return
+    _DEPRECATION_WARNED.add(old)
+    sys.stderr.write(f"clang-tool-chain: '{old}' is deprecated; use '{new}' instead. Forwarding.\n")
 
 
 def clang_main() -> NoReturn:
-    """
-    Entry point for clang wrapper (GNU ABI on Windows by default).
+    """Deprecated alias for `clang-tool-chain-clang`."""
+    _warn_once("clang-tool-chain-c", "clang-tool-chain-clang")
+    from ..zccache_shim import exec_via_zccache
 
-    Supports inlined build directives in source files:
-        // @link: pthread
-        // @std: c11
-        // @cflags: -O2 -Wall
-
-    Environment Variables:
-        CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
-        CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE: Set to '1' to show parsed directives
-    """
-    import sys
-
-    from ..execution.build import get_directive_args_from_compiler_args
-    from ..execution.core import execute_tool
-
-    # Get original arguments
-    args = sys.argv[1:]
-
-    # Parse directives from source files in arguments
-    directive_args = get_directive_args_from_compiler_args(args)
-
-    # Prepend directive args so they can be overridden by explicit flags
-    if directive_args:
-        args = directive_args + args
-
-    execute_tool("clang", args)
+    exec_via_zccache("clang", use_cache=False)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def clang_cpp_main() -> NoReturn:
-    """
-    Entry point for clang++ wrapper (GNU ABI on Windows by default).
+    """Deprecated alias for `clang-tool-chain-clang++`."""
+    _warn_once("clang-tool-chain-cpp", "clang-tool-chain-clang++")
+    from ..zccache_shim import exec_via_zccache
 
-    Supports inlined build directives in source files:
-        // @link: pthread
-        // @std: c++17
-        // @cflags: -O2 -Wall
-
-    Environment Variables:
-        CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
-        CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE: Set to '1' to show parsed directives
-    """
-    import sys
-
-    from ..execution.build import get_directive_args_from_compiler_args
-    from ..execution.core import execute_tool
-
-    # Get original arguments
-    args = sys.argv[1:]
-
-    # Parse directives from source files in arguments
-    directive_args = get_directive_args_from_compiler_args(args)
-
-    # Prepend directive args so they can be overridden by explicit flags
-    if directive_args:
-        args = directive_args + args
-
-    execute_tool("clang++", args)
+    exec_via_zccache("clang++", use_cache=False)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def clang_msvc_main() -> NoReturn:
-    """
-    Entry point for clang-tool-chain-c-msvc (MSVC ABI on Windows).
+    """Deprecated alias for `CTC_ABI=msvc clang-tool-chain-clang`."""
+    _warn_once("clang-tool-chain-c-msvc", "CTC_ABI=msvc clang-tool-chain-clang")
+    from ..zccache_shim import exec_via_zccache
 
-    Supports inlined build directives in source files:
-        // @link: pthread
-        // @std: c11
-        // @cflags: -O2 -Wall
-
-    Environment Variables:
-        CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
-        CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE: Set to '1' to show parsed directives
-    """
-    import sys
-
-    from ..execution.build import get_directive_args_from_compiler_args
-    from ..execution.core import execute_tool
-
-    # Get original arguments
-    args = sys.argv[1:]
-
-    # Parse directives from source files in arguments
-    directive_args = get_directive_args_from_compiler_args(args)
-
-    # Prepend directive args so they can be overridden by explicit flags
-    if directive_args:
-        args = directive_args + args
-
-    execute_tool("clang", args, use_msvc=True)
+    exec_via_zccache("clang", use_cache=False, abi="msvc")
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def clang_cpp_msvc_main() -> NoReturn:
-    """
-    Entry point for clang-tool-chain-cpp-msvc (MSVC ABI on Windows).
+    """Deprecated alias for `CTC_ABI=msvc clang-tool-chain-clang++`."""
+    _warn_once("clang-tool-chain-cpp-msvc", "CTC_ABI=msvc clang-tool-chain-clang++")
+    from ..zccache_shim import exec_via_zccache
 
-    Supports inlined build directives in source files:
-        // @link: pthread
-        // @std: c++17
-        // @cflags: -O2 -Wall
-
-    Environment Variables:
-        CLANG_TOOL_CHAIN_NO_DIRECTIVES: Set to '1' to disable directive parsing
-        CLANG_TOOL_CHAIN_DIRECTIVE_VERBOSE: Set to '1' to show parsed directives
-    """
-    import sys
-
-    from ..execution.build import get_directive_args_from_compiler_args
-    from ..execution.core import execute_tool
-
-    # Get original arguments
-    args = sys.argv[1:]
-
-    # Parse directives from source files in arguments
-    directive_args = get_directive_args_from_compiler_args(args)
-
-    # Prepend directive args so they can be overridden by explicit flags
-    if directive_args:
-        args = directive_args + args
-
-    execute_tool("clang++", args, use_msvc=True)
+    exec_via_zccache("clang++", use_cache=False, abi="msvc")
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 # ============================================================================
@@ -519,3 +443,124 @@ def valgrind_main() -> NoReturn | int:
     from ..execution.valgrind import execute_valgrind_tool
 
     return execute_valgrind_tool()
+
+
+# ============================================================================
+# Zccache Shim Entry Points (Phase 4 — new console scripts)
+# ============================================================================
+#
+# These entry points exec into `zccache` via `zccache_shim.exec_via_zccache`.
+# Imports of `..zccache_shim` are inside each function body so this module
+# remains importable before P3 lands the shim module.
+
+
+def clang_new_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-clang` — execs zccache-wrapped clang."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("clang", use_cache=False)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def clang_cpp_new_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-clang++` — execs zccache-wrapped clang++."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("clang++", use_cache=False)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def zccache_clang_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-zccache-clang` — execs clang with caching."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("clang", use_cache=True)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def zccache_clang_cpp_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-zccache-clang++` — execs clang++ with caching."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("clang++", use_cache=True)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def emcc_new_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-emcc` — execs zccache-wrapped emcc."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("emcc", use_cache=False)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def empp_new_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-em++` — execs zccache-wrapped em++."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("em++", use_cache=False)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def zccache_emcc_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-zccache-emcc` — execs emcc with caching."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("emcc", use_cache=True)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def zccache_empp_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-zccache-em++` — execs em++ with caching."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("em++", use_cache=True)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def wasm_ld_new_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-wasm-ld` — execs zccache-wrapped wasm-ld."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("wasm-ld", use_cache=False)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def zccache_wasm_ld_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-zccache-wasm-ld` — execs wasm-ld with caching."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("wasm-ld", use_cache=True)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def clang_tidy_new_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-clang-tidy` — execs zccache-wrapped clang-tidy."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("clang-tidy", use_cache=False)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def zccache_clang_tidy_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-zccache-clang-tidy` — execs clang-tidy with caching."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("clang-tidy", use_cache=True)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def iwyu_new_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-iwyu` — execs zccache-wrapped include-what-you-use."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("iwyu", use_cache=False)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def zccache_iwyu_main() -> NoReturn:
+    """Entry point for `clang-tool-chain-zccache-iwyu` — execs iwyu with caching."""
+    from ..zccache_shim import exec_via_zccache
+
+    exec_via_zccache("iwyu", use_cache=True)
+    raise AssertionError("unreachable")  # pragma: no cover

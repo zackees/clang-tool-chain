@@ -203,6 +203,14 @@ class ClangInstaller(BaseToolchainInstaller):
                 f"Installation completed successfully\nVersion: {latest_version}\nSHA256: {version_info.sha256}\n"
             )
 
+            # Install-time symlink self-heal (moved out of runtime transformers).
+            self._install_time_symlink_selfheal(install_dir, platform)
+
+            # Generate profile.json for the zccache shim. This MUST happen after
+            # done.txt so that readers of profile.json can trust the install is
+            # fully materialized on disk.
+            self._write_profile_json(install_dir, platform, arch)
+
             print("Clang/LLVM toolchain installation complete!", file=sys.stderr, flush=True)
 
         finally:
@@ -253,6 +261,52 @@ class ClangInstaller(BaseToolchainInstaller):
                     logger.warning(f"Failed to create ld64.lld symlink: {e}")
             elif ld64_lld_path.exists():
                 logger.info(f"ld64.lld already exists at {ld64_lld_path}")
+
+    def _install_time_symlink_selfheal(self, install_dir: Path, platform: str) -> None:
+        """
+        Install-time self-heal of symlinks that used to be created at dispatch time.
+
+        Mirrors the legacy runtime logic from ``linker/lld.py::_ensure_ld64_lld_symlink``
+        and ``execution/arg_transformers.py::LinuxUnwindTransformer``. Run once per
+        install. Failures are logged at warning level but do not fail the install
+        (the zccache shim tolerates missing symlinks the same way the legacy path
+        did).
+        """
+        try:
+            if platform == "darwin":
+                bin_dir = install_dir / "bin"
+                lld_path = bin_dir / "lld"
+                ld64_lld_path = bin_dir / "ld64.lld"
+                if lld_path.exists() and not ld64_lld_path.exists():
+                    try:
+                        os.symlink("lld", ld64_lld_path)
+                        logger.info(f"Created ld64.lld symlink at {ld64_lld_path}")
+                    except OSError as e:
+                        logger.warning(f"Failed to create ld64.lld symlink: {e}")
+            elif platform == "linux":
+                self._create_libunwind_symlinks(install_dir / "lib")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
+        except Exception as e:
+            logger.warning(f"Install-time symlink self-heal failed (non-fatal): {e}")
+
+    def _write_profile_json(self, install_dir: Path, platform: str, arch: str) -> None:
+        """
+        Generate and write ``profile.json`` for the zccache shim.
+
+        Failures are non-fatal: the shim will surface a clear ``ProfileMissingError``
+        telling the user to reinstall if the file is absent.
+        """
+        try:
+            from ..profile import generate_profile, write_profile
+
+            profile = generate_profile(install_dir, platform, arch)
+            write_profile(profile, install_dir)
+            logger.info(f"Wrote profile.json for {platform}/{arch} at {install_dir}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
+        except Exception as e:
+            logger.warning(f"Failed to write profile.json (non-fatal): {e}")
 
     def _create_libunwind_symlinks(self, lib_dir: Path) -> None:
         """

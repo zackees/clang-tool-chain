@@ -222,6 +222,15 @@ static std::string get_home_dir() {
 #endif
 }
 
+// Resolves the base clang-tool-chain directory. Mirrors Python's
+// path_utils.get_home_toolchain_dir — honors CLANG_TOOL_CHAIN_DOWNLOAD_PATH
+// (the var Python actually reads) and falls back to ~/.clang-tool-chain.
+static std::string get_ctc_home_dir() {
+    const char* override_path = getenv("CLANG_TOOL_CHAIN_DOWNLOAD_PATH");
+    if (override_path && override_path[0]) return override_path;
+    return path_join(get_home_dir(), ".clang-tool-chain");
+}
+
 static std::string get_exe_basename(const std::string& path) {
     size_t pos = path.find_last_of("/\\");
     std::string name = (pos == std::string::npos) ? path : path.substr(pos + 1);
@@ -787,9 +796,11 @@ static ParsedArgs parse_user_args(int argc, char* argv[]) {
             }
         }
 
-        // Output path
+        // Output path: accept both `-o foo.exe` (two-token) and `-ofoo.exe` (concatenated).
         if (arg == "-o" && i + 1 < argc) {
             p.output_path = argv[i + 1];
+        } else if (arg.size() > 2 && arg[0] == '-' && arg[1] == 'o') {
+            p.output_path = arg.substr(2);
         }
 
         // Source files
@@ -1932,10 +1943,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // 2. Resolve install directory
-    std::string home = get_home_dir();
-    std::string install_dir = path_join(home, ".clang-tool-chain");
-    install_dir = path_join(install_dir, "clang");
+    // 2. Resolve install directory (honors CLANG_TOOL_CHAIN_DOWNLOAD_PATH)
+    std::string install_dir = path_join(get_ctc_home_dir(), "clang");
     install_dir = path_join(install_dir, platform_str(platform));
     install_dir = path_join(install_dir, arch_str(arch));
     std::string cache_path = path_join(install_dir, CTC_CACHE_FILENAME);
@@ -2079,8 +2088,27 @@ int main(int argc, char* argv[]) {
 
     if (needs_post_link) {
         int rc = create_process_and_wait(cmd);
-        if (rc == 0 && parsed.deploy_dependencies) {
-            deploy_dlls(cache, parsed.output_path, parsed.has_fsanitize_address);
+        if (rc == 0) {
+            // Auto-deploy MinGW DLLs for GNU ABI .exe/.dll outputs (matches
+            // Python post_link_dll_deployment). MSVC builds don't auto-deploy
+            // their runtime (users are expected to have the MSVC redistributable),
+            // but sanitizer DLLs still get deployed when -fsanitize=address is used.
+            std::string lower_target = to_lower(parsed.target_value);
+            bool is_gnu_abi = !parsed.has_msvc_linker_flags &&
+                              (!parsed.user_specified_target ||
+                               lower_target.find("-gnu") != std::string::npos ||
+                               lower_target.find("mingw") != std::string::npos);
+            bool is_shared_lib_out = get_extension(parsed.output_path) == ".dll";
+            bool shared_lib_deploy_disabled =
+                is_shared_lib_out && is_feature_disabled("DEPLOY_SHARED_LIB");
+
+            bool should_deploy = !shared_lib_deploy_disabled &&
+                                 (is_gnu_abi ||
+                                  parsed.deploy_dependencies ||
+                                  parsed.has_fsanitize_address);
+            if (should_deploy) {
+                deploy_dlls(cache, parsed.output_path, parsed.has_fsanitize_address);
+            }
         }
         if (rc != 0) {
             check_toolchain_integrity(cache, cache_path);

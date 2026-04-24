@@ -1366,44 +1366,52 @@ def sccache_main() -> int:
     return sccache_runner.run_sccache(args)
 
 
-def sccache_c_main() -> NoReturn:
-    """
-    Entry point for sccache + clang C compiler wrapper.
+_SCCACHE_DEPRECATION_WARNED: set[str] = set()
 
-    This command wraps the clang C compiler with sccache for compilation caching.
-    Delegates to core.py for unified argument transformation and DLL deployment.
-    """
-    wrapper.sccache_clang_main(use_msvc=False)
+
+def _warn_sccache_deprecated(old: str, new: str) -> None:
+    if old in _SCCACHE_DEPRECATION_WARNED:
+        return
+    _SCCACHE_DEPRECATION_WARNED.add(old)
+    sys.stderr.write(
+        f"clang-tool-chain: '{old}' is deprecated (sccache → zccache migration); use '{new}' instead. Forwarding.\n"
+    )
+
+
+def sccache_c_main() -> NoReturn:
+    """Deprecated alias for `clang-tool-chain-zccache-clang`."""
+    _warn_sccache_deprecated("clang-tool-chain-sccache-c", "clang-tool-chain-zccache-clang")
+    from .zccache_shim import exec_via_zccache
+
+    exec_via_zccache("clang", use_cache=True)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def sccache_cpp_main() -> NoReturn:
-    """
-    Entry point for sccache + clang++ C++ compiler wrapper.
+    """Deprecated alias for `clang-tool-chain-zccache-clang++`."""
+    _warn_sccache_deprecated("clang-tool-chain-sccache-cpp", "clang-tool-chain-zccache-clang++")
+    from .zccache_shim import exec_via_zccache
 
-    This command wraps the clang++ C++ compiler with sccache for compilation caching.
-    Delegates to core.py for unified argument transformation and DLL deployment.
-    """
-    wrapper.sccache_clang_cpp_main(use_msvc=False)
+    exec_via_zccache("clang++", use_cache=True)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def sccache_c_msvc_main() -> NoReturn:
-    """
-    Entry point for sccache + clang C compiler wrapper with MSVC ABI.
+    """Deprecated alias for `CTC_ABI=msvc clang-tool-chain-zccache-clang`."""
+    _warn_sccache_deprecated("clang-tool-chain-sccache-c-msvc", "CTC_ABI=msvc clang-tool-chain-zccache-clang")
+    from .zccache_shim import exec_via_zccache
 
-    This command wraps the clang C compiler with sccache for compilation caching,
-    using MSVC ABI target on Windows.
-    """
-    wrapper.sccache_clang_main(use_msvc=True)
+    exec_via_zccache("clang", use_cache=True, abi="msvc")
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def sccache_cpp_msvc_main() -> NoReturn:
-    """
-    Entry point for sccache + clang++ C++ compiler wrapper with MSVC ABI.
+    """Deprecated alias for `CTC_ABI=msvc clang-tool-chain-zccache-clang++`."""
+    _warn_sccache_deprecated("clang-tool-chain-sccache-cpp-msvc", "CTC_ABI=msvc clang-tool-chain-zccache-clang++")
+    from .zccache_shim import exec_via_zccache
 
-    This command wraps the clang++ C++ compiler with sccache for compilation caching,
-    using MSVC ABI target on Windows.
-    """
-    wrapper.sccache_clang_cpp_main(use_msvc=True)
+    exec_via_zccache("clang++", use_cache=True, abi="msvc")
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 if __name__ == "__main__":
