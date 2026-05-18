@@ -36,4 +36,9 @@ TOOL_REGISTRY: dict[str, NativeTool] = {
         source="launcher_wasmld.cpp",
         output="ctc-wasm-ld",
     ),
+    "emtool": NativeTool(
+        source="launcher_emtool.cpp",
+        output="ctc-emar",
+        aliases=["ctc-emranlib", "ctc-emnm", "ctc-emstrip"],
+    ),
 }
