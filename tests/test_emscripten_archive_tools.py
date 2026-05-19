@@ -6,7 +6,7 @@ Verifies:
   - All eight entry-point names install and import.
   - Each runs `--version` end-to-end (proves dispatch into the bundled
     emscripten Python tools works, including the `tools/` fallback for emnm).
-  - The lightweight ``execute_emscripten_archive_tool`` helper rejects
+  - The lightweight ``execute_emscripten_py_tool`` helper rejects
     non-archive tool names.
 """
 
@@ -17,8 +17,49 @@ import subprocess
 
 import pytest
 
-_ARCHIVE_TOOL_NAMES = ("emar", "emstrip", "emranlib", "emnm")
-_ALL_ENTRY_POINTS = tuple(f"{prefix}{name}" for prefix in ("clang-tool-chain-", "ctc-") for name in _ARCHIVE_TOOL_NAMES)
+# Tools that respond to --version with rc=0 — used in a broader smoke test
+# to cover the Binaryen + wasm-heavy entry points added in 1.5.0.
+_VERSION_FRIENDLY_TOOLS = (
+    "emar",
+    "emstrip",
+    "emranlib",
+    "emnm",
+    "emcc",
+    "wasm-ld",
+    "wasm-opt",
+    "wasm-as",
+    "wasm-dis",
+    "wasm-emscripten-finalize",
+    "wasm-merge",
+    "wasm-metadce",
+    "wasm-ctor-eval",
+)
+_VERSION_ENTRY_POINTS = tuple(
+    f"{prefix}{name}" for prefix in ("clang-tool-chain-", "ctc-") for name in _VERSION_FRIENDLY_TOOLS
+)
+
+# Tools whose dispatch we verify just by checking the entry point is installed.
+# These tools either don't accept --version (emcmake / emsize / em-config print
+# usage and exit non-zero) or are interactive (wasm-shell), so we don't run them.
+_INSTALL_ONLY_TOOLS = (
+    "emcmake",
+    "emmake",
+    "emconfigure",
+    "emscons",
+    "embuilder",
+    "em-config",
+    "emsize",
+    "emrun",
+    "emscan-deps",
+    "emsymbolizer",
+    "emdwp",
+    "emcoverage",
+    "emprofile",
+    "wasm-shell",
+)
+_INSTALL_ONLY_ENTRY_POINTS = tuple(
+    f"{prefix}{name}" for prefix in ("clang-tool-chain-", "ctc-") for name in _INSTALL_ONLY_TOOLS
+)
 
 
 def _is_emscripten_available() -> bool:
@@ -64,22 +105,22 @@ def test_all_main_functions_importable() -> None:
 
 def test_archive_tool_helper_rejects_non_archive_tools() -> None:
     """Sanity-check the narrow input contract on the lightweight helper."""
-    from clang_tool_chain.execution.emscripten import execute_emscripten_archive_tool
+    from clang_tool_chain.execution.emscripten import execute_emscripten_py_tool
 
     with pytest.raises(ValueError, match="emar"):
-        execute_emscripten_archive_tool("emcc")
+        execute_emscripten_py_tool("emcc")
 
 
 @pytest.mark.serial
 @pytest.mark.skipif(not _is_emscripten_available(), reason="Emscripten binaries not available for this platform")
-@pytest.mark.parametrize("entry_point", _ALL_ENTRY_POINTS)
-def test_entry_point_dispatches_to_emscripten(entry_point: str) -> None:
-    """Each installed console script must dispatch into the bundled tool.
+@pytest.mark.parametrize("entry_point", _VERSION_ENTRY_POINTS)
+def test_version_friendly_entry_point_dispatches(entry_point: str) -> None:
+    """Every console script that supports ``--version`` must dispatch and exit 0.
 
-    We invoke ``--version`` which is supported by every underlying llvm-*
-    tool and exits 0. This proves both that the entry point is registered
-    AND that find_emscripten_tool can resolve the .py script (including the
-    tools/ subdir fallback added for emnm).
+    Covers the four archive tools (emar/emstrip/emranlib/emnm), the heavy WASM
+    compilers/linker (emcc/wasm-ld), and the Binaryen native binaries
+    (wasm-opt, wasm-as, wasm-dis, etc.). Both ``clang-tool-chain-*`` and
+    ``ctc-*`` short-form aliases are exercised.
     """
     binary = shutil.which(entry_point)
     assert binary is not None, f"{entry_point} not installed (re-run uv pip install -e .)"
@@ -88,6 +129,16 @@ def test_entry_point_dispatches_to_emscripten(entry_point: str) -> None:
     assert result.returncode == 0, (
         f"{entry_point} --version failed (rc={result.returncode})\nstdout: {result.stdout!r}\nstderr: {result.stderr!r}"
     )
-    # All llvm-* tools print their own name in the version banner; loose check
-    # rather than asserting a specific banner string (varies across LLVM versions).
-    assert "LLVM" in result.stdout or "llvm" in result.stdout.lower(), result.stdout
+
+
+@pytest.mark.parametrize("entry_point", _INSTALL_ONLY_ENTRY_POINTS)
+def test_install_only_entry_point_installed(entry_point: str) -> None:
+    """Tools that don't honour ``--version`` still need to be registered as scripts.
+
+    pyproject.toml ``[project.scripts]`` declares them; ``uv pip install -e .``
+    materialises them in the venv. This guards against typos in the script
+    map (e.g. a stale entry-point pointing at a renamed function).
+    """
+    assert shutil.which(entry_point), (
+        f"{entry_point} not installed — likely a stale [project.scripts] entry or a missing _main function."
+    )
