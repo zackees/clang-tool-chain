@@ -178,7 +178,7 @@ wheels = [
 
 [[package]]
 name = "clang-tool-chain"
-version = "1.5.5"
+version = "1.5.7"
 source = { editable = "." }
 dependencies = [
     { name = "clang-tool-chain-bins" },
@@ -222,7 +222,7 @@ sccache = [
 
 [package.metadata]
 requires-dist = [
-    { name = "clang-tool-chain-bins", specifier = ">=0.4.1" },
+    { name = "clang-tool-chain-bins", specifier = ">=0.4.3" },
     { name = "fasteners", specifier = ">=0.19.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "httpx", specifier = ">=0.27.0" },
@@ -258,7 +258,7 @@ sccache = [{ name = "sccache", specifier = ">=0.7.0" }]
 
 [[package]]
 name = "clang-tool-chain-bins"
-version = "0.4.1"
+version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fasteners" },
@@ -266,13 +266,16 @@ dependencies = [
     { name = "pyzstd" },
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/e7/dd6b109aaf79a2d10ae556354f7dad879b8b8ba4f2b56d998114ed151555/clang_tool_chain_bins-0.4.1.tar.gz", hash = "sha256:b0ed5f955047ec46fe1608e75570377372da564c2c37a3b0ffd70721035004cc", size = 53199, upload-time = "2026-04-12T10:37:10.68Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a8/42/8bf0d2666bbc35d322197de8064e9f883a7f49097c6d1a3b4e2bbb583427/clang_tool_chain_bins-0.4.3.tar.gz", hash = "sha256:1322d4b0af44aff9b00bf02702a06d3fcb5a836c452e1ef8d26d4361038a161c", size = 109959, upload-time = "2026-05-19T15:34:02.39Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8f/1d/a1a4c82ca3b0c8f0c56b63965877bd3bdb4ec358e0c67a040a96b72c9864/clang_tool_chain_bins-0.4.1-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:b127afe5dd787b2eba219fe1b45ee2e9915340fb2d50e23da7a7b33aa26eba07", size = 765566, upload-time = "2026-04-12T10:37:00.851Z" },
-    { url = "https://files.pythonhosted.org/packages/3e/5f/c20fa85a00d89900bde113832321f8de316aa0714d3fe84dd988311f02f7/clang_tool_chain_bins-0.4.1-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:d37803e26a7a72aa7a023fbc72b7fc7b2dcfcfda886631bae6251ba446377a62", size = 676835, upload-time = "2026-04-12T10:37:02.944Z" },
-    { url = "https://files.pythonhosted.org/packages/73/2f/1d29716de2e2769133984dfacef92604ce9549579890a5f88bf2ea538812/clang_tool_chain_bins-0.4.1-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:68ac3580d4d5f3cda23fb19d85717f6089c5b84e19eb7c1f31c83edd3b45d126", size = 645322, upload-time = "2026-04-12T10:37:05.071Z" },
-    { url = "https://files.pythonhosted.org/packages/a9/70/45530959322a625946e1bff264a0dd4843c9d6c15c52327707703bae798e/clang_tool_chain_bins-0.4.1-cp310-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:75fd6fe04562f6324175b4b3f3b3c797305b9035b678a2cbea8cc1bbbfa9236d", size = 901130, upload-time = "2026-04-12T10:37:07.291Z" },
-    { url = "https://files.pythonhosted.org/packages/dd/a2/50cb84207ec5d239fe7a51c4d3d13b5b2f15525e59845c6edcf3193047c6/clang_tool_chain_bins-0.4.1-cp310-abi3-win_amd64.whl", hash = "sha256:e3892b124162a3d979ffbd1d12df5c6b59d8f6d97275d9ad2e13290851e453da", size = 538255, upload-time = "2026-04-12T10:37:09.059Z" },
+    { url = "https://files.pythonhosted.org/packages/c2/44/a4de5b7fbaca26543f5086322f1585ccfbc33c62f6e6eae13cc16cd7786d/clang_tool_chain_bins-0.4.3-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:7ea02418d51a019199948afdba5e6f9b924271129f1d221d53d54e25c067b8fa", size = 819636, upload-time = "2026-05-19T15:33:47.216Z" },
+    { url = "https://files.pythonhosted.org/packages/97/14/f11cab8a9275bf49a03c2349e8580af4ed77eaa7214d191eb0b394cb217e/clang_tool_chain_bins-0.4.3-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:1476411bdd79bdc3819a00328901062430911a25ec453de0cc987da9a3ac7231", size = 733704, upload-time = "2026-05-19T15:33:49.143Z" },
+    { url = "https://files.pythonhosted.org/packages/82/7e/3a3433764891db659a7ecd99f89e69230d9f9e91ab6b353c33a2a4eea04d/clang_tool_chain_bins-0.4.3-cp310-abi3-manylinux_2_34_aarch64.whl", hash = "sha256:e2bb54b8f85a69da633a743a0516ebb43bf813bcb5c05b341e6530148bd37150", size = 910580, upload-time = "2026-05-19T15:33:51.465Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/70/f0f988358359a3c2133551b42fdb1ffbb5e698e8cabb0afc2c69d5c77e0a/clang_tool_chain_bins-0.4.3-cp310-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:f696984c98707c03f59401c0e86212755c1c8a5a34bfb53dc9f6cdfb5ea0fb8e", size = 956255, upload-time = "2026-05-19T15:33:53.19Z" },
+    { url = "https://files.pythonhosted.org/packages/f3/97/f41749aba6932a0458707f94d6558953a560496bf3bd725e05e6eac962e4/clang_tool_chain_bins-0.4.3-cp310-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:5f27e335771f97839d627bde798c737396a3c298385de471a709a03cff1b3761", size = 1190916, upload-time = "2026-05-19T15:33:55.347Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/b3/580984a5e0c333c9d6a7e191a4b3d06cdbcb515ae9b6624e119587902afc/clang_tool_chain_bins-0.4.3-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:3eb869ee8ac0d800348030f8795ea84b9ade5ffd3fe495ec35d37bc4519f95bb", size = 1032826, upload-time = "2026-05-19T15:33:57.277Z" },
+    { url = "https://files.pythonhosted.org/packages/26/5a/95ab270780ff92f0c63282626c105db3b73924d6fa9cc8365f884197a335/clang_tool_chain_bins-0.4.3-cp310-abi3-win_amd64.whl", hash = "sha256:a92f644b04e892e0e07e95e4768b30094c4a3fa272861cbcab4a07c3926d85f8", size = 597522, upload-time = "2026-05-19T15:33:58.953Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/59/dcc02778ba103239cbe1f7df8f3eeba75f9d71de50f832fb276c0dcc966d/clang_tool_chain_bins-0.4.3-cp310-abi3-win_arm64.whl", hash = "sha256:011e709bcbf503ea20a88626ffc7bc6034cd014a0cd7e04b9c56b98ffc32e108", size = 565928, upload-time = "2026-05-19T15:34:00.878Z" },
 ]
 
 [[package]]
