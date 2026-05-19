@@ -43,9 +43,11 @@ This is a Python package that distributes pre-built Clang/LLVM binaries for Wind
 |-----------|---------|-----------|---------|
 | Clang/LLVM | 21.1.5 (Linux/Win), 21.1.6 (macOS) | All 5 | [docs/CLANG_LLVM.md](docs/CLANG_LLVM.md) |
 | Emscripten | 4.0.19 (Mac/Win), 4.0.21 (Linux) | All 5 | [docs/EMSCRIPTEN.md](docs/EMSCRIPTEN.md) |
-| LLDB | 21.1.5-6 | Win/Linux (pending builds) | [docs/LLDB.md](docs/LLDB.md) |
+| LLDB | 21.1.5-6 (macOS x86_64: 19.1.7\*) | Win/Linux (pending builds) | [docs/LLDB.md](docs/LLDB.md) |
 | Cosmopolitan | 4.0.2 | All 5 | [docs/COSMOCC.md](docs/COSMOCC.md) |
 | Valgrind | 3.24.0 | Linux x64/ARM64 (via Docker) | [docs/VALGRIND.md](docs/VALGRIND.md) |
+
+\* Upstream LLVM stopped publishing macOS x86_64 prebuilts after 19.x, so darwin/x86_64 stays on LLDB 19.1.7 while everything else tracks 21.x.
 
 **Linker:** Uses `ld64.lld` on macOS, `ld.lld` on Linux/Windows. Opt-out: `CLANG_TOOL_CHAIN_USE_SYSTEM_LD=1`. GNU-style flags auto-translated on macOS and Windows. See [docs/LINKER_FLAG_TRANSLATION.md](docs/LINKER_FLAG_TRANSLATION.md) for details.
 

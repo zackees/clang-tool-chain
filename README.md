@@ -388,8 +388,10 @@ clang-tool-chain-iwyu-tool -p build/
 | Windows  | x86_64       | 21.1.5       | ⏳ Pending  | ✅ Basic | Archive rebuild needed for Python support |
 | Linux    | x86_64       | 21.1.5       | ✅ Ready    | ✅ Full | Wrapper complete, archives pending |
 | Linux    | ARM64        | 21.1.5       | ✅ Ready    | ✅ Full | Wrapper complete, archives pending |
-| macOS    | x86_64       | 21.1.6       | ⏳ Planned  | ✅ Basic | Python integration planned |
+| macOS    | x86_64       | 19.1.7\*     | ⏳ Planned  | ✅ Basic | Python integration planned |
 | macOS    | ARM64        | 21.1.6       | ⏳ Planned  | ✅ Basic | Python integration planned |
+
+\* macOS x86_64 ships LLDB **19.1.7** because upstream LLVM stopped publishing macOS x86_64 prebuilts after 19.x. All other platforms track LLDB 21.x.
 
 **Python 3.10 Features:** Full backtraces (`bt all`), Python scripting, advanced variable inspection, LLDB Python API
 
