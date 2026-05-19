@@ -52,6 +52,12 @@ ALL_CLANG_TOOLS = (
     # LLDB (separate install root)
     "lldb",
     "lldb-server",
+    # IWYU (separate install root); alias differs from binary name
+    # (ctc-iwyu -> include-what-you-use{ext})
+    "iwyu",
+    # clang-format / clang-tidy (clang_extra install root)
+    "clang-format",
+    "clang-tidy",
 )
 
 # Tools that print a banner on --version and exit 0. The lld variants
@@ -72,6 +78,10 @@ VERSION_FRIENDLY = (
     "llvm-symbolizer",
     "clang-query",
     "lld-link",
+    # IWYU + clang-format + clang-tidy all support --version (added 1.5.4).
+    "iwyu",
+    "clang-format",
+    "clang-tidy",
 )
 
 

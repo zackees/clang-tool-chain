@@ -70,6 +70,13 @@ TOOL_REGISTRY: dict[str, NativeTool] = {
             # LLDB (separate install root)
             "ctc-lldb",
             "ctc-lldb-server",
+            # IWYU (separate install root); ctc-iwyu dispatches to
+            # include-what-you-use{ext} via the alias→binary override
+            # in launcher_clang_tool.cpp.
+            "ctc-iwyu",
+            # clang-format / clang-tidy (clang_extra install root)
+            "ctc-clang-format",
+            "ctc-clang-tidy",
         ],
     ),
     # One C++ source -> one binary -> 17 hardlinks/copies. argv[0] dispatch
