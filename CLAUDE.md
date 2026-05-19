@@ -24,6 +24,11 @@ When the repository owner requests a version bump, update these files **in order
 
 3. **`uv.lock`** - Auto-generated; run `uv sync` or `uv pip install -e .` to update
 
+**`src/clang_tool_chain/__init__.py`** is NOT in this list — it imports
+``__version__`` from ``__version__.py`` so the value tracks automatically.
+``tests/test_version.py`` includes a regression guard (added in #34) that
+fails the build if a hardcoded ``__version__ = "..."`` re-appears there.
+
 **Verification:** Run `uv run pytest tests/test_version.py -v` to ensure versions are consistent.
 
 ## Project Overview

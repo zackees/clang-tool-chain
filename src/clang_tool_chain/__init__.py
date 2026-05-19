@@ -1,6 +1,11 @@
 from typing import TYPE_CHECKING
 
-__version__ = "1.1.10"
+# Import from the dedicated __version__.py module — the single source of
+# truth that's bumped in lockstep with pyproject.toml. Previously this was
+# a hardcoded string that drifted (last bumped at 1.1.10; closes #34).
+# Sibling-module import is essentially free at startup (~10 µs); the
+# native-trampoline import-footprint guard documented below is preserved.
+from clang_tool_chain.__version__ import __version__ as __version__
 
 # Public API is resolved lazily via module-level __getattr__ (PEP 562) so the
 # native-trampoline hot path (clang-tool-chain-c / -cpp) doesn't pay ~300 ms of
