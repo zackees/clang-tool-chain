@@ -120,7 +120,7 @@ Register new tools in `TOOL_REGISTRY` in `native_tools/__init__.py`. See `TODO_R
 
 ## Zccache-Based Dispatch (v1.4+)
 
-All clang-dispatching console scripts — `clang-tool-chain-clang`, `-clang++`, `-zccache-clang`, `-zccache-clang++`, and the equivalents for emcc/em++/wasm-ld/clang-tidy/iwyu — are thin Python shims (`src/clang_tool_chain/zccache_shim.py`) that subprocess into the `zccache` Rust binary shipped as a PyPI dependency (`zccache>=1.3.0`).
+All clang-dispatching console scripts — `clang-tool-chain-clang`, `-clang-cpp`, `-zccache-clang`, `-zccache-clang-cpp`, and the equivalents for emcc/em-cpp/wasm-ld/clang-tidy/iwyu — are thin Python shims (`src/clang_tool_chain/zccache_shim.py`) that subprocess into the `zccache` Rust binary shipped as a PyPI dependency (`zccache>=1.3.0`). Note: PyPI rejects `+` in entry point names (PEP 685), so the C++ variants use `-cpp` instead of `++`.
 
 - **Dispatch contract**: see [docs/ZCCACHE_INTEGRATION_CONTRACTS.md](docs/ZCCACHE_INTEGRATION_CONTRACTS.md) for `profile.json` schema + shim API + the full entry-point matrix.
 - **Profile bake**: `clang-tool-chain install clang` writes `~/.clang-tool-chain/{platform}/{arch}/profile.json` with resolved ABI flag sets, sysroot paths, linker flags, and sanitizer env. The shim reads this once per invocation — no per-dispatch subprocess calls to `xcrun`.

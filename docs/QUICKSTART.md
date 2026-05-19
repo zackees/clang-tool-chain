@@ -234,7 +234,7 @@ When you `pip install clang-tool-chain`, you get **41 wrapper commands** that au
 - `clang-tool-chain-c`, `clang-tool-chain-cpp` - Basic compilation
 - `clang-tool-chain-c-msvc`, `clang-tool-chain-cpp-msvc` - Windows MSVC ABI
 - `clang-tool-chain-sccache-c`, `clang-tool-chain-sccache-cpp` - With caching
-- `clang-tool-chain-ld`, `clang-tool-chain-clang++` - Direct tool access
+- `clang-tool-chain-ld`, `clang-tool-chain-clang-cpp` - Direct tool access
 - And more...
 
 **Build Utilities (3 commands):**

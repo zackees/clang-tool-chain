@@ -180,13 +180,13 @@ def zccache_clang_main() -> NoReturn:
 | Console script                          | `tool`       | `use_cache` |
 |-----------------------------------------|--------------|-------------|
 | `clang-tool-chain-clang`                | `clang`      | False       |
-| `clang-tool-chain-clang++`              | `clang++`    | False       |
+| `clang-tool-chain-clang-cpp`            | `clang++`    | False       |
 | `clang-tool-chain-zccache-clang`        | `clang`      | True        |
-| `clang-tool-chain-zccache-clang++`      | `clang++`    | True        |
+| `clang-tool-chain-zccache-clang-cpp`    | `clang++`    | True        |
 | `clang-tool-chain-emcc`                 | `emcc`       | False       |
-| `clang-tool-chain-em++`                 | `em++`       | False       |
+| `clang-tool-chain-em-cpp`               | `em++`       | False       |
 | `clang-tool-chain-zccache-emcc`         | `emcc`       | True        |
-| `clang-tool-chain-zccache-em++`         | `em++`       | True        |
+| `clang-tool-chain-zccache-em-cpp`       | `em++`       | True        |
 | `clang-tool-chain-wasm-ld`              | `wasm-ld`    | False       |
 | `clang-tool-chain-zccache-wasm-ld`      | `wasm-ld`    | True        |
 | `clang-tool-chain-clang-tidy`           | `clang-tidy` | False       |

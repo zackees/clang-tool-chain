@@ -5,7 +5,7 @@ Legacy clang entry points (`clang-tool-chain-c`, `-cpp`, `-c-msvc`,
 `-cpp-msvc`) forward to the zccache shim and print a one-line stderr
 deprecation notice. They will be removed in Phase 7 of the zccache
 migration. New users should invoke `clang-tool-chain-clang`,
-`clang-tool-chain-clang++`, and the `CTC_ABI=msvc` env var instead.
+`clang-tool-chain-clang-cpp`, and the `CTC_ABI=msvc` env var instead.
 """
 
 import sys
@@ -35,8 +35,8 @@ def clang_main() -> NoReturn:
 
 
 def clang_cpp_main() -> NoReturn:
-    """Deprecated alias for `clang-tool-chain-clang++`."""
-    _warn_once("clang-tool-chain-cpp", "clang-tool-chain-clang++")
+    """Deprecated alias for `clang-tool-chain-clang-cpp`."""
+    _warn_once("clang-tool-chain-cpp", "clang-tool-chain-clang-cpp")
     from ..zccache_shim import exec_via_zccache
 
     exec_via_zccache("clang++", use_cache=False)
@@ -53,8 +53,8 @@ def clang_msvc_main() -> NoReturn:
 
 
 def clang_cpp_msvc_main() -> NoReturn:
-    """Deprecated alias for `CTC_ABI=msvc clang-tool-chain-clang++`."""
-    _warn_once("clang-tool-chain-cpp-msvc", "CTC_ABI=msvc clang-tool-chain-clang++")
+    """Deprecated alias for `CTC_ABI=msvc clang-tool-chain-clang-cpp`."""
+    _warn_once("clang-tool-chain-cpp-msvc", "CTC_ABI=msvc clang-tool-chain-clang-cpp")
     from ..zccache_shim import exec_via_zccache
 
     exec_via_zccache("clang++", use_cache=False, abi="msvc")
@@ -463,7 +463,7 @@ def clang_new_main() -> NoReturn:
 
 
 def clang_cpp_new_main() -> NoReturn:
-    """Entry point for `clang-tool-chain-clang++` — execs zccache-wrapped clang++."""
+    """Entry point for `clang-tool-chain-clang-cpp` — execs zccache-wrapped clang++."""
     from ..zccache_shim import exec_via_zccache
 
     exec_via_zccache("clang++", use_cache=False)
@@ -479,7 +479,7 @@ def zccache_clang_main() -> NoReturn:
 
 
 def zccache_clang_cpp_main() -> NoReturn:
-    """Entry point for `clang-tool-chain-zccache-clang++` — execs clang++ with caching."""
+    """Entry point for `clang-tool-chain-zccache-clang-cpp` — execs clang++ with caching."""
     from ..zccache_shim import exec_via_zccache
 
     exec_via_zccache("clang++", use_cache=True)
@@ -495,7 +495,7 @@ def emcc_new_main() -> NoReturn:
 
 
 def empp_new_main() -> NoReturn:
-    """Entry point for `clang-tool-chain-em++` — execs zccache-wrapped em++."""
+    """Entry point for `clang-tool-chain-em-cpp` — execs zccache-wrapped em++."""
     from ..zccache_shim import exec_via_zccache
 
     exec_via_zccache("em++", use_cache=False)
@@ -511,7 +511,7 @@ def zccache_emcc_main() -> NoReturn:
 
 
 def zccache_empp_main() -> NoReturn:
-    """Entry point for `clang-tool-chain-zccache-em++` — execs em++ with caching."""
+    """Entry point for `clang-tool-chain-zccache-em-cpp` — execs em++ with caching."""
     from ..zccache_shim import exec_via_zccache
 
     exec_via_zccache("em++", use_cache=True)
