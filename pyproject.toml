@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clang-tool-chain"
-version = "1.4.0"
+version = "1.5.0"
 description = "Clang Tool Chain - C/C++ compilation toolchain utilities"
 readme = "README.md"
 license = "Apache-2.0"
@@ -129,6 +129,70 @@ clang-tool-chain-lldb-check-python = "clang_tool_chain.wrapper:lldb_check_python
 clang-tool-chain-emcc = "clang_tool_chain.wrapper:emcc_main"
 clang-tool-chain-empp = "clang_tool_chain.wrapper:empp_main"
 clang-tool-chain-emar = "clang_tool_chain.wrapper:emar_main"
+clang-tool-chain-emstrip = "clang_tool_chain.wrapper:emstrip_main"
+clang-tool-chain-emranlib = "clang_tool_chain.wrapper:emranlib_main"
+clang-tool-chain-emnm = "clang_tool_chain.wrapper:emnm_main"
+# Short-form (ctc-*) Python fallbacks for the native emtool launchers.
+# When `compile-native` runs, the compiled C++ ctc-emar/ctc-emstrip/ctc-emranlib/
+# ctc-emnm binaries land in the same scripts dir and shadow these on PATH.
+ctc-emar = "clang_tool_chain.wrapper:ctc_emar_main"
+ctc-emstrip = "clang_tool_chain.wrapper:ctc_emstrip_main"
+ctc-emranlib = "clang_tool_chain.wrapper:ctc_emranlib_main"
+ctc-emnm = "clang_tool_chain.wrapper:ctc_emnm_main"
+# Short-form (ctc-*) Python fallbacks for the heavy WASM build tools.
+# Same dispatch as `clang-tool-chain-emcc` / `clang-tool-chain-empp` /
+# `clang-tool-chain-wasm-ld`, just under the short names downstream cross-files
+# expect. PyPI rejects `++` in entry-point names (PEP 685), so the C++ variant
+# is `ctc-em-cpp`; the compiled native launcher `ctc-em++.exe` still wins on
+# PATH when `compile-native` runs.
+ctc-emcc = "clang_tool_chain.commands.entry_points:ctc_emcc_main"
+ctc-em-cpp = "clang_tool_chain.commands.entry_points:ctc_empp_main"
+ctc-wasm-ld = "clang_tool_chain.commands.entry_points:ctc_wasm_ld_main"
+# Emscripten build orchestration (cmake / make / configure drivers).
+clang-tool-chain-emcmake = "clang_tool_chain.commands.entry_points:emcmake_main"
+clang-tool-chain-emmake = "clang_tool_chain.commands.entry_points:emmake_main"
+clang-tool-chain-emconfigure = "clang_tool_chain.commands.entry_points:emconfigure_main"
+clang-tool-chain-emscons = "clang_tool_chain.commands.entry_points:emscons_main"
+clang-tool-chain-embuilder = "clang_tool_chain.commands.entry_points:embuilder_main"
+ctc-emcmake = "clang_tool_chain.commands.entry_points:ctc_emcmake_main"
+ctc-emmake = "clang_tool_chain.commands.entry_points:ctc_emmake_main"
+ctc-emconfigure = "clang_tool_chain.commands.entry_points:ctc_emconfigure_main"
+ctc-emscons = "clang_tool_chain.commands.entry_points:ctc_emscons_main"
+ctc-embuilder = "clang_tool_chain.commands.entry_points:ctc_embuilder_main"
+# Emscripten inspection / debug helpers.
+clang-tool-chain-em-config = "clang_tool_chain.commands.entry_points:em_config_main"
+clang-tool-chain-emsize = "clang_tool_chain.commands.entry_points:emsize_main"
+clang-tool-chain-emrun = "clang_tool_chain.commands.entry_points:emrun_main"
+clang-tool-chain-emscan-deps = "clang_tool_chain.commands.entry_points:emscan_deps_main"
+clang-tool-chain-emsymbolizer = "clang_tool_chain.commands.entry_points:emsymbolizer_main"
+clang-tool-chain-emdwp = "clang_tool_chain.commands.entry_points:emdwp_main"
+clang-tool-chain-emcoverage = "clang_tool_chain.commands.entry_points:emcoverage_main"
+clang-tool-chain-emprofile = "clang_tool_chain.commands.entry_points:emprofile_main"
+ctc-em-config = "clang_tool_chain.commands.entry_points:ctc_em_config_main"
+ctc-emsize = "clang_tool_chain.commands.entry_points:ctc_emsize_main"
+ctc-emrun = "clang_tool_chain.commands.entry_points:ctc_emrun_main"
+ctc-emscan-deps = "clang_tool_chain.commands.entry_points:ctc_emscan_deps_main"
+ctc-emsymbolizer = "clang_tool_chain.commands.entry_points:ctc_emsymbolizer_main"
+ctc-emdwp = "clang_tool_chain.commands.entry_points:ctc_emdwp_main"
+ctc-emcoverage = "clang_tool_chain.commands.entry_points:ctc_emcoverage_main"
+ctc-emprofile = "clang_tool_chain.commands.entry_points:ctc_emprofile_main"
+# Binaryen native binaries — direct exec, no Python wrapper.
+clang-tool-chain-wasm-opt = "clang_tool_chain.commands.entry_points:wasm_opt_main"
+clang-tool-chain-wasm-as = "clang_tool_chain.commands.entry_points:wasm_as_main"
+clang-tool-chain-wasm-dis = "clang_tool_chain.commands.entry_points:wasm_dis_main"
+clang-tool-chain-wasm-emscripten-finalize = "clang_tool_chain.commands.entry_points:wasm_emscripten_finalize_main"
+clang-tool-chain-wasm-merge = "clang_tool_chain.commands.entry_points:wasm_merge_main"
+clang-tool-chain-wasm-metadce = "clang_tool_chain.commands.entry_points:wasm_metadce_main"
+clang-tool-chain-wasm-ctor-eval = "clang_tool_chain.commands.entry_points:wasm_ctor_eval_main"
+clang-tool-chain-wasm-shell = "clang_tool_chain.commands.entry_points:wasm_shell_main"
+ctc-wasm-opt = "clang_tool_chain.commands.entry_points:ctc_wasm_opt_main"
+ctc-wasm-as = "clang_tool_chain.commands.entry_points:ctc_wasm_as_main"
+ctc-wasm-dis = "clang_tool_chain.commands.entry_points:ctc_wasm_dis_main"
+ctc-wasm-emscripten-finalize = "clang_tool_chain.commands.entry_points:ctc_wasm_emscripten_finalize_main"
+ctc-wasm-merge = "clang_tool_chain.commands.entry_points:ctc_wasm_merge_main"
+ctc-wasm-metadce = "clang_tool_chain.commands.entry_points:ctc_wasm_metadce_main"
+ctc-wasm-ctor-eval = "clang_tool_chain.commands.entry_points:ctc_wasm_ctor_eval_main"
+ctc-wasm-shell = "clang_tool_chain.commands.entry_points:ctc_wasm_shell_main"
 # Emscripten + sccache (WebAssembly compilation with caching)
 clang-tool-chain-sccache-emcc = "clang_tool_chain.wrapper:sccache_emcc_main"
 clang-tool-chain-sccache-empp = "clang_tool_chain.wrapper:sccache_empp_main"

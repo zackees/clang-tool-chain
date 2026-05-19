@@ -233,9 +233,109 @@ def empp_main() -> NoReturn:
 
 def emar_main() -> NoReturn:
     """Entry point for emar wrapper (Emscripten archiver)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emar")
+
+
+def emstrip_main() -> NoReturn:
+    """Entry point for emstrip wrapper (Emscripten symbol stripper)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emstrip")
+
+
+def emranlib_main() -> NoReturn:
+    """Entry point for emranlib wrapper (Emscripten archive indexer)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emranlib")
+
+
+def emnm_main() -> NoReturn:
+    """Entry point for emnm wrapper (Emscripten symbol lister)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emnm")
+
+
+# ----------------------------------------------------------------------------
+# Short-form ``ctc-*`` aliases — same dispatch, shorter command name.
+#
+# These deliberately go through the lightweight archive-tool path (no
+# Node.js setup, no compile-time filesystem-sync gymnastics). When a user
+# also runs ``compile-native``, the compiled launcher of the same name
+# (built from launcher_emtool.cpp) lands in the same scripts dir and wins
+# on PATH lookup — that's the fastest path, ~0 ms vs ~150 ms here.
+# ----------------------------------------------------------------------------
+
+
+def ctc_emar_main() -> NoReturn:
+    """Entry point for `ctc-emar` — Python fallback for the native ctc-emar launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emar")
+
+
+def ctc_emstrip_main() -> NoReturn:
+    """Entry point for `ctc-emstrip` — Python fallback for the native ctc-emstrip launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emstrip")
+
+
+def ctc_emranlib_main() -> NoReturn:
+    """Entry point for `ctc-emranlib` — Python fallback for the native ctc-emranlib launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emranlib")
+
+
+def ctc_emnm_main() -> NoReturn:
+    """Entry point for `ctc-emnm` — Python fallback for the native ctc-emnm launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emnm")
+
+
+# ----------------------------------------------------------------------------
+# `ctc-*` aliases for the heavy WASM build tools (emcc / em++ / wasm-ld).
+#
+# These reuse the existing emcc/em++/wasm-ld execution paths — same dispatch
+# as `clang-tool-chain-emcc` / `clang-tool-chain-empp` / `clang-tool-chain-wasm-ld`,
+# just under the shorter `ctc-*` names downstream cross-files expect.
+#
+# Why not go through the zccache shim? `clang-tool-chain-em-cpp` does today but
+# is broken on Windows (zccache can't directly exec a .py file). When the
+# compiled native launcher exists (built by `compile-native`), it lands in the
+# same scripts dir and wins on PATH lookup — that's the fastest path. These
+# Python wrappers are the always-available fallback.
+#
+# Naming: PyPI rejects `++` in entry-point names (PEP 685), so the C++ variant
+# is `ctc-em-cpp`. The compiled native launcher built by `compile-native` is
+# `ctc-em++.exe`; both coexist and the compiled binary wins on PATH when present.
+# ----------------------------------------------------------------------------
+
+
+def ctc_emcc_main() -> NoReturn:
+    """Entry point for `ctc-emcc` — Python fallback for the native ctc-emcc launcher."""
     from ..execution.emscripten import execute_emscripten_tool
 
-    execute_emscripten_tool("emar")
+    execute_emscripten_tool("emcc")
+
+
+def ctc_empp_main() -> NoReturn:
+    """Entry point for `ctc-em-cpp` — Python fallback for the native ctc-em++ launcher."""
+    from ..execution.emscripten import execute_emscripten_tool
+
+    execute_emscripten_tool("em++")
+
+
+def ctc_wasm_ld_main() -> NoReturn:
+    """Entry point for `ctc-wasm-ld` — Python fallback for the native ctc-wasm-ld launcher."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-ld")
 
 
 # ============================================================================
@@ -564,3 +664,319 @@ def zccache_iwyu_main() -> NoReturn:
 
     exec_via_zccache("iwyu", use_cache=True)
     raise AssertionError("unreachable")  # pragma: no cover
+
+
+# ============================================================================
+# Additional Emscripten tools (1.5.0)
+# ============================================================================
+# Build orchestration, inspection, Binaryen WASM tools. Each has both a
+# ``clang-tool-chain-{name}`` long form and a ``ctc-{name}`` short alias.
+# Naming notes:
+#   - PyPI rejects ``++`` in entry-point names, so C++ variants go via
+#     ``-cpp`` (handled separately above).
+#   - ``em-config`` keeps its hyphen — the underlying script file is
+#     ``em-config.py``. Python identifiers use ``em_config_main`` since
+#     hyphens aren't valid in identifiers.
+
+
+# -- Build orchestration (no Node.js needed) --
+
+
+def emcmake_main() -> NoReturn:
+    """Entry point for emcmake wrapper (Emscripten cmake driver)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emcmake")
+
+
+def ctc_emcmake_main() -> NoReturn:
+    """Entry point for `ctc-emcmake` — Python fallback for the native ctc-emcmake launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emcmake")
+
+
+def emmake_main() -> NoReturn:
+    """Entry point for emmake wrapper (Emscripten make driver)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emmake")
+
+
+def ctc_emmake_main() -> NoReturn:
+    """Entry point for `ctc-emmake` — Python fallback for the native ctc-emmake launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emmake")
+
+
+def emconfigure_main() -> NoReturn:
+    """Entry point for emconfigure wrapper (Emscripten ./configure driver)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emconfigure")
+
+
+def ctc_emconfigure_main() -> NoReturn:
+    """Entry point for `ctc-emconfigure` — Python fallback for the native ctc-emconfigure launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emconfigure")
+
+
+def emscons_main() -> NoReturn:
+    """Entry point for emscons wrapper (Emscripten SCons driver)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emscons")
+
+
+def ctc_emscons_main() -> NoReturn:
+    """Entry point for `ctc-emscons` — Python fallback for the native ctc-emscons launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emscons")
+
+
+def embuilder_main() -> NoReturn:
+    """Entry point for embuilder wrapper (Emscripten system library builder)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("embuilder")
+
+
+def ctc_embuilder_main() -> NoReturn:
+    """Entry point for `ctc-embuilder` — Python fallback for the native ctc-embuilder launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("embuilder")
+
+
+# -- Inspection / debug helpers --
+
+
+def em_config_main() -> NoReturn:
+    """Entry point for em-config wrapper (Emscripten config query tool)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("em-config")
+
+
+def ctc_em_config_main() -> NoReturn:
+    """Entry point for `ctc-em-config` — Python fallback for the native ctc-em-config launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("em-config")
+
+
+def emsize_main() -> NoReturn:
+    """Entry point for emsize wrapper (Emscripten size analyser)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emsize")
+
+
+def ctc_emsize_main() -> NoReturn:
+    """Entry point for `ctc-emsize` — Python fallback for the native ctc-emsize launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emsize")
+
+
+def emrun_main() -> NoReturn:
+    """Entry point for emrun wrapper (Emscripten HTML/WASM browser launcher)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emrun")
+
+
+def ctc_emrun_main() -> NoReturn:
+    """Entry point for `ctc-emrun` — Python fallback for the native ctc-emrun launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emrun")
+
+
+def emscan_deps_main() -> NoReturn:
+    """Entry point for emscan-deps wrapper (Emscripten dependency scanner)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emscan-deps")
+
+
+def ctc_emscan_deps_main() -> NoReturn:
+    """Entry point for `ctc-emscan-deps` — Python fallback for the native ctc-emscan-deps launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emscan-deps")
+
+
+def emsymbolizer_main() -> NoReturn:
+    """Entry point for emsymbolizer wrapper (WASM stack-trace symbolizer)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emsymbolizer")
+
+
+def ctc_emsymbolizer_main() -> NoReturn:
+    """Entry point for `ctc-emsymbolizer` — Python fallback for the native ctc-emsymbolizer launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emsymbolizer")
+
+
+def emdwp_main() -> NoReturn:
+    """Entry point for emdwp wrapper (DWARF packaging tool)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emdwp")
+
+
+def ctc_emdwp_main() -> NoReturn:
+    """Entry point for `ctc-emdwp` — Python fallback for the native ctc-emdwp launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emdwp")
+
+
+def emcoverage_main() -> NoReturn:
+    """Entry point for emcoverage wrapper (Emscripten coverage helper)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emcoverage")
+
+
+def ctc_emcoverage_main() -> NoReturn:
+    """Entry point for `ctc-emcoverage` — Python fallback for the native ctc-emcoverage launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emcoverage")
+
+
+def emprofile_main() -> NoReturn:
+    """Entry point for emprofile wrapper (Emscripten profiling helper)."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emprofile")
+
+
+def ctc_emprofile_main() -> NoReturn:
+    """Entry point for `ctc-emprofile` — Python fallback for the native ctc-emprofile launcher."""
+    from ..execution.emscripten import execute_emscripten_py_tool
+
+    execute_emscripten_py_tool("emprofile")
+
+
+# -- Binaryen native binaries (no Python wrapper, direct exec) --
+
+
+def wasm_opt_main() -> NoReturn:
+    """Entry point for wasm-opt wrapper (Binaryen WASM optimiser)."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-opt")
+
+
+def ctc_wasm_opt_main() -> NoReturn:
+    """Entry point for `ctc-wasm-opt` — Python fallback for the native ctc-wasm-opt launcher."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-opt")
+
+
+def wasm_as_main() -> NoReturn:
+    """Entry point for wasm-as wrapper (Binaryen WASM assembler)."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-as")
+
+
+def ctc_wasm_as_main() -> NoReturn:
+    """Entry point for `ctc-wasm-as` — Python fallback for the native ctc-wasm-as launcher."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-as")
+
+
+def wasm_dis_main() -> NoReturn:
+    """Entry point for wasm-dis wrapper (Binaryen WASM disassembler)."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-dis")
+
+
+def ctc_wasm_dis_main() -> NoReturn:
+    """Entry point for `ctc-wasm-dis` — Python fallback for the native ctc-wasm-dis launcher."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-dis")
+
+
+def wasm_emscripten_finalize_main() -> NoReturn:
+    """Entry point for wasm-emscripten-finalize wrapper (Binaryen WASM finaliser)."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-emscripten-finalize")
+
+
+def ctc_wasm_emscripten_finalize_main() -> NoReturn:
+    """Entry point for `ctc-wasm-emscripten-finalize` — Python fallback for native launcher."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-emscripten-finalize")
+
+
+def wasm_merge_main() -> NoReturn:
+    """Entry point for wasm-merge wrapper (Binaryen WASM merger)."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-merge")
+
+
+def ctc_wasm_merge_main() -> NoReturn:
+    """Entry point for `ctc-wasm-merge` — Python fallback for the native ctc-wasm-merge launcher."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-merge")
+
+
+def wasm_metadce_main() -> NoReturn:
+    """Entry point for wasm-metadce wrapper (Binaryen metadata DCE)."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-metadce")
+
+
+def ctc_wasm_metadce_main() -> NoReturn:
+    """Entry point for `ctc-wasm-metadce` — Python fallback for the native ctc-wasm-metadce launcher."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-metadce")
+
+
+def wasm_ctor_eval_main() -> NoReturn:
+    """Entry point for wasm-ctor-eval wrapper (Binaryen constructor pre-evaluator)."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-ctor-eval")
+
+
+def ctc_wasm_ctor_eval_main() -> NoReturn:
+    """Entry point for `ctc-wasm-ctor-eval` — Python fallback for the native ctc-wasm-ctor-eval launcher."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-ctor-eval")
+
+
+def wasm_shell_main() -> NoReturn:
+    """Entry point for wasm-shell wrapper (Binaryen WASM interpreter)."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-shell")
+
+
+def ctc_wasm_shell_main() -> NoReturn:
+    """Entry point for `ctc-wasm-shell` — Python fallback for the native ctc-wasm-shell launcher."""
+    from ..execution.emscripten import execute_emscripten_binary_tool
+
+    execute_emscripten_binary_tool("wasm-shell")

@@ -135,17 +135,21 @@ def find_emscripten_tool(tool_name: str) -> Path:
             f"Try removing ~/.clang-tool-chain/emscripten and running again."
         )
 
-    # Emscripten tools are typically .py files
-    tool_script = emscripten_dir / f"{tool_name}.py"
-    if not tool_script.exists():
-        # Try without .py extension (some versions may not have it)
-        tool_script = emscripten_dir / tool_name
-        if not tool_script.exists():
-            raise RuntimeError(
-                f"Emscripten tool not found: {tool_name}\n"
-                f"Expected location: {tool_script}\n"
-                f"Emscripten directory: {emscripten_dir}"
-            )
+    # Emscripten tools are typically .py files. Newer distributions ship
+    # less-common tools (emnm, emsize, …) under a `tools/` subdir while the
+    # core compilers stay at the top level. Check both.
+    candidates = [
+        emscripten_dir / f"{tool_name}.py",
+        emscripten_dir / tool_name,
+        emscripten_dir / "tools" / f"{tool_name}.py",
+        emscripten_dir / "tools" / tool_name,
+    ]
+    tool_script = next((c for c in candidates if c.exists()), None)
+    if tool_script is None:
+        searched = "\n  ".join(str(c) for c in candidates)
+        raise RuntimeError(
+            f"Emscripten tool not found: {tool_name}\nSearched:\n  {searched}\nEmscripten directory: {emscripten_dir}"
+        )
 
     return tool_script
 
@@ -480,6 +484,99 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Failed to execute Emscripten tool: {e}")
+        print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+# Tools that drive Python emscripten scripts but never run JS themselves —
+# they don't need Node.js. ``execute_emscripten_py_tool`` skips the Node.js
+# ensure step for these. emcc/em++ are NOT in this set (they really do run
+# JS during sanity checks and tests).
+_NO_NODE_PY_TOOLS = frozenset(
+    {
+        # archive / inspection
+        "emar",
+        "emstrip",
+        "emranlib",
+        "emnm",
+        "emsize",
+        "emsymbolizer",
+        "emdwp",
+        "emcoverage",
+        "emprofile",
+        # build orchestration (these exec cmake/make/etc.)
+        "emcmake",
+        "emmake",
+        "emconfigure",
+        "emscons",
+        "embuilder",
+        # misc
+        "em-config",
+        "emrun",
+        "emscan-deps",
+    }
+)
+
+
+def execute_emscripten_py_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
+    """
+    Execute an Emscripten Python-script tool that does NOT require Node.js.
+
+    Lightweight cousin of ``execute_emscripten_tool``: same dispatch, but skips
+    the bundled Node.js download/ensure step. Right for ``emar`` / ``emstrip`` /
+    ``emranlib`` / ``emnm`` / ``emcmake`` / ``emmake`` / ``em-config`` / etc. —
+    none of these run JS, and the Node ensure costs ~10–30 s on the first run.
+
+    Args:
+        tool_name: An emscripten tool name (without ``.py``). Must be one of
+            the tools in :data:`_NO_NODE_PY_TOOLS`.
+        args: Arguments to pass to the tool (defaults to ``sys.argv[1:]``).
+    """
+    if tool_name not in _NO_NODE_PY_TOOLS:
+        raise ValueError(
+            f"execute_emscripten_py_tool is only for {sorted(_NO_NODE_PY_TOOLS)}, "
+            f"got {tool_name!r}. Use execute_emscripten_tool for tools that need Node.js."
+        )
+
+    if args is None:
+        args = sys.argv[1:]
+
+    # Resolve the tool script (also triggers download/install on first use).
+    try:
+        tool_script = find_emscripten_tool(tool_name)
+    except RuntimeError as e:
+        print(f"\n{'=' * 60}", file=sys.stderr)
+        print(f"clang-tool-chain Emscripten {tool_name} Error", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
+        print(f"{e}", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
+        sys.exit(1)
+
+    platform_name, arch = get_platform_info()
+    install_dir = Path.home() / ".clang-tool-chain" / "emscripten" / platform_name / arch
+    config_path = install_dir / ".emscripten"
+    emscripten_bin_dir = install_dir / "bin"
+
+    # Minimal environment setup — emar/emstrip/emranlib/emnm read EM_CONFIG to
+    # locate LLVM_ROOT; without it they scan PATH which is brittle.
+    env = os.environ.copy()
+    env["EMSCRIPTEN"] = str(install_dir / "emscripten")
+    env["EMSCRIPTEN_ROOT"] = env["EMSCRIPTEN"]
+    env["EM_CONFIG"] = str(config_path)
+    # Prepend emscripten bin/ so the underlying llvm-ar/llvm-ranlib/etc are
+    # discoverable without requiring the user to mutate PATH themselves.
+    env["PATH"] = f"{emscripten_bin_dir}{os.pathsep}{env.get('PATH', '')}"
+
+    cmd = [sys.executable, str(tool_script)] + args
+    try:
+        result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        print(f"\nError: Python interpreter not found: {sys.executable}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
         print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -978,7 +1075,8 @@ def execute_emscripten_binary_tool(tool_name: str, args: list[str] | None = None
     logger.info(f"Executing Emscripten binary tool: {tool_name} with {len(args)} arguments")
     logger.debug(f"Arguments: {args}")
 
-    # Find tool binary based on tool name
+    # Find tool binary. wasm-ld has a dedicated resolver (lives one dir up in
+    # some emscripten layouts); everything else is just bin/{name}{ext}.
     if tool_name == "wasm-ld":
         try:
             tool_path = find_emscripten_wasm_ld_binary()
@@ -991,7 +1089,22 @@ def execute_emscripten_binary_tool(tool_name: str, args: list[str] | None = None
             print(f"{'=' * 60}\n", file=sys.stderr)
             sys.exit(1)
     else:
-        raise RuntimeError(f"Unknown Emscripten binary tool: {tool_name}")
+        from .. import downloader as _downloader
+
+        platform_name, arch = get_platform_info()
+        _downloader.ensure_emscripten_available(platform_name, arch)
+        install_dir = Path.home() / ".clang-tool-chain" / "emscripten" / platform_name / arch
+        exe_ext = ".exe" if platform_name == "win" else ""
+        tool_path = install_dir / "bin" / f"{tool_name}{exe_ext}"
+        if not tool_path.exists():
+            print(f"\n{'=' * 60}", file=sys.stderr)
+            print(f"clang-tool-chain Emscripten {tool_name} Error", file=sys.stderr)
+            print(f"{'=' * 60}", file=sys.stderr)
+            print(f"Emscripten binary not found: {tool_path}", file=sys.stderr)
+            print(f"Tool: {tool_name}", file=sys.stderr)
+            print(f"Expected location: {install_dir / 'bin'}", file=sys.stderr)
+            print(f"{'=' * 60}\n", file=sys.stderr)
+            sys.exit(1)
 
     # Build command: tool_path args...
     cmd = [str(tool_path)] + args

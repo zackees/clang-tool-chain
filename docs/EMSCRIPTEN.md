@@ -88,6 +88,30 @@ clang-tool-chain-empp hello.cpp -o hello.js
 clang-tool-chain-empp -O3 hello.cpp -o hello.html
 ```
 
+### Archive / inspection tools
+
+For producing and inspecting WASM object files and archives, four
+emscripten-aware wrappers ship alongside the compilers. Each has a
+``clang-tool-chain-*`` long-form name and a short ``ctc-*`` alias that
+maps to the same dispatch:
+
+| Tool      | Long form                    | Short form     | Underlying     |
+|-----------|------------------------------|----------------|----------------|
+| Archive   | ``clang-tool-chain-emar``    | ``ctc-emar``   | ``llvm-ar``    |
+| Strip     | ``clang-tool-chain-emstrip`` | ``ctc-emstrip``| ``llvm-strip`` |
+| Ranlib    | ``clang-tool-chain-emranlib``| ``ctc-emranlib``| ``llvm-ranlib``|
+| Nm        | ``clang-tool-chain-emnm``    | ``ctc-emnm``   | ``llvm-nm``    |
+
+These wrappers go through a lightweight path
+(``execute_emscripten_archive_tool``) that skips Node.js setup — these
+tools don't need a JavaScript runtime, so they avoid the ~10–30 s
+first-run bundled Node.js download that ``emcc`` would trigger.
+
+When ``clang-tool-chain compile-native <dir>`` is run, the compiled C++
+launcher binaries (``ctc-emar.exe`` etc.) land in the same directory and
+take precedence on PATH — that's the fastest option (no Python startup).
+These Python wrappers are the always-available fallback.
+
 ## What's Included
 
 - Emscripten Python scripts (emcc, em++, emconfigure, emmake)
