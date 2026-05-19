@@ -31,6 +31,19 @@ jobs:
         with:
           submodules: true
 
+      - name: Fast-forward downloads-bins to main
+        # The submodule pointer is pinned to the previously-published archive
+        # commit, which may lag behind the latest tooling. A build workflow
+        # should always use the latest create_lldb_archives.py — otherwise a
+        # script fix won't take effect until someone bumps the submodule.
+        run: |
+          cd downloads-bins
+          git fetch origin main --depth=1
+          git checkout FETCH_HEAD
+          echo "downloads-bins now at:"
+          git log -1 --oneline
+        shell: bash
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
