@@ -181,6 +181,7 @@ def exec_via_zccache(
     user_args, abi_override = _consume_ctc_abi_flag(user_args)
     user_args, deploy_requested = _consume_deploy_dependencies_flag(user_args)
     user_args = _strip_unsupported_windows_linker_flags(user_args)
+    user_args = _strip_lunwind_on_macos(user_args)
     user_args = _inject_shared_libasan_if_needed(user_args)
     resolved_abi = _resolve_abi(abi, user_args, abi_override)
 
@@ -404,6 +405,22 @@ def _strip_unsupported_windows_linker_flags(args: list[str]) -> list[str]:
             "These flags were removed, not supported.\n"
         )
     return out
+
+
+def _strip_lunwind_on_macos(args: list[str]) -> list[str]:
+    """Drop ``-lunwind`` from args on macOS.
+
+    macOS bundles libunwind inside ``libSystem.B.dylib`` (auto-linked); there
+    is no standalone ``libunwind.dylib`` to find. Passing ``-lunwind`` makes
+    ld64.lld fail with ``library not found for -lunwind``. The legacy
+    ``MacOSUnwindTransformer`` (priority=125) stripped it; that strip was
+    dropped in the zccache migration. Restore the same behavior here.
+    """
+    if _host_platform_key() != "darwin":
+        return args
+    if "-lunwind" not in args:
+        return args
+    return [a for a in args if a != "-lunwind"]
 
 
 def _inject_shared_libasan_if_needed(args: list[str]) -> list[str]:

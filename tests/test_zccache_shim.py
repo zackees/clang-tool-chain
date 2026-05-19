@@ -379,6 +379,52 @@ def test_parse_directives_fast_no_directives_env_disables(tmp_path, monkeypatch)
 
 
 # ---------------------------------------------------------------------------
+# _strip_lunwind_on_macos
+# ---------------------------------------------------------------------------
+
+
+def test_strip_lunwind_on_macos_removes_flag(monkeypatch):
+    """On darwin, -lunwind is dropped (libunwind ships in libSystem)."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "darwin")
+    result = shim._strip_lunwind_on_macos(["foo.c", "-lunwind", "-o", "foo"])
+    assert "-lunwind" not in result
+    assert result == ["foo.c", "-o", "foo"]
+
+
+def test_strip_lunwind_on_macos_removes_all_occurrences(monkeypatch):
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "darwin")
+    result = shim._strip_lunwind_on_macos(["-lunwind", "foo.c", "-lunwind"])
+    assert result == ["foo.c"]
+
+
+def test_strip_lunwind_on_macos_noop_when_absent(monkeypatch):
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "darwin")
+    args = ["foo.c", "-o", "foo"]
+    assert shim._strip_lunwind_on_macos(args) == args
+
+
+def test_strip_lunwind_on_macos_noop_on_linux(monkeypatch):
+    """On Linux, -lunwind is real (bundled libunwind) — must NOT be stripped."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "linux")
+    args = ["foo.c", "-lunwind", "-o", "foo"]
+    assert shim._strip_lunwind_on_macos(args) == args
+
+
+def test_strip_lunwind_on_macos_noop_on_windows(monkeypatch):
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "windows")
+    args = ["foo.c", "-lunwind"]
+    assert shim._strip_lunwind_on_macos(args) == args
+
+
+def test_strip_lunwind_on_macos_does_not_touch_similar_flags(monkeypatch):
+    """Don't drop -lunwinding (hypothetical), -L<path>, or args containing 'unwind'."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "darwin")
+    args = ["foo.c", "-lunwinding", "-L/opt/unwind/lib", "--unwindlib=libunwind", "-lunwind"]
+    result = shim._strip_lunwind_on_macos(args)
+    assert result == ["foo.c", "-lunwinding", "-L/opt/unwind/lib", "--unwindlib=libunwind"]
+
+
+# ---------------------------------------------------------------------------
 # Actionable error messages
 # ---------------------------------------------------------------------------
 
