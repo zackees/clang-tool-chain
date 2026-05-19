@@ -10,6 +10,7 @@ Usage:
 """
 
 import importlib.resources as resources
+import os
 import platform as platform_mod
 import shlex
 import shutil
@@ -122,15 +123,24 @@ def _compile_tool(
         print(f"Error: compilation of {tool.source} failed (exit {result.returncode})", file=sys.stderr)
         return result.returncode
 
-    # Create aliases (symlinks on Unix, copies on Windows)
+    # Create aliases. Goal: one on-disk binary, N filenames pointing at it.
+    #   - Unix:    symlink (always available, near-zero cost).
+    #   - Windows: hardlink when possible (NTFS, same volume — single file,
+    #              N directory entries). Falls back to copy for FAT/exFAT or
+    #              cross-volume installs.
     for alias in tool.aliases:
         alias_path = output_dir / f"{alias}{exe_suffix}"
+        if alias_path.exists() or alias_path.is_symlink():
+            alias_path.unlink()
+
         if platform_name == "win":
-            shutil.copy2(str(output_binary), str(alias_path))
-            print(f"Copied: {output_binary} -> {alias_path}")
+            try:
+                os.link(str(output_binary), str(alias_path))
+                print(f"Hardlink: {alias_path} -> {output_binary}")
+            except OSError as e:
+                shutil.copy2(str(output_binary), str(alias_path))
+                print(f"Copied (hardlink unavailable: {e}): {output_binary} -> {alias_path}")
         else:
-            if alias_path.exists() or alias_path.is_symlink():
-                alias_path.unlink()
             alias_path.symlink_to(f"{tool.output}{exe_suffix}")
             print(f"Symlink: {alias_path} -> {tool.output}{exe_suffix}")
 

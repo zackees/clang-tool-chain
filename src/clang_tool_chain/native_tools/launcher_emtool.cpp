@@ -1,16 +1,37 @@
-// clang-tool-chain native launcher for Emscripten archive/inspection tools.
+// clang-tool-chain native launcher for Emscripten Python-script tools.
 //
-// One binary, four roles — dispatched by argv[0] basename:
-//   ctc-emar      -> emar.py       (Emscripten archiver, wraps llvm-ar)
-//   ctc-emranlib  -> emranlib.py   (Emscripten ranlib, wraps llvm-ranlib)
-//   ctc-emnm      -> emnm.py       (Emscripten symbol lister, wraps llvm-nm)
-//   ctc-emstrip   -> emstrip.py    (Emscripten stripper, wraps llvm-strip)
+// One binary, 17 roles — dispatched by argv[0] basename. The same compiled
+// .exe is hardlinked (or copied on systems without hardlinks) under each of
+// these names; argv[0] selects which underlying emscripten Python script to
+// drive:
 //
-// Unlike emcc, these tools are thin Python wrappers around LLVM binaries and
-// don't need Node.js. We still need a Python interpreter (the tool itself is
-// a .py file), but we skip the clang-tool-chain *wrapper* Python entirely —
-// ~1.2s saved per invocation. With ~30 archive ops in a clean FastLED WASM
-// build that's ~35s of pure interpreter startup gone.
+//   archive / inspection
+//     ctc-emar       -> emar.py        (Emscripten archiver, wraps llvm-ar)
+//     ctc-emranlib   -> emranlib.py    (Emscripten ranlib, wraps llvm-ranlib)
+//     ctc-emnm       -> tools/emnm.py  (Emscripten symbol lister, wraps llvm-nm)
+//     ctc-emstrip    -> emstrip.py     (Emscripten stripper, wraps llvm-strip)
+//     ctc-emsize     -> emsize.py      (Emscripten size analyser, wraps llvm-size)
+//     ctc-emsymbolizer -> tools/emsymbolizer.py (WASM stack-trace symbolizer)
+//     ctc-emdwp      -> tools/emdwp.py (DWARF packaging tool)
+//     ctc-emcoverage -> tools/emcoverage.py
+//     ctc-emprofile  -> tools/emprofile.py
+//
+//   build orchestration (driver wrappers)
+//     ctc-emcmake    -> emcmake.py     (cmake driver)
+//     ctc-emmake     -> emmake.py      (make driver)
+//     ctc-emconfigure-> emconfigure.py (./configure driver)
+//     ctc-emscons    -> emscons.py     (SCons driver)
+//     ctc-embuilder  -> embuilder.py   (system library builder)
+//
+//   misc
+//     ctc-em-config  -> em-config.py   (config query tool)
+//     ctc-emrun      -> emrun.py       (HTML/WASM browser launcher)
+//     ctc-emscan-deps-> emscan-deps.py (dependency scanner)
+//
+// Unlike emcc, none of these tools run JS, so we skip the Node.js setup that
+// `execute_emscripten_tool` would otherwise do. We still need a Python
+// interpreter (the tool itself is a .py file), but we skip the clang-tool-chain
+// *wrapper* Python entirely — ~1.2s saved per invocation.
 //
 // Strategy: cache (python_path, emscripten_dir, config_path, bin_dir, tool_script)
 // on first run via a one-shot discovery script; on subsequent runs read the
@@ -47,8 +68,18 @@ static std::string detect_tool_name(const char* argv0) {
     }
 
     // Whitelist known tool names so a typo / unknown rename fails loudly
-    // instead of silently invoking some random "<name>.py".
-    static const char* known[] = {"emar", "emranlib", "emnm", "emstrip"};
+    // instead of silently invoking some random "<name>.py". Keep in sync
+    // with TOOL_REGISTRY entry in native_tools/__init__.py and the
+    // [project.scripts] block in pyproject.toml.
+    static const char* known[] = {
+        // archive / inspection
+        "emar", "emranlib", "emnm", "emstrip",
+        "emsize", "emsymbolizer", "emdwp", "emcoverage", "emprofile",
+        // build orchestration
+        "emcmake", "emmake", "emconfigure", "emscons", "embuilder",
+        // misc
+        "em-config", "emrun", "emscan-deps",
+    };
     for (const char* t : known) {
         if (base == t) return t;
     }

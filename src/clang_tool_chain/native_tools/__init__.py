@@ -36,9 +36,33 @@ TOOL_REGISTRY: dict[str, NativeTool] = {
         source="launcher_wasmld.cpp",
         output="ctc-wasm-ld",
     ),
+    # One C++ source -> one binary -> 17 hardlinks/copies. argv[0] dispatch
+    # selects which emscripten Python tool to invoke. Keep this list in sync
+    # with the `known[]` whitelist in launcher_emtool.cpp:detect_tool_name and
+    # the [project.scripts] block in pyproject.toml.
     "emtool": NativeTool(
         source="launcher_emtool.cpp",
         output="ctc-emar",
-        aliases=["ctc-emranlib", "ctc-emnm", "ctc-emstrip"],
+        aliases=[
+            # archive / inspection
+            "ctc-emstrip",
+            "ctc-emranlib",
+            "ctc-emnm",
+            "ctc-emsize",
+            "ctc-emsymbolizer",
+            "ctc-emdwp",
+            "ctc-emcoverage",
+            "ctc-emprofile",
+            # build orchestration
+            "ctc-emcmake",
+            "ctc-emmake",
+            "ctc-emconfigure",
+            "ctc-emscons",
+            "ctc-embuilder",
+            # misc
+            "ctc-em-config",
+            "ctc-emrun",
+            "ctc-emscan-deps",
+        ],
     ),
 }

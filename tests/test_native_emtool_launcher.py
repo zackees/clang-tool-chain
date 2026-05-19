@@ -118,7 +118,31 @@ def _copy_with_name(src_name: str, dst_name: str, tmp_dir: str) -> str:
 
 SKIP_REASON = "Native tool compilation failed"
 
+# Original 4-tool roster — kept for the legacy --ctc-help tests below.
 EM_TOOLS = ("emar", "emranlib", "emnm", "emstrip")
+
+# Full 17-tool roster compiled into a single binary as of issue #25.
+# Keep in sync with TOOL_REGISTRY["emtool"].aliases and the launcher's
+# known[] whitelist in launcher_emtool.cpp.
+ALL_EM_TOOLS = (
+    "emar",
+    "emstrip",
+    "emranlib",
+    "emnm",
+    "emsize",
+    "emsymbolizer",
+    "emdwp",
+    "emcoverage",
+    "emprofile",
+    "emcmake",
+    "emmake",
+    "emconfigure",
+    "emscons",
+    "embuilder",
+    "em-config",
+    "emrun",
+    "emscan-deps",
+)
 
 
 # ==========================================================================
@@ -145,7 +169,10 @@ class TestEmtoolResource(unittest.TestCase):
         tool = TOOL_REGISTRY["emtool"]
         self.assertEqual(tool.source, "launcher_emtool.cpp")
         self.assertEqual(tool.output, "ctc-emar")
-        for alias in ("ctc-emranlib", "ctc-emnm", "ctc-emstrip"):
+
+        # All 17 emscripten Python tools must be aliased in the registry (issue #25).
+        expected_aliases = [f"ctc-{name}" for name in ALL_EM_TOOLS if name != "emar"]
+        for alias in expected_aliases:
             self.assertIn(alias, tool.aliases, f"{alias} missing from emtool aliases")
 
 
@@ -330,6 +357,66 @@ class TestDryRunWithSeededCache(unittest.TestCase):
         # too brittle if user args could legitimately contain "--dry-run").
         tokens = result.stdout.split()
         self.assertNotIn("--dry-run", tokens)
+
+
+# ==========================================================================
+# Multi-role launcher (issue #25): one binary, 17 hardlinks
+# ==========================================================================
+
+
+@unittest.skipUnless(_has_native(), SKIP_REASON)
+class TestMultiRoleDispatch(unittest.TestCase):
+    """All 17 emscripten Python tools should resolve to the same on-disk binary."""
+
+    def test_all_aliases_present(self) -> None:
+        for tool in ALL_EM_TOOLS:
+            binary = _exe(f"ctc-{tool}")
+            self.assertTrue(os.path.exists(binary), f"ctc-{tool} not produced at {binary}")
+
+    def test_aliases_share_underlying_storage(self) -> None:
+        """Unix: aliases are symlinks. Windows: aliases are hardlinks (same inode).
+
+        Falls back gracefully to copy on filesystems that don't support
+        hardlinks; in that case all 17 binaries simply exist independently
+        and this test asserts that weaker guarantee.
+        """
+        primary = Path(_exe("ctc-emar"))
+        primary_stat = primary.stat()
+        primary_size = primary_stat.st_size
+
+        for tool in ALL_EM_TOOLS:
+            if tool == "emar":
+                continue
+            alias = Path(_exe(f"ctc-{tool}"))
+            self.assertTrue(alias.exists(), f"ctc-{tool} missing")
+
+            if not IS_WINDOWS and alias.is_symlink():
+                # Unix symlink path — resolved target should be ctc-emar.
+                target = os.readlink(alias)
+                self.assertIn("ctc-emar", target, f"ctc-{tool} symlinks to {target}, expected ctc-emar")
+                continue
+
+            alias_stat = alias.stat()
+            if alias_stat.st_ino == primary_stat.st_ino and alias_stat.st_ino != 0:
+                # Hardlinked — single inode shared across N filenames.
+                self.assertEqual(alias_stat.st_size, primary_size)
+            else:
+                # Copy fallback (FAT/exFAT/cross-volume). Still has to match byte-for-byte.
+                self.assertEqual(
+                    alias_stat.st_size,
+                    primary_size,
+                    f"ctc-{tool} ({alias_stat.st_size} bytes) ≠ ctc-emar ({primary_size} bytes)",
+                )
+
+    def test_ctc_help_dispatches_per_alias(self) -> None:
+        """Each alias must print --ctc-help referring to its own tool name."""
+        for tool in ALL_EM_TOOLS:
+            binary = _exe(f"ctc-{tool}")
+            result = _run([binary, "--ctc-help"])
+            self.assertEqual(result.returncode, 0, f"ctc-{tool} --ctc-help failed: {result.stderr}")
+            self.assertIn(
+                f"ctc-{tool}", result.stdout, f"ctc-{tool} help text doesn't mention its own name: {result.stdout!r}"
+            )
 
 
 if __name__ == "__main__":
