@@ -204,12 +204,20 @@ def exec_via_zccache(
             return flags
         return [f for f in flags if not f.startswith("--target=") and f != "--target"]
 
+    # Emscripten tools (emcc / em++ / wasm-ld) have their own target system
+    # (wasm32-emscripten); the host ABI profile flags (--target=*-windows-gnu,
+    # --sysroot=mingw, -lunwind, etc.) are meaningless or actively wrong for
+    # them. Skip both ABI injection and `@` directive parsing for these tools
+    # — they expect a clean argv pass-through.
+    is_emscripten_tool = tool in ("emcc", "em++", "wasm-ld")
+
     merged: list[str] = []
     merged.extend(user_args)
-    merged.extend(directive_flags)
-    merged.extend(_drop_target(abi_profile.flags_all))
-    if not is_no_link:
-        merged.extend(_drop_target(abi_profile.flags_link_only))
+    if not is_emscripten_tool:
+        merged.extend(directive_flags)
+        merged.extend(_drop_target(abi_profile.flags_all))
+        if not is_no_link:
+            merged.extend(_drop_target(abi_profile.flags_link_only))
 
     compiler_path = _resolve_tool_path(profile, tool)
     argv = [str(zccache), compiler_path, *merged]
@@ -220,6 +228,25 @@ def exec_via_zccache(
         env.pop("ZCCACHE_DISABLE", None)
     else:
         env["ZCCACHE_DISABLE"] = "1"
+
+    # Emscripten tools (emcc / em++) require EM_CONFIG / EMSCRIPTEN /
+    # EMSCRIPTEN_ROOT to locate LLVM_ROOT, BINARYEN_ROOT, etc. The legacy
+    # ``execute_emscripten_tool`` path sets these explicitly; the zccache
+    # shim used to skip them, causing "LLVM_ROOT not set in config" failures.
+    # Derive paths from compiler_path = <emsdk>/emscripten/em(++|cc).(bat|...)
+    if tool in ("emcc", "em++"):
+        em_dir = Path(compiler_path).parent  # <emsdk>/emscripten
+        emsdk_root = em_dir.parent  # <emsdk>
+        config_path = emsdk_root / ".emscripten"
+        if config_path.exists():
+            env.setdefault("EM_CONFIG", str(config_path))
+            env.setdefault("EMSCRIPTEN", str(em_dir))
+            env.setdefault("EMSCRIPTEN_ROOT", str(em_dir))
+            # Prepend emscripten bin/ to PATH so emcc's bundled python finds
+            # llvm-* binaries without requiring user PATH setup.
+            bin_dir = emsdk_root / "bin"
+            if bin_dir.exists():
+                env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
 
     _logger.debug("exec argv: %r", argv)
     _logger.debug(
@@ -569,4 +596,22 @@ def _resolve_tool_path(profile: Profile, tool: str) -> str:
         sys.exit(1)
     # zccache requires an absolute path (it normalizes MSYS paths but will
     # not search PATH). Profile emits absolute paths already; resolve defensively.
-    return str(Path(path).resolve())
+    resolved = Path(path).resolve()
+
+    # Back-compat shim for 1.5.0 / 1.5.1 profiles that baked .py paths for
+    # emcc/em++ on Windows. CreateProcess can't exec a .py script directly
+    # (no shebang support → error 193). Rewrite to the .bat wrapper that
+    # Emscripten ships in the same directory.
+    if os.name == "nt" and resolved.suffix.lower() == ".py":
+        bat = resolved.with_suffix(".bat")
+        if bat.exists():
+            return str(bat)
+        # No .bat next door — surface a clear error rather than letting zccache
+        # die with the cryptic "%1 is not a valid Win32 application".
+        sys.stderr.write(
+            f"error: profile points '{tool}' at {resolved}, but Windows cannot "
+            f"exec a .py file directly and no {bat.name} fallback exists.\n"
+            "Re-run `clang-tool-chain install emscripten` to bake a fresh profile.\n"
+        )
+        sys.exit(1)
+    return str(resolved)

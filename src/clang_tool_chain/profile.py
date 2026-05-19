@@ -105,21 +105,35 @@ def _discover_binaries(install_dir: Path, platform: str, arch: str) -> dict[str,
             bins[tool] = f"{clang_root}/bin/{_exe(tool, platform)}"
 
     # Emscripten: uses ``get_emscripten_install_dir`` which lives outside clang_root.
+    #
+    # Pick the right entry-point file per platform:
+    #   - Windows: ``emcc.bat`` / ``em++.bat`` — Windows CreateProcess can't exec
+    #     ``.py`` directly (no shebang support → error 193), so we point at the
+    #     batch wrapper Emscripten ships in the same directory. cmd.exe handles
+    #     the actual ``python emcc.py`` invocation.
+    #   - POSIX: ``emcc`` / ``em++`` (no extension) — these are shebang scripts
+    #     (``#!/usr/bin/env python3``) and exec directly.
     try:
         from .path_utils import get_emscripten_install_dir
 
         emsdk_root = get_emscripten_install_dir(platform, arch)
         if emsdk_root.exists():
-            # The launcher script lives at ``<emsdk>/emscripten/emcc.py``; the shim
-            # needs the logical entry point, which on all platforms is the python
-            # script invoked through the bundled node runtime. We export the path
-            # as-is; zccache treats ``.py`` as a normal executable argv[0].
-            emcc_py = emsdk_root / "emscripten" / "emcc.py"
-            empp_py = emsdk_root / "emscripten" / "em++.py"
-            if emcc_py.exists():
-                bins["emcc"] = "{emsdk_root}/emscripten/emcc.py"
-            if empp_py.exists():
-                bins["em++"] = "{emsdk_root}/emscripten/em++.py"
+            em_dir = emsdk_root / "emscripten"
+            if platform == "win":
+                emcc_entry = em_dir / "emcc.bat"
+                empp_entry = em_dir / "em++.bat"
+                rel_emcc = "{emsdk_root}/emscripten/emcc.bat"
+                rel_empp = "{emsdk_root}/emscripten/em++.bat"
+            else:
+                emcc_entry = em_dir / "emcc"
+                empp_entry = em_dir / "em++"
+                rel_emcc = "{emsdk_root}/emscripten/emcc"
+                rel_empp = "{emsdk_root}/emscripten/em++"
+
+            if emcc_entry.exists():
+                bins["emcc"] = rel_emcc
+            if empp_entry.exists():
+                bins["em++"] = rel_empp
     except Exception:
         pass
 
