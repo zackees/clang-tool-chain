@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clang-tool-chain"
-version = "1.3.3"
+version = "1.4.0"
 description = "Clang Tool Chain - C/C++ compilation toolchain utilities"
 readme = "README.md"
 license = "Apache-2.0"
@@ -152,12 +152,12 @@ clang-tool-chain-compile-native = "clang_tool_chain.commands.compile_native:comp
 # them to deprecation forwarders.
 # ---------------------------------------------------------------------------
 clang-tool-chain-clang = "clang_tool_chain.commands.entry_points:clang_new_main"
-"clang-tool-chain-clang++" = "clang_tool_chain.commands.entry_points:clang_cpp_new_main"
+clang-tool-chain-clang-cpp = "clang_tool_chain.commands.entry_points:clang_cpp_new_main"
 clang-tool-chain-zccache-clang = "clang_tool_chain.commands.entry_points:zccache_clang_main"
-"clang-tool-chain-zccache-clang++" = "clang_tool_chain.commands.entry_points:zccache_clang_cpp_main"
-"clang-tool-chain-em++" = "clang_tool_chain.commands.entry_points:empp_new_main"
+clang-tool-chain-zccache-clang-cpp = "clang_tool_chain.commands.entry_points:zccache_clang_cpp_main"
+clang-tool-chain-em-cpp = "clang_tool_chain.commands.entry_points:empp_new_main"
 clang-tool-chain-zccache-emcc = "clang_tool_chain.commands.entry_points:zccache_emcc_main"
-"clang-tool-chain-zccache-em++" = "clang_tool_chain.commands.entry_points:zccache_empp_main"
+clang-tool-chain-zccache-em-cpp = "clang_tool_chain.commands.entry_points:zccache_empp_main"
 clang-tool-chain-zccache-wasm-ld = "clang_tool_chain.commands.entry_points:zccache_wasm_ld_main"
 clang-tool-chain-clang-tidy = "clang_tool_chain.commands.entry_points:clang_tidy_new_main"
 clang-tool-chain-zccache-clang-tidy = "clang_tool_chain.commands.entry_points:zccache_clang_tidy_main"

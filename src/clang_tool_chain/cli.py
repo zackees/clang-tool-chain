@@ -1388,8 +1388,8 @@ def sccache_c_main() -> NoReturn:
 
 
 def sccache_cpp_main() -> NoReturn:
-    """Deprecated alias for `clang-tool-chain-zccache-clang++`."""
-    _warn_sccache_deprecated("clang-tool-chain-sccache-cpp", "clang-tool-chain-zccache-clang++")
+    """Deprecated alias for `clang-tool-chain-zccache-clang-cpp`."""
+    _warn_sccache_deprecated("clang-tool-chain-sccache-cpp", "clang-tool-chain-zccache-clang-cpp")
     from .zccache_shim import exec_via_zccache
 
     exec_via_zccache("clang++", use_cache=True)
@@ -1406,8 +1406,8 @@ def sccache_c_msvc_main() -> NoReturn:
 
 
 def sccache_cpp_msvc_main() -> NoReturn:
-    """Deprecated alias for `CTC_ABI=msvc clang-tool-chain-zccache-clang++`."""
-    _warn_sccache_deprecated("clang-tool-chain-sccache-cpp-msvc", "CTC_ABI=msvc clang-tool-chain-zccache-clang++")
+    """Deprecated alias for `CTC_ABI=msvc clang-tool-chain-zccache-clang-cpp`."""
+    _warn_sccache_deprecated("clang-tool-chain-sccache-cpp-msvc", "CTC_ABI=msvc clang-tool-chain-zccache-clang-cpp")
     from .zccache_shim import exec_via_zccache
 
     exec_via_zccache("clang++", use_cache=True, abi="msvc")
