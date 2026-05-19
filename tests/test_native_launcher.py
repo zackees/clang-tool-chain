@@ -154,12 +154,19 @@ class TestNativeToolResource(unittest.TestCase):
         )
 
     def test_registry_lists_launcher(self) -> None:
-        """TOOL_REGISTRY must contain the launcher entry."""
+        """TOOL_REGISTRY must produce ctc-clang and ctc-clang++.
+
+        As of 1.5.3, clang_launcher.cpp is no longer a standalone build target.
+        Its dispatch logic is #included into launcher_clang_tool.cpp, which
+        produces a single binary that argv[0]-dispatches between the clang
+        path and the simple-passthrough LLVM tools. ctc-clang is now the
+        primary output of the "clang_tool" registry entry.
+        """
         from clang_tool_chain.native_tools import TOOL_REGISTRY
 
-        self.assertIn("launcher", TOOL_REGISTRY)
-        tool = TOOL_REGISTRY["launcher"]
-        self.assertEqual(tool.source, "clang_launcher.cpp")
+        self.assertIn("clang_tool", TOOL_REGISTRY)
+        tool = TOOL_REGISTRY["clang_tool"]
+        self.assertEqual(tool.source, "launcher_clang_tool.cpp")
         self.assertEqual(tool.output, "ctc-clang")
         self.assertIn("ctc-clang++", tool.aliases)
 
