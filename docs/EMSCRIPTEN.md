@@ -115,6 +115,39 @@ clang-tool-chain-empp -O3 hello.cpp -o hello.html
 The wrapper automatically sets required environment variables:
 - `EMSCRIPTEN` - Points to Emscripten installation directory
 - `EMSCRIPTEN_ROOT` - Same as above (for compatibility)
+- `EMCC_WASM_LD` - Optional. Overrides the wasm-ld binary that emcc invokes at link time (see below).
+- `CTC_NO_WASMLD_INJECT` - Set to `1` to disable `ctc-emcc`'s auto-injection of `ctc-wasm-ld`.
+
+### Plugging in a custom wasm-ld (`EMCC_WASM_LD`)
+
+Upstream emcc has no env-var override for its bundled `wasm-ld`. To support `ctc-wasm-ld` (and any other drop-in replacement), `clang-tool-chain install emscripten` patches `emscripten/tools/shared.py` so the line
+
+```python
+WASM_LD = llvm_tool_path('wasm-ld')
+```
+
+becomes
+
+```python
+# CTC_EMCC_WASM_LD_PATCH: honor EMCC_WASM_LD for ctc-wasm-ld integration
+WASM_LD = os.environ.get('EMCC_WASM_LD') or llvm_tool_path('wasm-ld')
+```
+
+The patch is idempotent and is re-applied on every `ensure_emscripten_available` call, so existing installs upgrade automatically the next time emcc runs.
+
+Once patched, either invocation style works:
+
+```bash
+# Manual — opt your build system in by exporting the variable yourself.
+export EMCC_WASM_LD="$(command -v ctc-wasm-ld)"
+emcc hello.c -o hello.html
+
+# Automatic — ctc-emcc / ctc-em++ inject EMCC_WASM_LD when they fall through
+# to the Python emcc.py linker path. No build-system changes required.
+ctc-em++ hello.cpp -o hello.html
+```
+
+To opt out (e.g. while debugging a wasm-ld issue), set `CTC_NO_WASMLD_INJECT=1`. If `shared.py` cannot be patched (unknown emscripten layout, read-only filesystem) the installer logs a warning and emcc continues using the bundled `wasm-ld`.
 
 ## Example Usage
 

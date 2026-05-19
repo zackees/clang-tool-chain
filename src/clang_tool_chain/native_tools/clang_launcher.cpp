@@ -6,44 +6,28 @@
 //   Linux:   add -static-libstdc++ -static-libgcc -lpthread
 //   Windows: add -static-libstdc++ -static-libgcc
 
+#include "ctc_common.h"
+
 #include <algorithm>
 #include <atomic>
-#include <cctype>
 #include <chrono>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <fstream>
 #include <functional>
 #include <mutex>
-#include <sstream>
-#include <string>
 #include <thread>
 #include <unordered_map>
-#include <vector>
 
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <direct.h>
-#include <io.h>
-#include <process.h>
 #include <shlobj.h>
-#include <windows.h>
 #else
 #include <dirent.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
 #endif
 
+using namespace ctc;
+
 // ============================================================================
-// Section 0: Constants and Platform Detection
+// Section 0: Constants and tool-specific types
 // ============================================================================
 
-enum class Platform { Windows, Linux, Darwin };
-enum class Arch { X86_64, ARM64 };
 enum class CompilerMode { C, CXX };
 
 static constexpr const char* CTC_CACHE_FILENAME = ".ctc-cache";
@@ -82,46 +66,8 @@ struct Profiler {
 };
 static Profiler g_prof;
 
-static Platform get_platform() {
-#ifdef _WIN32
-    return Platform::Windows;
-#elif defined(__APPLE__)
-    return Platform::Darwin;
-#elif defined(__linux__)
-    return Platform::Linux;
-#else
-#error "Unsupported platform"
-#endif
-}
-
-static Arch get_arch() {
-#if defined(__x86_64__) || defined(_M_X64)
-    return Arch::X86_64;
-#elif defined(__aarch64__) || defined(_M_ARM64)
-    return Arch::ARM64;
-#else
-#error "Unsupported architecture"
-#endif
-}
-
-// For path construction: ~/.clang-tool-chain/clang/{platform}/{arch}/
-static const char* platform_str(Platform p) {
-    switch (p) {
-    case Platform::Windows: return "win";
-    case Platform::Linux: return "linux";
-    case Platform::Darwin: return "darwin";
-    }
-    return "unknown";
-}
-
-// For path construction (matches Python get_platform_info)
-static const char* arch_str(Arch a) {
-    switch (a) {
-    case Arch::X86_64: return "x86_64";
-    case Arch::ARM64: return "arm64";
-    }
-    return "unknown";
-}
+// (Platform/Arch enums, get_platform, get_arch, platform_str, arch_str —
+//  all live in ctc_common.h.)
 
 // For --target= triple construction
 static const char* arch_target_str(Arch a) {
@@ -143,44 +89,9 @@ static const char* platform_directive_str(Platform p) {
 }
 
 // ============================================================================
-// Section 1: Platform Abstraction Layer
+// Section 1: Tool-specific platform helpers
 // ============================================================================
-
-static char path_sep() {
-#ifdef _WIN32
-    return '\\';
-#else
-    return '/';
-#endif
-}
-
-static std::string path_join(const std::string& a, const std::string& b) {
-    if (a.empty()) return b;
-    if (b.empty()) return a;
-    char last = a.back();
-    if (last == '/' || last == '\\') return a + b;
-    return a + path_sep() + b;
-}
-
-static bool path_exists(const std::string& path) {
-#ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path.c_str());
-    return attr != INVALID_FILE_ATTRIBUTES;
-#else
-    struct stat st;
-    return stat(path.c_str(), &st) == 0;
-#endif
-}
-
-static bool is_directory(const std::string& path) {
-#ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path.c_str());
-    return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
-#else
-    struct stat st;
-    return stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
-#endif
-}
+// (path_sep, path_join, path_exists, is_directory — see ctc_common.h.)
 
 static std::vector<std::string> list_directory(const std::string& path) {
     std::vector<std::string> entries;
@@ -207,21 +118,6 @@ static std::vector<std::string> list_directory(const std::string& path) {
     return entries;
 }
 
-static std::string get_home_dir() {
-#ifdef _WIN32
-    const char* profile = getenv("USERPROFILE");
-    if (profile && profile[0]) return profile;
-    const char* homedrive = getenv("HOMEDRIVE");
-    const char* homepath = getenv("HOMEPATH");
-    if (homedrive && homepath) return std::string(homedrive) + homepath;
-    return "C:\\Users\\Default";
-#else
-    const char* home = getenv("HOME");
-    if (home && home[0]) return home;
-    return "/tmp";
-#endif
-}
-
 // Resolves the base clang-tool-chain directory. Mirrors Python's
 // path_utils.get_home_toolchain_dir — honors CLANG_TOOL_CHAIN_DOWNLOAD_PATH
 // (the var Python actually reads) and falls back to ~/.clang-tool-chain.
@@ -231,42 +127,13 @@ static std::string get_ctc_home_dir() {
     return path_join(get_home_dir(), ".clang-tool-chain");
 }
 
-static std::string get_exe_basename(const std::string& path) {
-    size_t pos = path.find_last_of("/\\");
-    std::string name = (pos == std::string::npos) ? path : path.substr(pos + 1);
-    // Strip .exe extension
-    if (name.size() > 4) {
-        std::string ext = name.substr(name.size() - 4);
-        for (auto& c : ext) c = (char)tolower((unsigned char)c);
-        if (ext == ".exe") name = name.substr(0, name.size() - 4);
-    }
-    return name;
-}
-
 static std::string get_dir_name(const std::string& path) {
     size_t pos = path.find_last_of("/\\");
     if (pos == std::string::npos) return ".";
     return path.substr(0, pos);
 }
 
-static std::string get_extension(const std::string& path) {
-    size_t dot = path.rfind('.');
-    size_t sep = path.find_last_of("/\\");
-    if (dot == std::string::npos || (sep != std::string::npos && dot < sep)) return "";
-    std::string ext = path.substr(dot);
-    for (auto& c : ext) c = (char)tolower((unsigned char)c);
-    return ext;
-}
-
-static std::string get_env(const char* name) {
-    const char* val = getenv(name);
-    return val ? val : "";
-}
-
-static bool env_is_truthy(const char* name) {
-    std::string val = get_env(name);
-    return val == "1" || val == "true" || val == "yes";
-}
+// (get_home_dir, get_exe_basename, get_extension, get_env, env_is_truthy live in ctc_common.h.)
 
 // Check CLANG_TOOL_CHAIN_NO_{feature}=1 or CLANG_TOOL_CHAIN_NO_AUTO=1
 static bool is_feature_disabled(const char* feature) {
@@ -275,14 +142,7 @@ static bool is_feature_disabled(const char* feature) {
     return env_is_truthy(env_name.c_str());
 }
 
-static void set_env(const char* name, const std::string& value) {
-#ifdef _WIN32
-    SetEnvironmentVariableA(name, value.c_str());
-    _putenv_s(name, value.c_str());
-#else
-    setenv(name, value.c_str(), 1);
-#endif
-}
+// (set_env lives in ctc_common.h.)
 
 // Hierarchical note suppression:
 //   CLANG_TOOL_CHAIN_NO_NOTE=1           -> suppress ALL notes
@@ -303,47 +163,7 @@ static void print_note(const char* name, const char* category, const char* messa
     fprintf(stderr, "[clang-tool-chain] %s\n", message);
 }
 
-static std::string read_file(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) return "";
-    std::ostringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
-}
-
-static bool write_file_atomic(const std::string& path, const std::string& content) {
-    // Write to temp file, then atomic rename
-    std::string tmp = path + ".tmp." + std::to_string(
-#ifdef _WIN32
-        (int)GetCurrentProcessId()
-#else
-        (int)getpid()
-#endif
-    );
-    {
-        std::ofstream f(tmp, std::ios::binary);
-        if (!f) return false;
-        f.write(content.data(), (std::streamsize)content.size());
-        if (!f) { std::remove(tmp.c_str()); return false; }
-    }
-#ifdef _WIN32
-    // Windows: MoveFileEx with REPLACE_EXISTING for atomic replace
-    if (!MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
-        // Fallback: delete target, then rename
-        DeleteFileA(path.c_str());
-        if (!MoveFileA(tmp.c_str(), path.c_str())) {
-            std::remove(tmp.c_str());
-            return false;
-        }
-    }
-#else
-    if (rename(tmp.c_str(), path.c_str()) != 0) {
-        std::remove(tmp.c_str());
-        return false;
-    }
-#endif
-    return true;
-}
+// (read_file, write_file_atomic live in ctc_common.h.)
 
 static bool copy_file_atomic(const std::string& src, const std::string& dst) {
     std::string tmp = dst + ".tmp." + std::to_string(
@@ -726,10 +546,7 @@ static bool str_contains(const std::string& haystack, const char* needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
-static bool starts_with(const std::string& s, const char* prefix) {
-    return s.compare(0, strlen(prefix), prefix) == 0;
-}
-
+// (starts_with(const char*) lives in ctc_common.h; std::string overload is local.)
 static bool starts_with(const std::string& s, const std::string& prefix) {
     return s.compare(0, prefix.size(), prefix) == 0;
 }
@@ -831,11 +648,7 @@ static std::string trim(const std::string& s) {
     return s.substr(start, end - start + 1);
 }
 
-static std::string to_lower(const std::string& s) {
-    std::string r = s;
-    for (auto& c : r) c = (char)tolower((unsigned char)c);
-    return r;
-}
+// (to_lower lives in ctc_common.h.)
 
 // Parse a value that might be a list: [a, b, c] or a plain string
 static std::vector<std::string> parse_directive_value(const std::string& value) {
@@ -1804,105 +1617,8 @@ static void check_toolchain_integrity(const CtcCache& cache, const std::string& 
 // Section 11: Process Execution
 // ============================================================================
 
-#ifdef _WIN32
-// Quote a single argument for Windows CreateProcess command line.
-// Follows the MSVC CRT argv parsing convention:
-//   - Arguments with spaces/tabs/quotes or empty args get wrapped in quotes
-//   - Inside quotes: backslashes before a quote must be doubled
-//   - Trailing backslashes before the closing quote must be doubled
-static std::string win_quote_arg(const std::string& arg) {
-    bool needs_quote = arg.empty() || arg.find(' ') != std::string::npos ||
-                       arg.find('\t') != std::string::npos ||
-                       arg.find('"') != std::string::npos;
-    if (!needs_quote) return arg;
-
-    std::string result = "\"";
-    size_t num_backslashes = 0;
-    for (size_t j = 0; j < arg.size(); j++) {
-        if (arg[j] == '\\') {
-            num_backslashes++;
-        } else if (arg[j] == '"') {
-            // Double the backslashes before a quote, then escape the quote
-            result.append(num_backslashes * 2 + 1, '\\');
-            result += '"';
-            num_backslashes = 0;
-        } else {
-            // Backslashes not followed by quote are literal
-            result.append(num_backslashes, '\\');
-            result += arg[j];
-            num_backslashes = 0;
-        }
-    }
-    // Double trailing backslashes (they precede the closing quote)
-    result.append(num_backslashes * 2, '\\');
-    result += '"';
-    return result;
-}
-
-static int create_process_and_wait(const std::vector<std::string>& cmd) {
-    // Build command line string (Windows requires a single command line)
-    std::string cmdline;
-    for (size_t i = 0; i < cmd.size(); i++) {
-        if (i > 0) cmdline += ' ';
-        cmdline += win_quote_arg(cmd[i]);
-    }
-
-    STARTUPINFOA si = {};
-    si.cb = sizeof(si);
-    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-    si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-    si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-    si.dwFlags = STARTF_USESTDHANDLES;
-
-    PROCESS_INFORMATION pi = {};
-
-    // CreateProcess needs mutable string
-    std::vector<char> cmdline_buf(cmdline.begin(), cmdline.end());
-    cmdline_buf.push_back('\0');
-
-    if (!CreateProcessA(nullptr, cmdline_buf.data(), nullptr, nullptr, TRUE,
-                        0, nullptr, nullptr, &si, &pi)) {
-        fprintf(stderr, "%sFailed to create process: %lu\n", CTC_TAG, GetLastError());
-        return 1;
-    }
-
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD exit_code = 1;
-    GetExitCodeProcess(pi.hProcess, &exit_code);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-    return (int)exit_code;
-}
-#endif
-
-static void print_command(const std::vector<std::string>& cmd) {
-    for (size_t i = 0; i < cmd.size(); i++) {
-        if (i > 0) printf(" ");
-        bool needs_quote = cmd[i].find(' ') != std::string::npos ||
-                           cmd[i].find('\t') != std::string::npos;
-        if (needs_quote) printf("\"");
-        printf("%s", cmd[i].c_str());
-        if (needs_quote) printf("\"");
-    }
-    printf("\n");
-}
-
-[[noreturn]] static void exec_process(const std::vector<std::string>& cmd) {
-#ifdef _WIN32
-    // Use CreateProcessA with explicit handle inheritance instead of _execv,
-    // which can lose stdout in some Windows environments (MSYS2, etc.)
-    int rc = create_process_and_wait(cmd);
-    exit(rc);
-#else
-    std::vector<const char*> argv_ptrs;
-    for (const auto& s : cmd) argv_ptrs.push_back(s.c_str());
-    argv_ptrs.push_back(nullptr);
-    execv(cmd[0].c_str(), const_cast<char**>(argv_ptrs.data()));
-    // If exec fails
-    fprintf(stderr, "%sFailed to exec: %s\n", CTC_TAG, cmd[0].c_str());
-    exit(127);
-#endif
-}
+// (print_command, win_quote_arg, create_process_and_wait, exec_process live
+//  in ctc_common.h. Callers pass CTC_TAG explicitly.)
 
 // ============================================================================
 // Section 12: main()
@@ -1998,7 +1714,7 @@ int main(int argc, char* argv[]) {
             cmd.push_back(argv[i]);
         }
         if (early_dry_run) { print_command(cmd); return 0; }
-        exec_process(cmd);
+        exec_process(cmd, CTC_TAG);
     }
 
     // 7. Parse user args
@@ -2147,6 +1863,6 @@ int main(int argc, char* argv[]) {
 #endif
 
     // Default: exec (replaces process) — compile-only, or no deploy-dependencies
-    exec_process(cmd);
+    exec_process(cmd, CTC_TAG);
     // Does not return
 }

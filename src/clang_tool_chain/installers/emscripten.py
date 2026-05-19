@@ -108,11 +108,16 @@ class EmscriptenInstaller(BaseToolchainInstaller):
         exe_ext = ".exe" if platform == "win" else ""
         return install_dir / "bin" / f"clang{exe_ext}"
 
+    # Marker comment written into shared.py to detect prior application of the
+    # EMCC_WASM_LD patch and make re-application idempotent.
+    _WASM_LD_PATCH_MARKER = "# CTC_EMCC_WASM_LD_PATCH"
+
     def post_extract_hook(self, install_dir: Path, platform: str, arch: str) -> None:
         """
         Custom post-extraction steps for Emscripten.
 
-        Creates clang++ on Windows, creates config file, and removes cache.
+        Creates clang++ on Windows, patches shared.py to honor EMCC_WASM_LD,
+        creates config file, and removes cache.
         """
         exe_ext = ".exe" if platform == "win" else ""
         bin_dir = install_dir / "bin"
@@ -160,6 +165,11 @@ class EmscriptenInstaller(BaseToolchainInstaller):
 
         # Create .emscripten config file if it doesn't exist
         self._create_config(install_dir, platform, arch)
+
+        # Patch shared.py so EMCC_WASM_LD env var overrides the bundled wasm-ld.
+        # This lets downstream projects plug in ctc-wasm-ld (or any wasm-ld replacement)
+        # without symlinking or shipping their own emscripten fork.
+        self._apply_wasm_ld_patch(install_dir)
 
         # CRITICAL: Remove entire cache directory to force proper header installation on first compile
         # The extracted archive may contain an incomplete or corrupted cache from the build process.
@@ -362,6 +372,58 @@ NODE_JS = '{node_js}'
                 f"This may indicate a permissions issue or disk space problem."
             ) from e
 
+    def _apply_wasm_ld_patch(self, install_dir: Path) -> None:
+        """
+        Patch emscripten/tools/shared.py so EMCC_WASM_LD overrides the bundled
+        wasm-ld path. Idempotent — re-applying on an already-patched file is a no-op.
+
+        Background:
+          Emscripten sets WASM_LD = llvm_tool_path('wasm-ld') at module load and
+          has no built-in env-var override. building.link_lld() invokes WASM_LD
+          directly, so swapping in ctc-wasm-ld requires either a symlink or a
+          source patch. We choose the source patch because symlinks get stomped
+          on every reinstall.
+        """
+        shared_py = install_dir / "emscripten" / "tools" / "shared.py"
+        if not shared_py.exists():
+            logger.warning(
+                f"EMCC_WASM_LD patch skipped — {shared_py} not found. emcc will not honor EMCC_WASM_LD on this install."
+            )
+            return
+
+        try:
+            content = shared_py.read_text(encoding="utf-8")
+        except OSError as e:
+            logger.warning(f"EMCC_WASM_LD patch skipped — could not read {shared_py}: {e}")
+            return
+
+        if self._WASM_LD_PATCH_MARKER in content:
+            logger.debug(f"shared.py already patched for EMCC_WASM_LD: {shared_py}")
+            return
+
+        original = "WASM_LD = llvm_tool_path('wasm-ld')"
+        replacement = (
+            f"{self._WASM_LD_PATCH_MARKER}: honor EMCC_WASM_LD for ctc-wasm-ld integration\n"
+            "WASM_LD = os.environ.get('EMCC_WASM_LD') or llvm_tool_path('wasm-ld')"
+        )
+
+        if original not in content:
+            # Unexpected emscripten version or already-replaced source. Don't crash
+            # the install — log and move on. Users can still opt in via symlink.
+            logger.warning(
+                f"EMCC_WASM_LD patch skipped — expected line not found in {shared_py}. "
+                f"This usually means an unknown emscripten version. "
+                f"ctc-wasm-ld auto-injection will be a no-op for this install."
+            )
+            return
+
+        patched = content.replace(original, replacement, 1)
+        try:
+            shared_py.write_text(patched, encoding="utf-8")
+            logger.info(f"Applied EMCC_WASM_LD patch to {shared_py}")
+        except OSError as e:
+            logger.warning(f"EMCC_WASM_LD patch skipped — could not write {shared_py}: {e}")
+
 
 # Module-level singleton installer instance
 _installer = EmscriptenInstaller()
@@ -430,6 +492,10 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
             and _verify_file_readable(wasm_opt_binary, "wasm-opt binary (quick check)", timeout_seconds=2.0)
             and _verify_file_readable(clang_binary, "clang binary (quick check)", timeout_seconds=2.0)
         ):
+            # Apply the EMCC_WASM_LD patch on existing installs (idempotent — no-op once applied).
+            # Covers users who installed before the patch was added to clang-tool-chain.
+            _installer._apply_wasm_ld_patch(install_dir)
+
             # Emscripten is already installed and configured
             logger.info(f"Emscripten already installed and configured for {platform}/{arch}")
             return
@@ -481,6 +547,9 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
                     f"Clang binary exists but verification failed: {clang_binary}\n"
                     f"Filesystem sync delay detected. File should be accessible when needed."
                 )
+
+            # Apply the EMCC_WASM_LD patch (idempotent) — covers existing installs.
+            _installer._apply_wasm_ld_patch(install_dir)
 
             logger.info(f"Emscripten setup complete and verified for {platform}/{arch}")
             return
