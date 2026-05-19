@@ -73,11 +73,15 @@ jobs:
           fi
           echo "Using LLVM root: $LLVM_ROOT"
 
+          # The script's default --lldb-root is `downloads-bins/assets/lldb`, a
+          # relative path that only resolves correctly from the repo root.
+          # Since we cd'd into downloads-bins/tools, point it at the real dir.
           python create_lldb_archives.py \
             --platform darwin \
             --arch x86_64 \
             --version "${{ github.event.inputs.lldb_version }}" \
-            --source-dir "$LLVM_ROOT"
+            --source-dir "$LLVM_ROOT" \
+            --lldb-root ../assets/lldb
         shell: bash
 
       - name: Verify archive + show checksum
