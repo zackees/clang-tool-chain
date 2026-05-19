@@ -1,3 +1,3 @@
 """Version information for clang-tool-chain."""
 
-__version__ = "1.5.2"
+__version__ = "1.5.3"

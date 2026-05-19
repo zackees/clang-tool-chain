@@ -1624,7 +1624,16 @@ static void check_toolchain_integrity(const CtcCache& cache, const std::string& 
 // Section 12: main()
 // ============================================================================
 
+// When CTC_LAUNCHER_NO_MAIN is defined (by launcher_clang_tool.cpp which
+// #includes this file to consolidate native binaries into one .exe), the
+// dispatch logic is exposed as a regular function instead of main(). This
+// lets the multi-role launcher invoke clang dispatch via argv[0] without
+// forking into a separate binary.
+#ifdef CTC_LAUNCHER_NO_MAIN
+int clang_launcher_main(int argc, char* argv[]) {
+#else
 int main(int argc, char* argv[]) {
+#endif
     bool profile = env_is_truthy("CTC_PROFILE");
     if (profile) g_prof.begin();
 

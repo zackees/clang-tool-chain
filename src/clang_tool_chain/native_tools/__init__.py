@@ -22,11 +22,6 @@ class NativeTool:
 
 
 TOOL_REGISTRY: dict[str, NativeTool] = {
-    "launcher": NativeTool(
-        source="clang_launcher.cpp",
-        output="ctc-clang",
-        aliases=["ctc-clang++"],
-    ),
     "emcc": NativeTool(
         source="launcher_emcc.cpp",
         output="ctc-emcc",
@@ -35,6 +30,47 @@ TOOL_REGISTRY: dict[str, NativeTool] = {
     "wasmld": NativeTool(
         source="launcher_wasmld.cpp",
         output="ctc-wasm-ld",
+    ),
+    # Unified native launcher: one C++ source -> one compiled binary -> N
+    # hardlinks/copies. argv[0] dispatch selects between:
+    #   - SPECIAL PATH for ctc-clang / ctc-clang++ / ctc-clang-cpp — runs
+    #     clang_launcher.cpp's full ABI-profile / sysroot / target / lib-deploy
+    #     dispatch (included into launcher_clang_tool.cpp via #include).
+    #   - FAST PATH for everything else — simple "find <install>/bin/<name>{ext}
+    #     and exec". Covers LLVM utilities (llvm-ar/nm/strip/...), the lld
+    #     linker variants, clang-query, and LLDB tools.
+    # clang_launcher.cpp is no longer a standalone TOOL_REGISTRY entry — it's
+    # consumed by launcher_clang_tool.cpp. Keep the alias list in sync with
+    # launcher_clang_tool.cpp's FAST_PATH_TOOLS table.
+    "clang_tool": NativeTool(
+        source="launcher_clang_tool.cpp",
+        output="ctc-clang",
+        aliases=[
+            # complex clang dispatch path
+            "ctc-clang++",
+            "ctc-clang-cpp",
+            # linker variants (all alias the same lld binary internally)
+            "ctc-lld",
+            "ctc-ld.lld",
+            "ctc-ld64.lld",
+            "ctc-lld-link",
+            # archive / inspection / manipulation
+            "ctc-llvm-ar",
+            "ctc-llvm-nm",
+            "ctc-llvm-objdump",
+            "ctc-llvm-objcopy",
+            "ctc-llvm-ranlib",
+            "ctc-llvm-strip",
+            "ctc-llvm-readobj",
+            "ctc-llvm-dlltool",
+            "ctc-llvm-lib",
+            "ctc-llvm-symbolizer",
+            # AST query
+            "ctc-clang-query",
+            # LLDB (separate install root)
+            "ctc-lldb",
+            "ctc-lldb-server",
+        ],
     ),
     # One C++ source -> one binary -> 17 hardlinks/copies. argv[0] dispatch
     # selects which emscripten Python tool to invoke. Keep this list in sync
