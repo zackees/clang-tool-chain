@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clang-tool-chain"
-version = "1.4.0"
+version = "1.5.0"
 description = "Clang Tool Chain - C/C++ compilation toolchain utilities"
 readme = "README.md"
 license = "Apache-2.0"
@@ -129,6 +129,16 @@ clang-tool-chain-lldb-check-python = "clang_tool_chain.wrapper:lldb_check_python
 clang-tool-chain-emcc = "clang_tool_chain.wrapper:emcc_main"
 clang-tool-chain-empp = "clang_tool_chain.wrapper:empp_main"
 clang-tool-chain-emar = "clang_tool_chain.wrapper:emar_main"
+clang-tool-chain-emstrip = "clang_tool_chain.wrapper:emstrip_main"
+clang-tool-chain-emranlib = "clang_tool_chain.wrapper:emranlib_main"
+clang-tool-chain-emnm = "clang_tool_chain.wrapper:emnm_main"
+# Short-form (ctc-*) Python fallbacks for the native emtool launchers.
+# When `compile-native` runs, the compiled C++ ctc-emar/ctc-emstrip/ctc-emranlib/
+# ctc-emnm binaries land in the same scripts dir and shadow these on PATH.
+ctc-emar = "clang_tool_chain.wrapper:ctc_emar_main"
+ctc-emstrip = "clang_tool_chain.wrapper:ctc_emstrip_main"
+ctc-emranlib = "clang_tool_chain.wrapper:ctc_emranlib_main"
+ctc-emnm = "clang_tool_chain.wrapper:ctc_emnm_main"
 # Emscripten + sccache (WebAssembly compilation with caching)
 clang-tool-chain-sccache-emcc = "clang_tool_chain.wrapper:sccache_emcc_main"
 clang-tool-chain-sccache-empp = "clang_tool_chain.wrapper:sccache_empp_main"

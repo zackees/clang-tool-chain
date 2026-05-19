@@ -233,9 +233,69 @@ def empp_main() -> NoReturn:
 
 def emar_main() -> NoReturn:
     """Entry point for emar wrapper (Emscripten archiver)."""
-    from ..execution.emscripten import execute_emscripten_tool
+    from ..execution.emscripten import execute_emscripten_archive_tool
 
-    execute_emscripten_tool("emar")
+    execute_emscripten_archive_tool("emar")
+
+
+def emstrip_main() -> NoReturn:
+    """Entry point for emstrip wrapper (Emscripten symbol stripper)."""
+    from ..execution.emscripten import execute_emscripten_archive_tool
+
+    execute_emscripten_archive_tool("emstrip")
+
+
+def emranlib_main() -> NoReturn:
+    """Entry point for emranlib wrapper (Emscripten archive indexer)."""
+    from ..execution.emscripten import execute_emscripten_archive_tool
+
+    execute_emscripten_archive_tool("emranlib")
+
+
+def emnm_main() -> NoReturn:
+    """Entry point for emnm wrapper (Emscripten symbol lister)."""
+    from ..execution.emscripten import execute_emscripten_archive_tool
+
+    execute_emscripten_archive_tool("emnm")
+
+
+# ----------------------------------------------------------------------------
+# Short-form ``ctc-*`` aliases — same dispatch, shorter command name.
+#
+# These deliberately go through the lightweight archive-tool path (no
+# Node.js setup, no compile-time filesystem-sync gymnastics). When a user
+# also runs ``compile-native``, the compiled launcher of the same name
+# (built from launcher_emtool.cpp) lands in the same scripts dir and wins
+# on PATH lookup — that's the fastest path, ~0 ms vs ~150 ms here.
+# ----------------------------------------------------------------------------
+
+
+def ctc_emar_main() -> NoReturn:
+    """Entry point for `ctc-emar` — Python fallback for the native ctc-emar launcher."""
+    from ..execution.emscripten import execute_emscripten_archive_tool
+
+    execute_emscripten_archive_tool("emar")
+
+
+def ctc_emstrip_main() -> NoReturn:
+    """Entry point for `ctc-emstrip` — Python fallback for the native ctc-emstrip launcher."""
+    from ..execution.emscripten import execute_emscripten_archive_tool
+
+    execute_emscripten_archive_tool("emstrip")
+
+
+def ctc_emranlib_main() -> NoReturn:
+    """Entry point for `ctc-emranlib` — Python fallback for the native ctc-emranlib launcher."""
+    from ..execution.emscripten import execute_emscripten_archive_tool
+
+    execute_emscripten_archive_tool("emranlib")
+
+
+def ctc_emnm_main() -> NoReturn:
+    """Entry point for `ctc-emnm` — Python fallback for the native ctc-emnm launcher."""
+    from ..execution.emscripten import execute_emscripten_archive_tool
+
+    execute_emscripten_archive_tool("emnm")
 
 
 # ============================================================================

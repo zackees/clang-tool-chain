@@ -135,17 +135,21 @@ def find_emscripten_tool(tool_name: str) -> Path:
             f"Try removing ~/.clang-tool-chain/emscripten and running again."
         )
 
-    # Emscripten tools are typically .py files
-    tool_script = emscripten_dir / f"{tool_name}.py"
-    if not tool_script.exists():
-        # Try without .py extension (some versions may not have it)
-        tool_script = emscripten_dir / tool_name
-        if not tool_script.exists():
-            raise RuntimeError(
-                f"Emscripten tool not found: {tool_name}\n"
-                f"Expected location: {tool_script}\n"
-                f"Emscripten directory: {emscripten_dir}"
-            )
+    # Emscripten tools are typically .py files. Newer distributions ship
+    # less-common tools (emnm, emsize, …) under a `tools/` subdir while the
+    # core compilers stay at the top level. Check both.
+    candidates = [
+        emscripten_dir / f"{tool_name}.py",
+        emscripten_dir / tool_name,
+        emscripten_dir / "tools" / f"{tool_name}.py",
+        emscripten_dir / "tools" / tool_name,
+    ]
+    tool_script = next((c for c in candidates if c.exists()), None)
+    if tool_script is None:
+        searched = "\n  ".join(str(c) for c in candidates)
+        raise RuntimeError(
+            f"Emscripten tool not found: {tool_name}\nSearched:\n  {searched}\nEmscripten directory: {emscripten_dir}"
+        )
 
     return tool_script
 
@@ -480,6 +484,72 @@ def execute_emscripten_tool(tool_name: str, args: list[str] | None = None) -> No
         handle_keyboard_interrupt_properly(ke)
     except Exception as e:
         logger.error(f"Failed to execute Emscripten tool: {e}")
+        print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+_ARCHIVE_TOOLS = frozenset({"emar", "emstrip", "emranlib", "emnm"})
+
+
+def execute_emscripten_archive_tool(tool_name: str, args: list[str] | None = None) -> NoReturn:
+    """
+    Execute an Emscripten archive/inspection tool (emar / emstrip / emranlib / emnm).
+
+    These tools are thin Python wrappers around llvm-* binaries — they do NOT
+    require Node.js and never run WebAssembly, so we skip the Node.js ensure
+    + bundled-node download that ``execute_emscripten_tool`` would otherwise
+    do. That removes the worst-case ~10-30 s first-run Node.js download from
+    any build that only uses these tools.
+
+    Args:
+        tool_name: One of "emar", "emstrip", "emranlib", "emnm".
+        args: Arguments to pass to the tool (defaults to sys.argv[1:]).
+    """
+    if tool_name not in _ARCHIVE_TOOLS:
+        raise ValueError(
+            f"execute_emscripten_archive_tool is only for {sorted(_ARCHIVE_TOOLS)}, "
+            f"got {tool_name!r}. Use execute_emscripten_tool for general tools."
+        )
+
+    if args is None:
+        args = sys.argv[1:]
+
+    # Resolve the tool script (also triggers download/install on first use).
+    try:
+        tool_script = find_emscripten_tool(tool_name)
+    except RuntimeError as e:
+        print(f"\n{'=' * 60}", file=sys.stderr)
+        print(f"clang-tool-chain Emscripten {tool_name} Error", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
+        print(f"{e}", file=sys.stderr)
+        print(f"{'=' * 60}\n", file=sys.stderr)
+        sys.exit(1)
+
+    platform_name, arch = get_platform_info()
+    install_dir = Path.home() / ".clang-tool-chain" / "emscripten" / platform_name / arch
+    config_path = install_dir / ".emscripten"
+    emscripten_bin_dir = install_dir / "bin"
+
+    # Minimal environment setup — emar/emstrip/emranlib/emnm read EM_CONFIG to
+    # locate LLVM_ROOT; without it they scan PATH which is brittle.
+    env = os.environ.copy()
+    env["EMSCRIPTEN"] = str(install_dir / "emscripten")
+    env["EMSCRIPTEN_ROOT"] = env["EMSCRIPTEN"]
+    env["EM_CONFIG"] = str(config_path)
+    # Prepend emscripten bin/ so the underlying llvm-ar/llvm-ranlib/etc are
+    # discoverable without requiring the user to mutate PATH themselves.
+    env["PATH"] = f"{emscripten_bin_dir}{os.pathsep}{env.get('PATH', '')}"
+
+    cmd = [sys.executable, str(tool_script)] + args
+    try:
+        result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        print(f"\nError: Python interpreter not found: {sys.executable}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt as ke:
+        handle_keyboard_interrupt_properly(ke)
+    except Exception as e:
         print(f"\nError executing {tool_name}: {e}", file=sys.stderr)
         sys.exit(1)
 
