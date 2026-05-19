@@ -102,8 +102,8 @@ def test_patched_module_honors_env_var(tmp_path: Path, monkeypatch: pytest.Monke
 
     monkeypatch.delenv("EMCC_WASM_LD", raising=False)
     default_mod = load()
-    assert default_mod.WASM_LD == "/fake/llvm/bin/wasm-ld"
+    assert getattr(default_mod, "WASM_LD") == "/fake/llvm/bin/wasm-ld"  # noqa: B009
 
     monkeypatch.setenv("EMCC_WASM_LD", "/custom/ctc-wasm-ld")
     override_mod = load()
-    assert override_mod.WASM_LD == "/custom/ctc-wasm-ld"
+    assert getattr(override_mod, "WASM_LD") == "/custom/ctc-wasm-ld"  # noqa: B009
