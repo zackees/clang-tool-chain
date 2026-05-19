@@ -202,10 +202,22 @@ def _build_windows_msvc_flags(arch: str) -> AbiProfile:
     return AbiProfile(flags_all=[f"--target={target}"], flags_link_only=[])
 
 
-def _build_linux_flags() -> AbiProfile:
-    # ``flags_all`` is empty on Linux: the bundled clang driver's default target
-    # triple is already correct. Linker flags match the LLDLinkerTransformer.
-    return AbiProfile(flags_all=[], flags_link_only=["-fuse-ld=lld"])
+def _build_linux_flags(install_dir: Path) -> AbiProfile:
+    # The bundled clang driver's default target triple is already correct, so
+    # we don't inject --target here. Linker flag matches the legacy
+    # LLDLinkerTransformer.
+    flags_all: list[str] = []
+    flags_link_only: list[str] = ["-fuse-ld=lld"]
+
+    # Bundled libunwind: mirror the legacy LinuxUnwindTransformer. When
+    # ``<install>/include/libunwind.h`` exists, inject -I for compile and
+    # -L + -Wl,-rpath for link so user code can ``#include <libunwind.h>``
+    # and ``-lunwind`` without system libunwind-dev being installed.
+    if (install_dir / "include" / "libunwind.h").exists():
+        flags_all.append("-I{clang_root}/include")
+        flags_link_only.extend(["-L{clang_root}/lib", "-Wl,-rpath,{clang_root}/lib"])
+
+    return AbiProfile(flags_all=flags_all, flags_link_only=flags_link_only)
 
 
 def _detect_macos_sdk_path() -> str:
@@ -237,14 +249,14 @@ def _build_darwin_flags() -> AbiProfile:
     return profile
 
 
-def _build_abi_profiles(platform: str, arch: str) -> dict[str, AbiProfile]:
+def _build_abi_profiles(install_dir: Path, platform: str, arch: str) -> dict[str, AbiProfile]:
     if platform == "win":
         return {
             "gnu": _build_windows_gnu_flags(arch),
             "msvc": _build_windows_msvc_flags(arch),
         }
     if platform == "linux":
-        return {"linux": _build_linux_flags()}
+        return {"linux": _build_linux_flags(install_dir)}
     if platform == "darwin":
         return {"darwin": _build_darwin_flags()}
     return {}
@@ -292,7 +304,7 @@ def generate_profile(install_dir: Path, platform: str, arch: str) -> Profile:
         arch=arch,
         clang_root=_fwd(install_dir),
         binaries=_discover_binaries(install_dir, platform, arch),
-        abi_profiles=_build_abi_profiles(platform, arch),
+        abi_profiles=_build_abi_profiles(install_dir, platform, arch),
         sanitizer_env=_build_sanitizer_env(install_dir, platform),
         libdeploy=_build_libdeploy(install_dir, platform, arch),
     )

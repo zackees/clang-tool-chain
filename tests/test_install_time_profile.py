@@ -283,6 +283,42 @@ def test_linux_has_single_linux_profile(tmp_path: Path) -> None:
     assert "-fuse-ld=lld" in profile.abi_profiles["linux"].flags_link_only
 
 
+@pytest.mark.skipif(not IS_LINUX, reason="Linux-specific libunwind injection")
+def test_linux_profile_injects_bundled_libunwind_flags(tmp_path: Path) -> None:
+    """Regression: bundled libunwind headers must be on the Linux compile path.
+
+    Mirrors the legacy LinuxUnwindTransformer behavior — when
+    ``<install>/include/libunwind.h`` exists, the Linux profile must inject
+    ``-I{clang_root}/include`` at compile time and ``-L{clang_root}/lib`` +
+    ``-Wl,-rpath,{clang_root}/lib`` at link time so user code can
+    ``#include <libunwind.h>`` and ``-lunwind`` without system libunwind-dev.
+    """
+    install = _make_fake_install(tmp_path / "install", "linux", "x86_64")
+    profile = profile_mod.generate_profile(install, "linux", "x86_64")
+
+    linux = profile.abi_profiles["linux"]
+    assert "-I{clang_root}/include" in linux.flags_all, (
+        f"Compile-time -I for libunwind headers missing: {linux.flags_all}"
+    )
+    assert "-L{clang_root}/lib" in linux.flags_link_only, f"Link-time -L for libunwind missing: {linux.flags_link_only}"
+    assert "-Wl,-rpath,{clang_root}/lib" in linux.flags_link_only, (
+        f"Link-time -Wl,-rpath for libunwind missing: {linux.flags_link_only}"
+    )
+
+
+@pytest.mark.skipif(not IS_LINUX, reason="Linux-specific libunwind injection")
+def test_linux_profile_omits_libunwind_flags_when_header_absent(tmp_path: Path) -> None:
+    """No libunwind flags should be injected when libunwind.h is not bundled."""
+    install = _make_fake_install(tmp_path / "install", "linux", "x86_64")
+    (install / "include" / "libunwind.h").unlink()
+
+    profile = profile_mod.generate_profile(install, "linux", "x86_64")
+    linux = profile.abi_profiles["linux"]
+    assert "-I{clang_root}/include" not in linux.flags_all
+    assert "-L{clang_root}/lib" not in linux.flags_link_only
+    assert not any("rpath" in f for f in linux.flags_link_only)
+
+
 @pytest.mark.skipif(not IS_MACOS, reason="macOS-specific ABI profile")
 def test_darwin_has_single_darwin_profile(tmp_path: Path) -> None:
     install = _make_fake_install(tmp_path / "install", "darwin", "arm64")
