@@ -1,0 +1,132 @@
+name: Build LLDB Archive (darwin/x86_64, v19.1.7)
+
+# Why this workflow exists:
+#   Upstream LLVM stopped publishing macOS x86_64 prebuilts after 19.x.
+#   Every other platform tracks LLDB 21.x; darwin/x86_64 is pinned to 19.1.7
+#   (the last upstream macOS X64 release). See docs/LLDB.md and CLAUDE.md.
+#
+# Why it runs on ubuntu-latest, not macos-15-intel:
+#   downloads-bins/tools/create_lldb_archives.py is pure file-shuffling
+#   (tar -xJf extract, shutil.copy2, tarfile + zstandard repack). It never
+#   invokes codesign / otool / install_name_tool on the LLVM extracts —
+#   the macOS binaries are shipped exactly as Apple-signed by upstream.
+#   Running on Linux is ~10× cheaper than macos-15-intel CI minutes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      lldb_version:
+        description: 'LLDB/LLVM version to build (default 19.1.7 — the last upstream macOS X64 release)'
+        required: true
+        default: '19.1.7'
+
+jobs:
+  build-lldb-darwin-x86_64:
+    name: LLDB darwin/x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install zstandard
+
+      - name: Download LLVM ${{ github.event.inputs.lldb_version }} macOS X64
+        run: |
+          set -euo pipefail
+          mkdir -p downloads-bins/work/lldb/darwin/x86_64
+          cd downloads-bins/work/lldb/darwin/x86_64
+
+          URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ github.event.inputs.lldb_version }}/LLVM-${{ github.event.inputs.lldb_version }}-macOS-X64.tar.xz"
+          echo "Downloading $URL"
+          curl -fLO --retry 3 --retry-delay 5 "$URL"
+
+          ls -lh "LLVM-${{ github.event.inputs.lldb_version }}-macOS-X64.tar.xz"
+        shell: bash
+
+      - name: Extract LLVM archive
+        run: |
+          set -euo pipefail
+          cd downloads-bins/work/lldb/darwin/x86_64
+          mkdir -p extracted
+          tar -xJf "LLVM-${{ github.event.inputs.lldb_version }}-macOS-X64.tar.xz" -C extracted
+          ls -la extracted/
+        shell: bash
+
+      - name: Build LLDB archive
+        run: |
+          set -euo pipefail
+          cd downloads-bins/tools
+
+          LLVM_ROOT=$(find ../work/lldb/darwin/x86_64/extracted -maxdepth 1 -type d -name "LLVM-*" -o -name "clang+llvm-*" | head -1)
+          if [ -z "$LLVM_ROOT" ]; then
+            echo "ERROR: Could not find extracted LLVM directory" >&2
+            ls -la ../work/lldb/darwin/x86_64/extracted/
+            exit 1
+          fi
+          echo "Using LLVM root: $LLVM_ROOT"
+
+          python create_lldb_archives.py \
+            --platform darwin \
+            --arch x86_64 \
+            --version "${{ github.event.inputs.lldb_version }}" \
+            --source-dir "$LLVM_ROOT"
+        shell: bash
+
+      - name: Verify archive + show checksum
+        run: |
+          set -euo pipefail
+          cd downloads-bins/assets/lldb/darwin/x86_64
+          ls -lh
+          file lldb-*.tar.zst
+          cat lldb-*.tar.zst.sha256
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lldb-darwin-x86_64-${{ github.event.inputs.lldb_version }}
+          path: |
+            downloads-bins/assets/lldb/darwin/x86_64/lldb-*.tar.zst
+            downloads-bins/assets/lldb/darwin/x86_64/lldb-*.tar.zst.sha256
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summary
+        run: |
+          {
+            echo "# LLDB darwin/x86_64 Archive Build"
+            echo
+            echo "**LLDB Version:** ${{ github.event.inputs.lldb_version }}"
+            echo
+            ARCHIVE=$(ls downloads-bins/assets/lldb/darwin/x86_64/lldb-*.tar.zst 2>/dev/null | head -1)
+            if [ -f "$ARCHIVE" ]; then
+              SIZE=$(ls -lh "$ARCHIVE" | awk '{print $5}')
+              echo "**Archive:** $(basename "$ARCHIVE") ($SIZE)"
+              echo
+              echo "## SHA256"
+              echo
+              echo '```'
+              cat downloads-bins/assets/lldb/darwin/x86_64/lldb-*.tar.zst.sha256
+              echo '```'
+              echo
+              echo "## Next steps"
+              echo
+              echo "1. Download the artifact from this run."
+              echo "2. In the \`clang-tool-chain-bins\` repo, copy the \`.tar.zst\` and \`.sha256\` into \`assets/lldb/darwin/x86_64/\`."
+              echo "3. Update \`assets/lldb/darwin/x86_64/manifest.json\` — set \`latest\` to \`${{ github.event.inputs.lldb_version }}\`, add the new version entry with the SHA256 above."
+              echo "4. Update \`assets/lldb/manifest.json\` — add \`darwin/x86_64\` to the platform list."
+              echo "5. Open a PR with the new files; merge."
+              echo "6. Back in \`clang-tool-chain\`, bump the \`downloads-bins\` submodule pointer and remove the broken skip step in \`.github/workflows/test-lldb-macos-x86.yml\`."
+            else
+              echo "**Status:** ❌ Archive not produced"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
