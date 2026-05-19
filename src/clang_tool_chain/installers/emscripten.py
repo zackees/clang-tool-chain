@@ -112,6 +112,13 @@ class EmscriptenInstaller(BaseToolchainInstaller):
     # EMCC_WASM_LD patch and make re-application idempotent.
     _WASM_LD_PATCH_MARKER = "# CTC_EMCC_WASM_LD_PATCH"
 
+    # Sidecar marker file written next to .emscripten after a successful patch.
+    # Used as a one-stat() fast-path so we don't re-read the ~30 MB shared.py
+    # on every ensure_emscripten_available() call. Versioned filename — bump
+    # the suffix when the patch content changes so old markers don't
+    # falsely advertise the new patch as applied.
+    _WASM_LD_PATCH_MARKER_FILE = ".ctc-wasm-ld-patched.v1"
+
     def post_extract_hook(self, install_dir: Path, platform: str, arch: str) -> None:
         """
         Custom post-extraction steps for Emscripten.
@@ -377,6 +384,14 @@ NODE_JS = '{node_js}'
         Patch emscripten/tools/shared.py so EMCC_WASM_LD overrides the bundled
         wasm-ld path. Idempotent — re-applying on an already-patched file is a no-op.
 
+        Hot path (1.5.5+): if the sidecar marker file
+        ``{install_dir}/.ctc-wasm-ld-patched.v1`` exists, return immediately
+        after a single ``stat()``. Skips the ~30 MB read of shared.py that
+        used to dominate ``ensure_emscripten_available`` (~50–800 ms per call).
+
+        Cold path: read shared.py, scan for the inline marker, apply if needed,
+        then drop the sidecar marker so future calls take the hot path.
+
         Background:
           Emscripten sets WASM_LD = llvm_tool_path('wasm-ld') at module load and
           has no built-in env-var override. building.link_lld() invokes WASM_LD
@@ -384,6 +399,13 @@ NODE_JS = '{node_js}'
           source patch. We choose the source patch because symlinks get stomped
           on every reinstall.
         """
+        marker_path = install_dir / self._WASM_LD_PATCH_MARKER_FILE
+        if marker_path.exists():
+            # Hot path: single stat. Marker is written only after a successful
+            # patch, and reinstalls wipe install_dir whole, so marker presence
+            # is a reliable "patch is in shared.py" signal.
+            return
+
         shared_py = install_dir / "emscripten" / "tools" / "shared.py"
         if not shared_py.exists():
             logger.warning(
@@ -398,6 +420,10 @@ NODE_JS = '{node_js}'
             return
 
         if self._WASM_LD_PATCH_MARKER in content:
+            # Patch already present in shared.py — likely from a pre-1.5.5
+            # install that pre-dates the sidecar marker. Drop the marker so the
+            # next call takes the hot path and skip the (already-applied) patch.
+            self._write_marker_quietly(marker_path)
             logger.debug(f"shared.py already patched for EMCC_WASM_LD: {shared_py}")
             return
 
@@ -421,12 +447,90 @@ NODE_JS = '{node_js}'
         try:
             shared_py.write_text(patched, encoding="utf-8")
             logger.info(f"Applied EMCC_WASM_LD patch to {shared_py}")
+            self._write_marker_quietly(marker_path)
         except OSError as e:
             logger.warning(f"EMCC_WASM_LD patch skipped — could not write {shared_py}: {e}")
+
+    @staticmethod
+    def _write_marker_quietly(marker_path: Path) -> None:
+        """Drop the sidecar marker. Best-effort — failures aren't fatal since
+        the next call just takes the cold path and re-detects the patch."""
+        try:
+            marker_path.write_text(
+                "# Sidecar marker — clang-tool-chain has applied the EMCC_WASM_LD\n"
+                "# patch to emscripten/tools/shared.py. Delete this file to force a\n"
+                "# re-check on the next ensure_emscripten_available() call.\n",
+                encoding="utf-8",
+            )
+        except OSError as e:
+            logger.debug(f"Could not write {marker_path} (non-fatal): {e}")
 
 
 # Module-level singleton installer instance
 _installer = EmscriptenInstaller()
+
+# Per-process memo of (platform, arch) tuples that have been fully verified
+# by ensure_emscripten_available() in this Python process. Lets a single
+# build script that calls ensure() multiple times pay the check cost only once.
+# Reset across processes (which is what FastLED's bash compile wasm pattern hits)
+# — that's covered by the marker file + done.txt-age fast paths.
+_ensure_memo: set[tuple[str, str]] = set()
+
+
+def _emscripten_ensure_memo_reset_for_tests() -> None:
+    """Test-only hook to clear the per-process memoization set."""
+    _ensure_memo.clear()
+
+
+# Age of done.txt past which we trust the install is settled and skip the
+# expensive open()+read() readability checks. The race window that
+# _verify_file_readable was written to handle (Windows filesystem sync after
+# extraction) closes within a couple of seconds; 5 s is conservative.
+_DONE_TXT_RACE_WINDOW_SECONDS = 5.0
+
+# How long to trust a previously-verified install before re-fetching the
+# upstream manifest from GitHub. The manifest fetch is the dominant cost in
+# warm ``ensure_emscripten_available`` calls (~250–900 ms depending on
+# network latency). Caching for 24 hours means an interactive build pays the
+# manifest cost once a day instead of every invocation.
+#
+# Force a fresh check by setting ``CLANG_TOOL_CHAIN_FORCE_MANIFEST_CHECK=1``,
+# or by removing done.txt to trigger a full reinstall path.
+_MANIFEST_RECHECK_INTERVAL_SECONDS = 24 * 60 * 60
+
+
+def _is_post_race_window(done_path: Path) -> bool:
+    """True if done.txt exists and was created/modified more than
+    ``_DONE_TXT_RACE_WINDOW_SECONDS`` seconds ago. Used to skip
+    ``_verify_file_readable`` calls that are only meaningful while the
+    filesystem-sync race window is open."""
+    import time as _time
+
+    try:
+        age = _time.time() - done_path.stat().st_mtime
+    except OSError:
+        return False
+    return age > _DONE_TXT_RACE_WINDOW_SECONDS
+
+
+def _can_skip_manifest_recheck(done_path: Path) -> bool:
+    """True if we can trust the existing install without re-fetching the
+    upstream manifest from GitHub. Saves ~250–900 ms per call.
+
+    Returns False when:
+      - done.txt is missing or unreadable (treat as not installed)
+      - done.txt is older than ``_MANIFEST_RECHECK_INTERVAL_SECONDS``
+      - ``CLANG_TOOL_CHAIN_FORCE_MANIFEST_CHECK`` is set (testing / debugging)
+    """
+    if os.environ.get("CLANG_TOOL_CHAIN_FORCE_MANIFEST_CHECK", "").lower() in ("1", "true", "yes"):
+        return False
+    import time as _time
+
+    try:
+        age = _time.time() - done_path.stat().st_mtime
+    except OSError:
+        return False
+    return 0 <= age < _MANIFEST_RECHECK_INTERVAL_SECONDS
 
 
 def is_emscripten_installed(platform: str, arch: str) -> bool:
@@ -462,6 +566,15 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
         platform: Platform name (e.g., "win", "linux", "darwin")
         arch: Architecture name (e.g., "x86_64", "arm64")
     """
+    # Process-level memoization: if we already verified this (platform, arch)
+    # in the current Python process, every subsequent call is a no-op. Covers
+    # build scripts that call ensure() multiple times per invocation. Cross-
+    # process callers (e.g. ``bash compile wasm`` spawning fresh interpreters)
+    # don't hit this — that's what the marker file + done.txt-age gates are for.
+    memo_key = (platform, arch)
+    if memo_key in _ensure_memo:
+        return
+
     logger.info(f"Ensuring Emscripten is installed for {platform}/{arch}")
 
     # Get paths for checks
@@ -471,33 +584,46 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
     exe_ext = ".exe" if platform == "win" else ""
     clang_binary = bin_dir / f"clang{exe_ext}"
     wasm_opt_binary = bin_dir / f"wasm-opt{exe_ext}"
+    done_path = install_dir / "done.txt"
 
     # Quick check without lock - if fully set up, return immediately
     # This avoids lock contention for the common case where everything is ready
     # Check all critical files to ensure complete installation
     # CRITICAL: Also verify files are readable, not just exists() - fixes filesystem sync race
     clang_pp_binary = bin_dir / f"clang++{exe_ext}"
+
+    # is_emscripten_installed() makes two HTTPS calls to GitHub to verify the
+    # upstream SHA256 hasn't changed. Skip that round-trip when done.txt is
+    # recent (default: 24 h). User can force a recheck by setting
+    # ``CLANG_TOOL_CHAIN_FORCE_MANIFEST_CHECK=1`` or by deleting done.txt.
+    install_is_current = _can_skip_manifest_recheck(done_path) or is_emscripten_installed(platform, arch)
+
     if (
-        is_emscripten_installed(platform, arch)
+        install_is_current
         and config_path.exists()
         and clang_binary.exists()
         and clang_pp_binary.exists()  # Also check clang++ exists
         and wasm_opt_binary.exists()
     ):
-        # Files exist, but verify they're readable (Windows filesystem sync issue)
-        # Use a moderate timeout (2 seconds) to handle filesystem sync delays in parallel tests
-        # CRITICAL: Also verify clang binary is readable, not just config and wasm-opt
-        if (
+        # Readability checks via _verify_file_readable() guard against a Windows
+        # filesystem-sync race that's only present in the few seconds after
+        # extraction. Once done.txt is older than the race window, skip them —
+        # they cost ~30–100 ms per call (one open() + read() each) and add no
+        # safety on a settled install. Fresh installs still get the full check.
+        skip_readability_checks = _is_post_race_window(done_path)
+        readable_ok = skip_readability_checks or (
             _verify_file_readable(config_path, "Emscripten config (quick check)", timeout_seconds=2.0)
             and _verify_file_readable(wasm_opt_binary, "wasm-opt binary (quick check)", timeout_seconds=2.0)
             and _verify_file_readable(clang_binary, "clang binary (quick check)", timeout_seconds=2.0)
-        ):
+        )
+        if readable_ok:
             # Apply the EMCC_WASM_LD patch on existing installs (idempotent — no-op once applied).
             # Covers users who installed before the patch was added to clang-tool-chain.
             _installer._apply_wasm_ld_patch(install_dir)
 
             # Emscripten is already installed and configured
             logger.info(f"Emscripten already installed and configured for {platform}/{arch}")
+            _ensure_memo.add(memo_key)
             return
         else:
             # Files exist but aren't readable yet - fall through to acquire lock and wait
@@ -552,6 +678,7 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
             _installer._apply_wasm_ld_patch(install_dir)
 
             logger.info(f"Emscripten setup complete and verified for {platform}/{arch}")
+            _ensure_memo.add(memo_key)
             return
 
         # Check if installation is corrupted (done.txt exists but critical files missing)
@@ -636,6 +763,7 @@ def ensure_emscripten_available(platform: str, arch: str) -> None:
             )
 
         logger.info(f"Emscripten setup complete and verified for {platform}/{arch}")
+        _ensure_memo.add(memo_key)
 
     # CRITICAL: After releasing the lock, do a final verification that critical files are
     # accessible to external processes (like child processes that will run emcc)
