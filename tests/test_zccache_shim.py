@@ -425,6 +425,54 @@ def test_strip_lunwind_on_macos_does_not_touch_similar_flags(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# _strip_unsupported_macos_linker_flags
+# ---------------------------------------------------------------------------
+
+
+def test_strip_unsupported_macos_linker_flags_removes_no_undefined(monkeypatch):
+    """On darwin, -Wl,--no-undefined is stripped (ld64.lld rejects it)."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "darwin")
+    args = ["-fuse-ld=lld", "-Wl,--no-undefined", "-pthread"]
+    result = shim._strip_unsupported_macos_linker_flags(args)
+    assert result == ["-fuse-ld=lld", "-pthread"]
+
+
+def test_strip_unsupported_macos_linker_flags_preserves_other_wl_parts(monkeypatch):
+    """Comma-separated -Wl,<a,b,c> keeps the supported entries."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "darwin")
+    args = ["-Wl,--no-undefined,-fatal_warnings,-dead_strip"]
+    result = shim._strip_unsupported_macos_linker_flags(args)
+    assert result == ["-Wl,-fatal_warnings,-dead_strip"]
+
+
+def test_strip_unsupported_macos_linker_flags_removes_bare_flag(monkeypatch):
+    """Bare --no-undefined (not wrapped in -Wl,) is also stripped on darwin."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "darwin")
+    assert shim._strip_unsupported_macos_linker_flags(["--no-undefined"]) == []
+
+
+def test_strip_unsupported_macos_linker_flags_strips_allow_shlib_undefined(monkeypatch):
+    """--allow-shlib-undefined is a no-op on macOS; strip it too."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "darwin")
+    args = ["-Wl,--allow-shlib-undefined"]
+    assert shim._strip_unsupported_macos_linker_flags(args) == []
+
+
+def test_strip_unsupported_macos_linker_flags_noop_on_linux(monkeypatch):
+    """Linux ld.lld accepts --no-undefined natively — must NOT strip."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "linux")
+    args = ["-Wl,--no-undefined"]
+    assert shim._strip_unsupported_macos_linker_flags(args) == args
+
+
+def test_strip_unsupported_macos_linker_flags_noop_on_windows(monkeypatch):
+    """Windows is handled by the separate Windows strip helper."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "windows")
+    args = ["-Wl,--no-undefined"]
+    assert shim._strip_unsupported_macos_linker_flags(args) == args
+
+
+# ---------------------------------------------------------------------------
 # Actionable error messages
 # ---------------------------------------------------------------------------
 
