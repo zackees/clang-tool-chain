@@ -425,6 +425,113 @@ def test_strip_lunwind_on_macos_does_not_touch_similar_flags(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# _inject_rpath_origin_if_needed (issue #45)
+# ---------------------------------------------------------------------------
+
+
+def test_inject_rpath_origin_linux_with_deploy(monkeypatch):
+    """On Linux, --deploy-dependencies must inject -Wl,-rpath,$ORIGIN."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "linux")
+    monkeypatch.delenv("CLANG_TOOL_CHAIN_NO_RPATH", raising=False)
+    args = ["foo.c", "-fsanitize=address", "-o", "foo"]
+    result = shim._inject_rpath_origin_if_needed(args, deploy_requested=True)
+    assert "-Wl,-rpath,$ORIGIN" in result
+    # Original args preserved
+    assert result[: len(args)] == args
+
+
+def test_inject_rpath_origin_skipped_without_deploy(monkeypatch):
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "linux")
+    args = ["foo.c", "-o", "foo"]
+    result = shim._inject_rpath_origin_if_needed(args, deploy_requested=False)
+    assert "-Wl,-rpath,$ORIGIN" not in result
+    assert result == args
+
+
+def test_inject_rpath_origin_skipped_on_macos(monkeypatch):
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "darwin")
+    args = ["foo.c", "-o", "foo"]
+    result = shim._inject_rpath_origin_if_needed(args, deploy_requested=True)
+    assert "-Wl,-rpath,$ORIGIN" not in result
+    assert result == args
+
+
+def test_inject_rpath_origin_skipped_on_windows(monkeypatch):
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "windows")
+    args = ["foo.c", "-o", "foo.exe"]
+    result = shim._inject_rpath_origin_if_needed(args, deploy_requested=True)
+    assert "-Wl,-rpath,$ORIGIN" not in result
+    assert result == args
+
+
+def test_inject_rpath_origin_skipped_when_compile_only(monkeypatch):
+    """The flag is a link-time concern; -c/-S/-E invocations must be untouched."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "linux")
+    for no_link_flag in ("-c", "-S", "-E"):
+        args = ["foo.c", no_link_flag, "-o", "foo.o"]
+        result = shim._inject_rpath_origin_if_needed(args, deploy_requested=True)
+        assert "-Wl,-rpath,$ORIGIN" not in result, f"leaked into {no_link_flag} compile"
+        assert result == args
+
+
+def test_inject_rpath_origin_idempotent(monkeypatch):
+    """If user already passed the flag, don't duplicate it."""
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "linux")
+    args = ["foo.c", "-Wl,-rpath,$ORIGIN", "-o", "foo"]
+    result = shim._inject_rpath_origin_if_needed(args, deploy_requested=True)
+    assert result.count("-Wl,-rpath,$ORIGIN") == 1
+    assert result == args
+
+
+def test_inject_rpath_origin_suppressed_by_env(monkeypatch):
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "linux")
+    monkeypatch.setenv("CLANG_TOOL_CHAIN_NO_RPATH", "1")
+    args = ["foo.c", "-o", "foo"]
+    result = shim._inject_rpath_origin_if_needed(args, deploy_requested=True)
+    assert "-Wl,-rpath,$ORIGIN" not in result
+    assert result == args
+
+
+def test_exec_via_zccache_injects_rpath_on_linux_deploy(tmp_path, monkeypatch, fake_profile):
+    """End-to-end: --deploy-dependencies on Linux causes $ORIGIN rpath in zccache argv."""
+    profile, _ = fake_profile
+    py_dir = tmp_path / "py"
+    py_dir.mkdir()
+    monkeypatch.setattr(sys, "executable", str(py_dir / "python.exe"))
+    _fake_zccache(py_dir)
+    # The fake_profile fixture keys its ABI by host platform; when we override
+    # _host_platform_key to "linux" below, _resolve_abi will return "linux".
+    # Ensure the profile has that key (idempotent on real Linux hosts).
+    if "linux" not in profile.abi_profiles:
+        sample = next(iter(profile.abi_profiles.values()))
+        profile.abi_profiles["linux"] = sample
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "clang-tool-chain-cpp",
+            "-fsanitize=address",
+            "foo.cpp",
+            "-o",
+            "foo",
+            "--deploy-dependencies",
+        ],
+    )
+    monkeypatch.setattr(shim, "_host_platform_key", lambda: "linux")
+    monkeypatch.setenv("CLANG_TOOL_CHAIN_NO_DIRECTIVES", "1")
+    monkeypatch.delenv("CLANG_TOOL_CHAIN_NO_RPATH", raising=False)
+    _install_execvp_capture(monkeypatch)
+
+    with pytest.raises(_ExecvpCalled) as exc:
+        shim.exec_via_zccache("clang++", use_cache=False)
+
+    argv = exc.value.argv
+    assert "-Wl,-rpath,$ORIGIN" in argv, f"rpath not injected into zccache argv:\n{argv}"
+    # --deploy-dependencies itself must be stripped before reaching zccache
+    assert "--deploy-dependencies" not in argv
+
+
+# ---------------------------------------------------------------------------
 # Actionable error messages
 # ---------------------------------------------------------------------------
 

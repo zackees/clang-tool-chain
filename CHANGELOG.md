@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resource directory auto-detection for compiler intrinsics (mm_malloc.h, etc.)
 - Resource directory correctly set for linking with libclang_rt.builtins.a
 - Manifest test now correctly handles deprecated versions when determining "latest"
+- **`zccache_shim`**: inject `-Wl,-rpath,$ORIGIN` on Linux when
+  `--deploy-dependencies` is present (issue #45). The shim already injected
+  `-shared-libasan` and the post-link hook deployed `libclang_rt.asan.so`
+  next to the executable, but the resulting RUNPATH contained only the
+  toolchain install dir — the dynamic loader couldn't find the sibling
+  `.so` and exited with `cannot open shared object file`, breaking the
+  `Clang (Linux x86_64)` ASAN CI for 11+ days. Mirrors the native
+  `clang_launcher.cpp` section 6.8 behavior. Suppressable via
+  `CLANG_TOOL_CHAIN_NO_RPATH=1`.
 
 ### Migration Notes
 - Existing installations will automatically download the new integrated archive on next use
