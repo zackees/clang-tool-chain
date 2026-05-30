@@ -93,6 +93,28 @@ def _platform_compile_flags(clang_bin_dir: Path, platform_name: str) -> list[str
         if lld_path.exists():
             flags.append("-fuse-ld=lld")
 
+        # macOS SDK + libc++: without these, clang can't find system C++
+        # headers like <cctype> (the bundled clang doesn't auto-detect the
+        # SDK when invoked as a launcher compile). Mirrors the runtime
+        # discovery in `native_tools/clang_launcher.cpp::discover_macos_sdk_path`.
+        #
+        # FastLED #2612 (compile of launcher_emcc.cpp fails with
+        # `fatal error: 'cctype' file not found`).
+        sdk_path = os.environ.get("SDKROOT", "").strip()
+        if not sdk_path or not Path(sdk_path).is_dir():
+            try:
+                sdk_path = subprocess.check_output(
+                    ["xcrun", "--show-sdk-path"],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                ).strip()
+            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+                sdk_path = ""
+        if sdk_path:
+            flags.extend(["-isysroot", sdk_path])
+        flags.append("-stdlib=libc++")
+
     return flags
 
 
