@@ -181,6 +181,7 @@ def exec_via_zccache(
     user_args, abi_override = _consume_ctc_abi_flag(user_args)
     user_args, deploy_requested = _consume_deploy_dependencies_flag(user_args)
     user_args = _strip_unsupported_windows_linker_flags(user_args)
+    user_args = _strip_unsupported_macos_linker_flags(user_args)
     user_args = _strip_lunwind_on_macos(user_args)
     user_args = _inject_shared_libasan_if_needed(user_args)
     resolved_abi = _resolve_abi(abi, user_args, abi_override)
@@ -430,6 +431,57 @@ def _strip_unsupported_windows_linker_flags(args: list[str]) -> list[str]:
             f"MinGW mode: {' '.join(stripped)}. Set "
             "CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1 to silence. "
             "These flags were removed, not supported.\n"
+        )
+    return out
+
+
+def _strip_unsupported_macos_linker_flags(args: list[str]) -> list[str]:
+    """Remove `-Wl,` linker pass-throughs that ld64.lld on macOS rejects.
+
+    Apple's ld64 (and LLVM's ld64.lld used via `-fuse-ld=lld`) does not
+    accept GNU-style `--no-undefined`. On macOS the default linker behavior
+    is already "error on undefined symbols", so the flag is both unrecognized
+    *and* redundant — strip it.
+
+    Also strip `--allow-shlib-undefined`: ld64 allows undefined symbols in
+    dylibs by default, so the flag is a no-op on macOS.
+
+    Mirrors the legacy ``_translate_linker_flags_for_macos_lld`` behavior
+    that the wrapper.py path applied via ``_add_lld_linker_if_needed``;
+    that translation was lost when ``clang_cpp_new_main`` started execing
+    directly through this shim.
+    """
+    if _host_platform_key() != "darwin":
+        return args
+    unsupported = {
+        "--no-undefined",
+        "--allow-shlib-undefined",
+    }
+    stripped: list[str] = []
+    out: list[str] = []
+    for a in args:
+        if a.startswith("-Wl,"):
+            parts = a[4:].split(",")
+            kept = [p for p in parts if p not in unsupported]
+            dropped = [p for p in parts if p in unsupported]
+            if dropped:
+                stripped.extend(dropped)
+            if not kept:
+                continue
+            if len(kept) == len(parts):
+                out.append(a)
+            else:
+                out.append("-Wl," + ",".join(kept))
+            continue
+        if a in unsupported:
+            stripped.append(a)
+            continue
+        out.append(a)
+    if stripped and os.environ.get("CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE") != "1":
+        sys.stderr.write(
+            "clang-tool-chain: removed GNU linker flags not supported by "
+            f"ld64.lld: {' '.join(stripped)}. Set "
+            "CLANG_TOOL_CHAIN_NO_LINKER_COMPAT_NOTE=1 to silence.\n"
         )
     return out
 

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.9] - 2026-05-30
+
+### Fixed
+- **macOS link failures via `clang-tool-chain-clang-cpp` (zccache shim)**: The new `exec_via_zccache` code path was missing the `--no-undefined` / `--allow-shlib-undefined` strip that the legacy `wrapper.py` path applied via `_translate_linker_flags_for_macos_lld`. ld64.lld rejects `--no-undefined` with `unknown argument`, which broke every macOS link invoking the new entry points (e.g. FastLED's quick/release-mode runner linking). Added `_strip_unsupported_macos_linker_flags` to `zccache_shim.py` mirroring `_strip_unsupported_windows_linker_flags`, plus regression tests.
+
 ### Changed
 - **Windows GNU ABI**: MinGW headers and sysroot are now integrated into the main Clang archive
   - Eliminates separate 91 MB MinGW download on first use
