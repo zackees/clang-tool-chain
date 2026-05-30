@@ -183,6 +183,7 @@ def exec_via_zccache(
     user_args = _strip_unsupported_windows_linker_flags(user_args)
     user_args = _strip_lunwind_on_macos(user_args)
     user_args = _inject_shared_libasan_if_needed(user_args)
+    user_args = _inject_rpath_origin_if_needed(user_args, deploy_requested)
     resolved_abi = _resolve_abi(abi, user_args, abi_override)
 
     abi_profile = profile.abi_profiles.get(resolved_abi)
@@ -485,6 +486,37 @@ def _inject_shared_libasan_if_needed(args: list[str]) -> list[str]:
             "to silence.\n"
         )
     return out
+
+
+def _inject_rpath_origin_if_needed(args: list[str], deploy_requested: bool) -> list[str]:
+    """On Linux, add ``-Wl,-rpath,$ORIGIN`` when linking with ``--deploy-dependencies``.
+
+    Mirrors the native launcher (``clang_launcher.cpp`` section 6.8): when the
+    caller asked for sibling-library deployment, the produced executable must
+    look next to itself first so the deployed ``libclang_rt.asan.so`` (or any
+    other dylib copied alongside) actually loads at runtime.
+
+    Without this, ``--deploy-dependencies`` copies the libraries but RUNPATH
+    only contains the toolchain install dir — the dynamic loader can't find
+    the sibling ``.so`` and exits with ``cannot open shared object file``
+    (issue #45). Skipped on macOS (uses ``@loader_path`` via separate
+    mechanism) and Windows (no rpath concept; DLL search order handles it).
+
+    Suppressable via ``CLANG_TOOL_CHAIN_NO_RPATH=1`` to match the native
+    launcher's ``is_feature_disabled("RPATH")`` semantics.
+    """
+    if not deploy_requested:
+        return args
+    if _host_platform_key() != "linux":
+        return args
+    if _is_no_link_invocation(args):
+        return args
+    if os.environ.get("CLANG_TOOL_CHAIN_NO_RPATH") == "1":
+        return args
+    flag = "-Wl,-rpath,$ORIGIN"
+    if flag in args:
+        return args
+    return list(args) + [flag]
 
 
 def _auto_install_or_regenerate_profile() -> bool:
