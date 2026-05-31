@@ -487,21 +487,52 @@ def execute_lldb_tool(tool_name: str, args: list[str] | None = None, print_mode:
         try:
             # Get the LLDB installation directory
             install_dir = downloader.get_lldb_install_dir(platform_name, get_platform_info()[1])
-            lib_dir = install_dir / "lib"
 
-            # Check if lib directory exists
-            if lib_dir.exists():
-                logger.debug(f"Adding {lib_dir} to LD_LIBRARY_PATH")
-                env = os.environ.copy()
-                # Prepend lib directory to LD_LIBRARY_PATH
-                existing_ld_path = env.get("LD_LIBRARY_PATH", "")
-                if existing_ld_path:
-                    env["LD_LIBRARY_PATH"] = f"{lib_dir}{os.pathsep}{existing_ld_path}"
-                else:
-                    env["LD_LIBRARY_PATH"] = str(lib_dir)
+            # Resolve lib directory(ies) for LD_LIBRARY_PATH. The bundled LLDB
+            # is built without an $ORIGIN-relative RUNPATH, so the loader
+            # needs LD_LIBRARY_PATH to find `liblldb.so.<ver>` etc. — see
+            # FastLED/clang-tool-chain#46.
+            #
+            # Layout varies across LLVM/LLDB releases:
+            #   * Standard: `<install_dir>/lib/`
+            #   * Some upstream archives nest under a versioned dir that may
+            #     not be flattened on every platform (e.g.
+            #     `<install_dir>/LLVM-21.x-Linux/lib/`).
+            #   * Some Linux distros split into `<install_dir>/lib/x86_64-linux-gnu/`.
+            #
+            # Collect every plausible `lib*` directory under install_dir
+            # (depth-limited to avoid scanning the full tree) and prepend
+            # them all to LD_LIBRARY_PATH. The dynamic loader walks entries
+            # left-to-right; duplicates are harmless.
+            lib_dirs: list[Path] = []
+            primary_lib = install_dir / "lib"
+            if primary_lib.is_dir():
+                lib_dirs.append(primary_lib)
+                # Common per-arch sub-bucket on Linux multi-arch installs.
+                for sub in primary_lib.iterdir():
+                    if sub.is_dir() and sub.name.startswith(("x86_64-", "aarch64-", "arm64-")):
+                        lib_dirs.append(sub)
             else:
-                logger.debug(f"No lib directory found at {lib_dir}, using system libraries")
-                env = os.environ.copy()
+                # Fall back: look one level down for `*/lib` (versioned dirs).
+                for child in install_dir.iterdir():
+                    if child.is_dir():
+                        candidate = child / "lib"
+                        if candidate.is_dir():
+                            lib_dirs.append(candidate)
+                            break
+
+            env = os.environ.copy()
+            if lib_dirs:
+                logger.debug(f"Adding {len(lib_dirs)} lib dir(s) to LD_LIBRARY_PATH: {lib_dirs}")
+                # Prepend lib directories to LD_LIBRARY_PATH (first-found wins).
+                existing_ld_path = env.get("LD_LIBRARY_PATH", "")
+                new_entries = os.pathsep.join(str(d) for d in lib_dirs)
+                if existing_ld_path:
+                    env["LD_LIBRARY_PATH"] = f"{new_entries}{os.pathsep}{existing_ld_path}"
+                else:
+                    env["LD_LIBRARY_PATH"] = new_entries
+            else:
+                logger.debug(f"No lib directory found under {install_dir}, using system libraries")
 
             # Configure Python environment for LLDB (future: Linux/macOS support)
             python_dir = install_dir / "python"
