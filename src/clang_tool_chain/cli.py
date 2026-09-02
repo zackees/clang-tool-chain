@@ -315,6 +315,18 @@ def cmd_install_clang(args: argparse.Namespace) -> int:
         print(f"  {install_dir}")
         print()
 
+        # NixOS support (issue #55): the toolchain itself is already installed, but
+        # this short-circuit skips download_and_install() entirely, so re-run the
+        # clang.cfg/clang++.cfg generation here too -- otherwise an existing install
+        # never picks up the NixOS fix. No-op on non-NixOS hosts.
+        if platform_name == "linux":
+            try:
+                from .platform.nixos import write_nixos_clang_configs
+
+                write_nixos_clang_configs(install_dir)
+            except Exception as e:
+                print(f"Warning: failed to write NixOS clang config (non-fatal): {e}", file=sys.stderr)
+
         # Mark as installed in database
         env_breadcrumbs.mark_component_installed("clang", str(install_dir))
 
@@ -940,6 +952,42 @@ def cmd_install_valgrind(args: argparse.Namespace) -> int:
         return 1
 
 
+def _nixos_diagnostic_lines() -> list[str]:
+    """Human-readable NixOS status lines for `clang-tool-chain-test` (issue #55).
+
+    Returns an empty list when not on NixOS, or when the (lazily imported)
+    `platform.nixos` module is unavailable -- never raises, so a missing or
+    broken module can't crash the diagnostic run.
+
+    When no system gcc/g++ is available, appends an explicit line spelling
+    out the consequence (produced binaries will not link or start) since
+    that's the whole point of surfacing this in the *compile*-failure paths
+    below, before the underlying compiler error is even shown.
+    """
+    try:
+        from clang_tool_chain.platform import nixos as _nixos
+    except ImportError:
+        return []
+
+    try:
+        lines = _nixos.nixos_status_report()
+    except Exception:
+        return []
+
+    if any("no system gcc" in line.lower() for line in lines):
+        lines.append(
+            "Without gcc, produced binaries will not link or start. Add `gcc` to "
+            "environment.systemPackages in configuration.nix, or run inside `nix-shell -p gcc`."
+        )
+    return lines
+
+
+def _print_nixos_hint() -> None:
+    """Print `_nixos_diagnostic_lines()`, indented to match cmd_test's step output."""
+    for line in _nixos_diagnostic_lines():
+        print(f"      {line}")
+
+
 def cmd_test(args: argparse.Namespace) -> int:
     """Run diagnostic tests to verify the toolchain installation."""
     import tempfile
@@ -950,7 +998,7 @@ def cmd_test(args: argparse.Namespace) -> int:
     print()
 
     # Test 1: Platform Detection
-    print("[1/7] Testing platform detection...")
+    print("[1/8] Testing platform detection...")
     platform_name: str
     arch: str
     try:
@@ -965,7 +1013,7 @@ def cmd_test(args: argparse.Namespace) -> int:
     print()
 
     # Test 2: Toolchain Download/Installation
-    print("[2/7] Testing toolchain installation...")
+    print("[2/8] Testing toolchain installation...")
     try:
         bin_dir = wrapper.get_platform_binary_dir()
         if bin_dir.exists():
@@ -982,7 +1030,7 @@ def cmd_test(args: argparse.Namespace) -> int:
     print()
 
     # Test 3: Finding clang binary
-    print("[3/7] Testing binary resolution (clang)...")
+    print("[3/8] Testing binary resolution (clang)...")
     clang_path: Path
     try:
         clang_path = wrapper.find_tool_binary("clang")
@@ -999,7 +1047,7 @@ def cmd_test(args: argparse.Namespace) -> int:
     print()
 
     # Test 4: Finding clang++ binary
-    print("[4/7] Testing binary resolution (clang++)...")
+    print("[4/8] Testing binary resolution (clang++)...")
     clang_cpp_path: Path
     try:
         clang_cpp_path = wrapper.find_tool_binary("clang++")
@@ -1016,7 +1064,7 @@ def cmd_test(args: argparse.Namespace) -> int:
     print()
 
     # Test 5: Version check for clang
-    print("[5/7] Testing clang version...")
+    print("[5/8] Testing clang version...")
     try:
         result = subprocess.run([str(clang_path), "--version"], capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
@@ -1035,7 +1083,7 @@ def cmd_test(args: argparse.Namespace) -> int:
     print()
 
     # Test 6: Simple compilation test
-    print("[6/7] Testing C compilation...")
+    print("[6/8] Testing C compilation...")
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         test_c = tmpdir_path / "test.c"
@@ -1063,6 +1111,7 @@ int main() {
                 safe_print("      ✗ FAILED: Compilation failed")
                 print(f"      stdout: {result.stdout}")
                 print(f"      stderr: {result.stderr}")
+                _print_nixos_hint()
                 return 1
 
             # Verify output file was created
@@ -1080,7 +1129,7 @@ int main() {
     print()
 
     # Test 7: Simple C++ compilation test
-    print("[7/7] Testing C++ compilation...")
+    print("[7/8] Testing C++ compilation...")
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         test_cpp = tmpdir_path / "test.cpp"
@@ -1108,6 +1157,7 @@ int main() {
                 safe_print("      ✗ FAILED: Compilation failed")
                 print(f"      stdout: {result.stdout}")
                 print(f"      stderr: {result.stderr}")
+                _print_nixos_hint()
                 return 1
 
             # Verify output file was created
@@ -1122,6 +1172,47 @@ int main() {
         except Exception as e:
             safe_print(f"      ✗ FAILED: {e}")
             return 1
+        print()
+
+        # Test 8: NixOS / ELF runtime-resolvability diagnostics.
+        # Warning-only *unless* the produced binary genuinely fails to start,
+        # in which case it's promoted to a hard failure. Reuses test_out from
+        # Test 7 above rather than compiling a fresh binary, so this step
+        # costs essentially nothing on a healthy system (no NixOS, all
+        # sonames resolvable): nixos_status_report() short-circuits on
+        # is_nixos(), and diagnose_binary() returns [] immediately.
+        print("[8/8] Checking runtime-resolvability diagnostics...")
+        try:
+            _print_nixos_hint()
+
+            from clang_tool_chain import elf_check
+
+            warning_lines = elf_check.diagnose_binary(test_out)
+            for line in warning_lines:
+                safe_print(f"      {line}")
+
+            if warning_lines:
+                try:
+                    run_result = subprocess.run([str(test_out)], capture_output=True, timeout=10)
+                    binary_starts = run_result.returncode == 0
+                except subprocess.TimeoutExpired:
+                    # It started running (just didn't finish in time) -- not a
+                    # startup failure, so don't penalize it here.
+                    binary_starts = True
+                except OSError:
+                    binary_starts = False
+
+                if not binary_starts:
+                    safe_print("      ✗ FAILED: produced binary could not start (see warnings above)")
+                    return 1
+                safe_print("      ! WARNING: runtime-resolvability issues detected (see above)")
+            else:
+                safe_print("      ✓ PASSED (no runtime-resolvability issues detected)")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
+        except Exception as e:
+            # Diagnostic-only step: never fail the overall test run because of it.
+            safe_print(f"      (skipped: diagnostic check raised {e})")
     print()
 
     print("=" * 70)

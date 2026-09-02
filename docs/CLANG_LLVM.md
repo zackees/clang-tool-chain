@@ -1,8 +1,9 @@
 # Clang/LLVM Toolchain
 
 <!-- AGENT: Read this file when working on compiler wrappers, sanitizers (ASAN/UBSAN), LLD linker,
-     macOS SDK detection, Windows GNU/MSVC ABI, or sccache integration.
-     Key topics: clang-tool-chain-c, clang-tool-chain-cpp, -fsanitize, lld, ld64.lld, MinGW, MSVC.
+     macOS SDK detection, Windows GNU/MSVC ABI, sccache integration, or NixOS support (issue #55).
+     Key topics: clang-tool-chain-c, clang-tool-chain-cpp, -fsanitize, lld, ld64.lld, MinGW, MSVC,
+     NixOS, nix-ld, clang.cfg.
      Related: docs/ENVIRONMENT_VARIABLES.md, docs/SHARED_LIBRARY_DEPLOYMENT.md. -->
 
 This document covers the Clang/LLVM toolchain integration, including platform-specific features and compiler wrappers.
@@ -511,6 +512,51 @@ The MSVC ABI injection is implemented in `wrapper.py`:
 These functions are called by:
 - `execute_tool()` and `run_tool()` for direct compilation
 - `sccache_clang_main()` and `sccache_clang_cpp_main()` for sccache variants
+
+## NixOS (Linux)
+
+NixOS has no FHS: there is no `/usr/lib`, `/usr/include`, or `/lib64/ld-linux-x86-64.so.2` symlink
+farm for a prebuilt binary to assume exists. A bundled toolchain that ships headers-only sysroot
+data (see [Sysroot Headers](ENVIRONMENT_VARIABLES.md#sysroot-headers-cposix-development-headers))
+therefore cannot locate the C/C++ standard library headers or runtime libraries on its own, and the
+system's dynamic loader itself lives at a `/nix/store/...` path rather than a well-known default
+location (see GitHub issue #55).
+
+**How clang-tool-chain compensates:**
+
+- **Compile/link time**: Clang's driver auto-loads a per-binary config file
+  (`<bindir>/<driver-basename>.cfg`) if one is present next to the compiler binary. `clang-tool-chain
+  install clang` probes the system's Nix-provided `gcc`/`g++` (via `gcc -print-file-name=...` and
+  friends) to discover the Nix store paths for glibc, libgcc, and libstdc++, and writes
+  `bin/clang.cfg` / `bin/clang++.cfg` with the resulting `--gcc-toolchain`, `-B`, `-L`, and
+  `-Wl,-rpath` flags. Every `clang-tool-chain-*` compile/link invocation picks these up automatically
+  and transparently, no environment changes needed. `clang-tool-chain install clang` regenerates
+  these config files on every run, so once `gcc` becomes available (or a package version changes),
+  simply re-running the install command refreshes them.
+- **Run time**: the generated config deliberately does **not** pin `-Wl,-dynamic-linker`, leaving
+  each produced binary's ELF interpreter at Clang's normal default. This allows
+  [nix-ld](https://github.com/nix-community/nix-ld) (NixOS's `programs.nix-ld` module) to intercept
+  process startup and resolve transitive shared-library dependencies via `NIX_LD_LIBRARY_PATH` --
+  which is the reason `clang-tool-chain-test`'s runtime-resolvability diagnostic (see below) treats a
+  *pinned* interpreter as the trap to specifically call out: once something (a linker flag, a
+  different build system) pins the interpreter to a Nix store path, nix-ld no longer runs for that
+  binary and `NIX_LD_LIBRARY_PATH` is silently ignored.
+
+**Requirements:** a system `gcc` must be on `PATH` (add `gcc` to `environment.systemPackages` in
+`configuration.nix`, or run inside `nix-shell -p gcc`) for the toolchain probe to succeed. Without
+it, `clang-tool-chain install clang` logs a warning and skips config generation -- compiles will fail
+with missing-header/missing-library errors until `gcc` is available and the install command is
+re-run.
+
+**Diagnostics:** `clang-tool-chain-test` (see [Testing Guide](TESTING.md)) includes a NixOS-aware
+step that reports whether the toolchain probe succeeded and runs the ELF runtime-resolvability check
+(`clang_tool_chain.elf_check`) against a freshly compiled test binary, so a broken setup ("nothing in
+the sequence hints at the cause" from issue #55) surfaces as an explicit warning instead of a mystery
+runtime failure.
+
+**Opt-out:** set `CLANG_TOOL_CHAIN_NO_NIXOS_CFG=1` before running `clang-tool-chain install clang` to
+skip config generation entirely -- see
+[Environment Variables](ENVIRONMENT_VARIABLES.md#nixos-support-linux).
 
 ## Build Utilities
 

@@ -211,6 +211,11 @@ class ClangInstaller(BaseToolchainInstaller):
             # fully materialized on disk.
             self._write_profile_json(install_dir, platform, arch)
 
+            # NixOS support (issue #55): write bin/clang.cfg + bin/clang++.cfg with
+            # the flags needed to find libstdc++/glibc/gcc at compile and link time
+            # (NixOS has no /usr/lib). No-op on non-NixOS hosts.
+            self._write_nixos_configs(install_dir, platform)
+
             print("Clang/LLVM toolchain installation complete!", file=sys.stderr, flush=True)
 
         finally:
@@ -307,6 +312,27 @@ class ClangInstaller(BaseToolchainInstaller):
             handle_keyboard_interrupt_properly(ke)
         except Exception as e:
             logger.warning(f"Failed to write profile.json (non-fatal): {e}")
+
+    def _write_nixos_configs(self, install_dir: Path, platform: str) -> None:
+        """
+        Write ``bin/clang.cfg`` / ``bin/clang++.cfg`` with NixOS support flags (issue #55).
+
+        Lazily imported to keep import cost off non-NixOS install paths. No-op on
+        non-Linux platforms and on non-NixOS Linux hosts (checked inside
+        ``write_nixos_clang_configs`` itself). Failures are non-fatal.
+        """
+        if platform != "linux":
+            return
+        try:
+            from ..platform.nixos import write_nixos_clang_configs
+
+            written = write_nixos_clang_configs(install_dir)
+            if written:
+                logger.info(f"Wrote NixOS clang config(s): {', '.join(str(p) for p in written)}")
+        except KeyboardInterrupt as ke:
+            handle_keyboard_interrupt_properly(ke)
+        except Exception as e:
+            logger.warning(f"Failed to write NixOS clang config (non-fatal): {e}")
 
     def _create_libunwind_symlinks(self, lib_dir: Path) -> None:
         """
