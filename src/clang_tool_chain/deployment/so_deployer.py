@@ -283,7 +283,7 @@ class SoDeployer(BaseLibraryDeployer):
 
     def _get_trusted_dirs(self) -> list[Path]:
         """Return the default trusted library directories that exist on this system."""
-        candidates = list(self._DEFAULT_TRUSTED_DIRS)
+        candidates: list[str] = list(self._DEFAULT_TRUSTED_DIRS)
         if self.arch == "x86_64":
             candidates.append("/usr/lib/x86_64-linux-gnu")
         elif self.arch in ("arm64", "aarch64"):
