@@ -98,6 +98,10 @@ class SoDeployer(BaseLibraryDeployer):
         # Parsed `ldconfig -p` cache: soname -> resolved path. None means
         # "not built yet"; built at most once per deployer instance.
         self._ldconfig_cache: dict[str, Path] | None = None
+        # Clang install root, resolved lazily. Directories under it never
+        # count as "already resolvable" -- see is_resolvable().
+        self._toolchain_root: Path | None = None
+        self._toolchain_root_resolved = False
 
     def detect_dependencies(self, binary_path: Path) -> list[str]:
         """
@@ -311,6 +315,15 @@ class SoDeployer(BaseLibraryDeployer):
         4. Default trusted directories (/lib, /lib64, /usr/lib, /usr/lib64,
            and the arch-specific multiarch directory)
 
+        Directories inside the toolchain install root are deliberately NOT
+        counted as resolvable. The toolchain stamps ``-Wl,-rpath,<clang_root>/lib``
+        (and the compiler-rt lib dir) into every binary it links, so without
+        this exclusion every toolchain-provided library -- libunwind,
+        libclang_rt.asan.so -- would look "already resolvable" and never be
+        deployed. That would leave the shipped binary depending on
+        ``~/.clang-tool-chain`` existing on the target machine, which is
+        precisely what --deploy-dependencies exists to avoid.
+
         Args:
             soname: Library filename to check (e.g. "libc++.so.1")
             binary_path: The binary whose RPATH/RUNPATH should be consulted
@@ -320,17 +333,21 @@ class SoDeployer(BaseLibraryDeployer):
             dynamic loader, None otherwise.
         """
         for directory in self._get_rpath_runpath_dirs(binary_path):
+            if self._is_toolchain_dir(directory):
+                continue
             candidate = directory / soname
             if candidate.is_file():
                 return candidate
 
         for directory in self._get_ld_library_path_dirs():
+            if self._is_toolchain_dir(directory):
+                continue
             candidate = directory / soname
             if candidate.is_file():
                 return candidate
 
         cached = self._get_ldconfig_cache().get(soname)
-        if cached is not None and cached.is_file():
+        if cached is not None and cached.is_file() and not self._is_toolchain_dir(cached.parent):
             return cached
 
         for directory in self._get_trusted_dirs():
@@ -339,6 +356,34 @@ class SoDeployer(BaseLibraryDeployer):
                 return candidate
 
         return None
+
+    def _get_toolchain_root(self) -> Path | None:
+        """Return the clang install root, or None when it cannot be determined."""
+        if self._toolchain_root_resolved:
+            return self._toolchain_root
+
+        root: Path | None = None
+        try:
+            from clang_tool_chain.platform.detection import get_platform_binary_dir
+
+            root = get_platform_binary_dir().parent.resolve()
+        except Exception as e:  # pragma: no cover - defensive
+            self.logger.debug(f"Could not determine toolchain root: {e}")
+
+        self._toolchain_root = root
+        self._toolchain_root_resolved = True
+        return root
+
+    def _is_toolchain_dir(self, directory: Path) -> bool:
+        """True when `directory` lives inside the clang toolchain install root."""
+        root = self._get_toolchain_root()
+        if root is None:
+            return False
+        try:
+            resolved = directory.resolve()
+        except OSError:  # pragma: no cover - defensive
+            return False
+        return resolved == root or root in resolved.parents
 
     def find_library_in_toolchain(self, lib_name: str) -> Path | None:
         """

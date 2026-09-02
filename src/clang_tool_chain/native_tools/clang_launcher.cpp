@@ -1499,17 +1499,40 @@ static std::vector<std::string> get_trusted_dirs() {
 //   3. The ldconfig cache (`ldconfig -p`)
 //   4. Default trusted directories (/lib, /lib64, /usr/lib, /usr/lib64,
 //      and the multiarch dirs, whichever exist)
+// True when `dir` lives inside the clang toolchain install root.
+//
+// Toolchain-owned directories must never count as "already resolvable": the
+// toolchain stamps -Wl,-rpath,<clang_root>/lib (and the compiler-rt lib dir)
+// into every binary it links, so without this exclusion libunwind and
+// libclang_rt.asan.so would always look resolvable and never get deployed.
+// The shipped binary would then depend on ~/.clang-tool-chain existing on the
+// target machine -- exactly what --deploy-dependencies exists to avoid.
+static bool is_toolchain_dir(const std::string& dir, const std::string& clang_root) {
+    if (clang_root.empty() || dir.empty()) return false;
+    if (dir.compare(0, clang_root.size(), clang_root) != 0) return false;
+    // Require a full path-component match so "/a/bc" does not match root "/a/b".
+    if (dir.size() == clang_root.size()) return true;
+    char next = dir[clang_root.size()];
+    return next == '/' || next == '\\';
+}
+
 static bool soname_is_resolvable(const std::string& soname,
                                   [[maybe_unused]] const std::string& binary_path,
-                                  const std::vector<std::string>& rpath_dirs) {
+                                  const std::vector<std::string>& rpath_dirs,
+                                  const std::string& clang_root) {
     for (const auto& dir : rpath_dirs) {
+        if (is_toolchain_dir(dir, clang_root)) continue;
         if (path_exists(path_join(dir, soname))) return true;
     }
     for (const auto& dir : get_ld_library_path_dirs()) {
+        if (is_toolchain_dir(dir, clang_root)) continue;
         if (path_exists(path_join(dir, soname))) return true;
     }
     auto it = get_ldconfig_cache().find(soname);
-    if (it != get_ldconfig_cache().end() && path_exists(it->second)) return true;
+    if (it != get_ldconfig_cache().end() && !is_toolchain_dir(get_dir_name(it->second), clang_root) &&
+        path_exists(it->second)) {
+        return true;
+    }
     for (const auto& dir : get_trusted_dirs()) {
         if (path_exists(path_join(dir, soname))) return true;
     }
@@ -1598,7 +1621,7 @@ static void deploy_shared_libs(const CtcCache& cache, const std::string& output_
     bool always_deploy = is_always_deploy_enabled();
     for (const auto& lib_name : needed) {
         if (platform == Platform::Linux && !always_deploy &&
-            soname_is_resolvable(lib_name, output_path, rpath_dirs)) {
+            soname_is_resolvable(lib_name, output_path, rpath_dirs, cache.clang_root)) {
             continue;
         }
 
