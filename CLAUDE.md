@@ -192,7 +192,7 @@ clang-tool-chain uninstall clang-env
 
 ```bash
 # Quick diagnostic test of the toolchain installation
-clang-tool-chain-test           # Runs 7 diagnostic tests
+clang-tool-chain-test           # Runs 8 diagnostic tests
 
 # Run all tests with coverage (parallel execution)
 ./test

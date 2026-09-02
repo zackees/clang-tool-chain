@@ -17,6 +17,7 @@ Usage:
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -173,14 +174,32 @@ def deploy_dependencies(
             logger.info("No deployable dependencies found")
             return 0
 
-        logger.info(f"Would deploy {len(dependencies)} libraries:")
+        # Linux: reflect the "already resolvable -> skip" behavior (see
+        # SoDeployer.is_resolvable / CLANG_TOOL_CHAIN_ALWAYS_DEPLOY) so the
+        # dry-run listing matches what deploy_all() would actually do.
+        is_resolvable = getattr(deployer, "is_resolvable", None) if platform == "linux" else None
+        always_deploy = os.environ.get("CLANG_TOOL_CHAIN_ALWAYS_DEPLOY", "").strip().lower() in ("1", "true", "yes")
+
+        to_deploy = []
         for dep in sorted(dependencies):
+            if is_resolvable is not None and not always_deploy:
+                resolved = is_resolvable(dep, binary_path)
+                if resolved is not None:
+                    logger.info(
+                        f"  Skipping {dep}: already resolvable at {resolved} "
+                        "(set CLANG_TOOL_CHAIN_ALWAYS_DEPLOY=1 to copy anyway)"
+                    )
+                    continue
+            to_deploy.append(dep)
+
+        logger.info(f"Would deploy {len(to_deploy)} libraries:")
+        for dep in to_deploy:
             src = deployer.find_library_in_toolchain(dep)
             if src:
                 logger.info(f"  {dep} <- {src}")
             else:
                 logger.info(f"  {dep} (source not found)")
-        return len(dependencies)
+        return len(to_deploy)
 
     # Actually deploy
     try:

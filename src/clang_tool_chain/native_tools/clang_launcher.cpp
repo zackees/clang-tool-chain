@@ -1373,6 +1373,172 @@ static std::string find_lib_in_search_dirs(const std::string& lib_name,
     return "";  // not found
 }
 
+// --- Resolvability check for --deploy-dependencies (GitHub issue #55, request #2) ---
+// "A check for 'is this soname already resolvable on this system' before
+// deploying would make the flag a no-op where it should be one." Mirrors
+// clang_tool_chain.deployment.so_deployer.SoDeployer.is_resolvable() as
+// closely as C++ allows. Linux only -- macOS dylib resolution uses very
+// different machinery (otool/dyld) and is out of scope here.
+
+// Escape hatch: CLANG_TOOL_CHAIN_ALWAYS_DEPLOY=1 restores the old
+// unconditional-copy behavior and skips the resolvability check entirely.
+// Same env var (and truthy values) as the Python side. Positively named,
+// so -- unlike CLANG_TOOL_CHAIN_NO_* -- it doesn't fit is_feature_disabled();
+// it gets its own tiny helper instead of bending that one.
+static bool is_always_deploy_enabled() {
+    return env_is_truthy("CLANG_TOOL_CHAIN_ALWAYS_DEPLOY");
+}
+
+// Parse DT_RPATH / DT_RUNPATH directory lists out of the `readelf -d` output
+// lines the caller already captured (no second `readelf` invocation). Lines
+// look like:
+//   0x000000000000000f (RPATH)    Library rpath: [/a:/b]
+//   0x000000000000001d (RUNPATH)  Library runpath: [$ORIGIN/../lib:/c]
+// $ORIGIN / ${ORIGIN} expand to the produced binary's own directory.
+// $LIB/$PLATFORM (and their ${...} forms) are dynamic-linker substitutions
+// that depend on the running system/ABI and can't be resolved statically,
+// so entries containing them are skipped. Mirrors
+// SoDeployer._parse_rpath_runpath().
+static std::vector<std::string> parse_rpath_runpath(const std::vector<std::string>& readelf_lines,
+                                                      const std::string& binary_dir) {
+    std::vector<std::string> dirs;
+    for (const auto& line : readelf_lines) {
+        if (!str_contains(line, "(RPATH)") && !str_contains(line, "(RUNPATH)")) continue;
+        size_t bracket = line.find('[');
+        size_t bracket_end = line.find(']', bracket);
+        if (bracket == std::string::npos || bracket_end == std::string::npos) continue;
+        std::string list = line.substr(bracket + 1, bracket_end - bracket - 1);
+
+        size_t start = 0;
+        while (start <= list.size()) {
+            size_t colon = list.find(':', start);
+            std::string entry = (colon == std::string::npos) ? list.substr(start)
+                                                               : list.substr(start, colon - start);
+            entry = trim(entry);
+            if (!entry.empty() &&
+                !str_contains(entry, "$LIB") && !str_contains(entry, "${LIB}") &&
+                !str_contains(entry, "$PLATFORM") && !str_contains(entry, "${PLATFORM}")) {
+                std::string expanded = entry;
+                size_t pos;
+                while ((pos = expanded.find("${ORIGIN}")) != std::string::npos)
+                    expanded.replace(pos, 9, binary_dir);
+                while ((pos = expanded.find("$ORIGIN")) != std::string::npos)
+                    expanded.replace(pos, 7, binary_dir);
+                if (std::find(dirs.begin(), dirs.end(), expanded) == dirs.end())
+                    dirs.push_back(expanded);
+            }
+            if (colon == std::string::npos) break;
+            start = colon + 1;
+        }
+    }
+    return dirs;
+}
+
+// Split LD_LIBRARY_PATH on ':'.
+static std::vector<std::string> get_ld_library_path_dirs() {
+    std::vector<std::string> dirs;
+    std::string raw = get_env("LD_LIBRARY_PATH");
+    size_t start = 0;
+    while (start <= raw.size()) {
+        size_t colon = raw.find(':', start);
+        std::string entry = (colon == std::string::npos) ? raw.substr(start) : raw.substr(start, colon - start);
+        if (!entry.empty()) dirs.push_back(entry);
+        if (colon == std::string::npos) break;
+        start = colon + 1;
+    }
+    return dirs;
+}
+
+// Parse `ldconfig -p` at most once per process and cache soname -> resolved
+// path (function-local static, lazily initialised). Degrades silently to an
+// empty cache when ldconfig is missing (e.g. NixOS, which does not ship it)
+// or exits non-zero -- the resolvability check simply falls through to the
+// trusted-directory check. Mirrors SoDeployer._get_ldconfig_cache(). Line
+// format:
+//   \tlibfoo.so.1 (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libfoo.so.1
+static const std::unordered_map<std::string, std::string>& get_ldconfig_cache() {
+    static const std::unordered_map<std::string, std::string> cache = [] {
+        std::unordered_map<std::string, std::string> result;
+        auto lines = run_capture_lines("ldconfig -p 2>/dev/null");
+        for (const auto& line : lines) {
+            size_t arrow = line.find("=>");
+            if (arrow == std::string::npos) continue;
+            std::string before = line.substr(0, arrow);
+            std::string after = trim(line.substr(arrow + 2));
+            size_t paren = before.find('(');
+            std::string soname = trim(paren == std::string::npos ? before : before.substr(0, paren));
+            if (!soname.empty() && !after.empty()) result[soname] = after;
+        }
+        return result;
+    }();
+    return cache;
+}
+
+// Default trusted library directories consulted by the dynamic loader when
+// nothing more specific (RPATH/RUNPATH, LD_LIBRARY_PATH, ldconfig cache)
+// resolves the soname. See ld.so(8). Only directories that actually exist
+// on this system are returned.
+static std::vector<std::string> get_trusted_dirs() {
+    static const char* candidates[] = {
+        "/lib", "/lib64", "/usr/lib", "/usr/lib64",
+        "/usr/lib/x86_64-linux-gnu", "/usr/lib/aarch64-linux-gnu",
+    };
+    std::vector<std::string> dirs;
+    for (const char* c : candidates) {
+        if (path_exists(c)) dirs.push_back(c);
+    }
+    return dirs;
+}
+
+// Check whether `soname` would already resolve via the dynamic loader's
+// normal search order, without copying anything and without executing
+// binary_path. Search order mirrors ld.so(8) and SoDeployer.is_resolvable():
+//   1. DT_RPATH / DT_RUNPATH of the produced binary (rpath_dirs, already
+//      parsed out of the readelf -d output the caller captured)
+//   2. LD_LIBRARY_PATH
+//   3. The ldconfig cache (`ldconfig -p`)
+//   4. Default trusted directories (/lib, /lib64, /usr/lib, /usr/lib64,
+//      and the multiarch dirs, whichever exist)
+// True when `dir` lives inside the clang toolchain install root.
+//
+// Toolchain-owned directories must never count as "already resolvable": the
+// toolchain stamps -Wl,-rpath,<clang_root>/lib (and the compiler-rt lib dir)
+// into every binary it links, so without this exclusion libunwind and
+// libclang_rt.asan.so would always look resolvable and never get deployed.
+// The shipped binary would then depend on ~/.clang-tool-chain existing on the
+// target machine -- exactly what --deploy-dependencies exists to avoid.
+static bool is_toolchain_dir(const std::string& dir, const std::string& clang_root) {
+    if (clang_root.empty() || dir.empty()) return false;
+    if (dir.compare(0, clang_root.size(), clang_root) != 0) return false;
+    // Require a full path-component match so "/a/bc" does not match root "/a/b".
+    if (dir.size() == clang_root.size()) return true;
+    char next = dir[clang_root.size()];
+    return next == '/' || next == '\\';
+}
+
+static bool soname_is_resolvable(const std::string& soname,
+                                  [[maybe_unused]] const std::string& binary_path,
+                                  const std::vector<std::string>& rpath_dirs,
+                                  const std::string& clang_root) {
+    for (const auto& dir : rpath_dirs) {
+        if (is_toolchain_dir(dir, clang_root)) continue;
+        if (path_exists(path_join(dir, soname))) return true;
+    }
+    for (const auto& dir : get_ld_library_path_dirs()) {
+        if (is_toolchain_dir(dir, clang_root)) continue;
+        if (path_exists(path_join(dir, soname))) return true;
+    }
+    auto it = get_ldconfig_cache().find(soname);
+    if (it != get_ldconfig_cache().end() && !is_toolchain_dir(get_dir_name(it->second), clang_root) &&
+        path_exists(it->second)) {
+        return true;
+    }
+    for (const auto& dir : get_trusted_dirs()) {
+        if (path_exists(path_join(dir, soname))) return true;
+    }
+    return false;
+}
+
 static void deploy_shared_libs(const CtcCache& cache, const std::string& output_path,
                                 bool has_asan, Platform platform) {
     if (is_feature_disabled("DEPLOY_LIBS")) return;
@@ -1388,6 +1554,9 @@ static void deploy_shared_libs(const CtcCache& cache, const std::string& output_
     // Determine which libraries to deploy
     // Use ldd/readelf on Linux, otool on macOS to find actual dependencies
     std::vector<std::string> needed;
+    // Populated from the same `readelf -d` output below (Linux only) so
+    // soname_is_resolvable() never needs a second `readelf` call.
+    std::vector<std::string> rpath_dirs;
 
     if (platform == Platform::Linux) {
         // readelf -d <exe> | grep NEEDED
@@ -1403,6 +1572,7 @@ static void deploy_shared_libs(const CtcCache& cache, const std::string& output_
                 if (!is_system_library(lib)) needed.push_back(lib);
             }
         }
+        rpath_dirs = parse_rpath_runpath(lines, output_dir);
     } else if (platform == Platform::Darwin) {
         // otool -L <exe>
         std::string cmd = "otool -L \"" + output_path + "\" 2>/dev/null";
@@ -1441,7 +1611,20 @@ static void deploy_shared_libs(const CtcCache& cache, const std::string& output_
     }
 
     // Deploy each needed library
+    // GitHub issue #55, request #2: on Linux, skip libraries the dynamic
+    // loader would already find on its own (RPATH/RUNPATH, LD_LIBRARY_PATH,
+    // ldconfig cache, or trusted dirs) -- copying them is unnecessary noise.
+    // CLANG_TOOL_CHAIN_ALWAYS_DEPLOY=1 restores the old unconditional-copy
+    // behavior. Nothing is printed for a resolved skip at default verbosity
+    // (the whole point is removing noise); this file has no general
+    // CLANG_TOOL_CHAIN_VERBOSE convention to hook into.
+    bool always_deploy = is_always_deploy_enabled();
     for (const auto& lib_name : needed) {
+        if (platform == Platform::Linux && !always_deploy &&
+            soname_is_resolvable(lib_name, output_path, rpath_dirs, cache.clang_root)) {
+            continue;
+        }
+
         std::string src = find_lib_in_search_dirs(lib_name, search_dirs);
         if (!src.empty()) {
             std::string dst = path_join(output_dir, lib_name);

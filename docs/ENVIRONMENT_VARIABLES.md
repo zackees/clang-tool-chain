@@ -1,8 +1,9 @@
 # Environment Variables
 
 <!-- AGENT: Read this file when working on CLANG_TOOL_CHAIN_* environment variables, note suppression,
-     or configuring automatic features (deployment, sanitizers, directives, linker, sysroot).
-     Key topics: NO_AUTO, NO_DEPLOY_LIBS, NO_SHARED_ASAN, NO_SANITIZER_ENV, NO_DIRECTIVES.
+     or configuring automatic features (deployment, sanitizers, directives, linker, sysroot, NixOS).
+     Key topics: NO_AUTO, NO_DEPLOY_LIBS, NO_SHARED_ASAN, NO_SANITIZER_ENV, NO_DIRECTIVES,
+     NO_NIXOS_CFG, ALWAYS_DEPLOY.
      Related: docs/CLANG_LLVM.md, docs/SHARED_LIBRARY_DEPLOYMENT.md, docs/DIRECTIVES.md. -->
 
 **Comprehensive Guide to clang-tool-chain Environment Variables**
@@ -15,6 +16,7 @@ This document lists all environment variables recognized by clang-tool-chain for
 - [Library Deployment](#library-deployment)
 - [Linker Configuration](#linker-configuration)
 - [Bundled Libraries (Linux)](#bundled-libraries-linux)
+- [NixOS Support (Linux)](#nixos-support-linux)
 - [Sanitizer Configuration](#sanitizer-configuration)
 - [Build Tools](#build-tools)
 - [Toolchain Installation](#toolchain-installation)
@@ -80,6 +82,7 @@ Environment variables for controlling automatic library dependency deployment (W
 | `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS` | All | Boolean | `0` | Disable library deployment for all output types |
 | `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB` | All | Boolean | `0` | Disable library deployment for shared library outputs only (.dll, .so, .dylib) |
 | `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE` | All | Boolean | `0` | Enable verbose DEBUG logging for library deployment |
+| `CLANG_TOOL_CHAIN_ALWAYS_DEPLOY` | Linux | Boolean | `0` | Always copy runtime libraries, even when the soname already resolves on this system |
 
 **Usage:**
 
@@ -101,7 +104,22 @@ clang-tool-chain-cpp main.cpp -o program --deploy-dependencies
 # DEBUG: Found library: libunwind.so.8
 # DEBUG: Copying libunwind.so.8 to /path/to/output
 # INFO: Deployed 1 shared library for program
+
+# Always deploy, even when a library is already resolvable via ldconfig / trusted dirs
+export CLANG_TOOL_CHAIN_ALWAYS_DEPLOY=1
+clang-tool-chain-cpp main.cpp -o program --deploy-dependencies
+# Copies every deployable dependency unconditionally, matching pre-resolvability-check behavior
 ```
+
+**Why ALWAYS_DEPLOY Exists:**
+
+On Linux, `--deploy-dependencies` normally skips copying a library next to the output binary when
+that library's soname is already resolvable on the current system (via its rpath/runpath, `ldconfig
+-p`, or the default trusted directories) -- see [NixOS Support](#nixos-support-linux) and
+[Architecture](ARCHITECTURE.md) for why this matters on non-FHS systems. `CLANG_TOOL_CHAIN_ALWAYS_DEPLOY=1`
+restores the old unconditional-copy behavior for cases where you want a fully self-contained output
+directory regardless of what the build machine happens to have installed (e.g. building an artifact
+meant to be copied to a different machine).
 
 **Difference Between NO_DEPLOY_LIBS and NO_DEPLOY_SHARED_LIB:**
 
@@ -248,6 +266,47 @@ The transformer does NOT inject paths when any of these flags are present:
 - Works on minimal Docker images and CI runners
 - Consistent headers across systems
 - Only headers are bundled (~3-5 MB compressed), linking uses system libc
+
+---
+
+## NixOS Support (Linux)
+
+NixOS has no FHS (there is no `/usr/lib`), so `clang-tool-chain install clang` probes the system's
+Nix-provided `gcc`/`g++` and writes `bin/clang.cfg` / `bin/clang++.cfg` next to the installed
+compiler with the flags (`--gcc-toolchain`, `-L`, `-Wl,-rpath`, ...) needed to find glibc/libstdc++/
+libgcc at compile and link time. See [Clang/LLVM: NixOS](CLANG_LLVM.md#nixos-linux) for the full
+mechanism (including why the ELF interpreter is deliberately left unpinned so nix-ld can run) and
+GitHub issue #55 for the original problem report.
+
+| Variable | Platforms | Type | Default | Description |
+|----------|-----------|------|---------|-------------|
+| `CLANG_TOOL_CHAIN_NO_NIXOS_CFG` | Linux (NixOS) | Boolean | `0` | Skip generating `clang.cfg`/`clang++.cfg` at install time |
+
+**Usage:**
+
+```bash
+# Default behavior on NixOS - clang.cfg/clang++.cfg generated automatically
+clang-tool-chain install clang
+# Wrote NixOS clang config: .../bin/clang.cfg
+# Wrote NixOS clang config: .../bin/clang++.cfg
+
+# Opt out of config generation (e.g. you manage --gcc-toolchain/-rpath yourself)
+export CLANG_TOOL_CHAIN_NO_NIXOS_CFG=1
+clang-tool-chain install clang
+# No clang.cfg/clang++.cfg written
+```
+
+**No-gcc Diagnosis:** if NixOS is detected but no `gcc`/`g++` is on `PATH`, config generation is
+skipped with a warning instead of failing the install -- produced binaries will not compile/link
+correctly until `gcc` is added to `environment.systemPackages` (or you run inside `nix-shell -p
+gcc`) and `clang-tool-chain install clang` is re-run. `clang-tool-chain-test` surfaces this same
+diagnosis, plus an ELF-level runtime-resolvability check (`clang_tool_chain.elf_check`) that warns
+when a produced binary's interpreter is pinned away from the platform default with unresolvable
+sonames -- the exact "compiles cleanly, links cleanly, and produces a binary that cannot start" trap
+from issue #55.
+
+**See Also:** [Clang/LLVM: NixOS](CLANG_LLVM.md#nixos-linux), [Library Deployment](#library-deployment)
+(`CLANG_TOOL_CHAIN_ALWAYS_DEPLOY`), [Testing Guide](TESTING.md)
 
 ---
 
@@ -499,11 +558,13 @@ is unavailable the shim prints an actionable error pointing at
 | `CLANG_TOOL_CHAIN_NO_DEPLOY_LIBS` | All | Deployment | Boolean | `0` | Disable library deployment (all outputs) |
 | `CLANG_TOOL_CHAIN_NO_DEPLOY_SHARED_LIB` | All | Deployment | Boolean | `0` | Disable deployment for shared library outputs only |
 | `CLANG_TOOL_CHAIN_LIB_DEPLOY_VERBOSE` | All | Deployment | Boolean | `0` | Verbose library deployment logs |
+| `CLANG_TOOL_CHAIN_ALWAYS_DEPLOY` | Linux | Deployment | Boolean | `0` | Always deploy, even when a soname already resolves |
 | `CLANG_TOOL_CHAIN_USE_SYSTEM_LD` | All | Linker | Boolean | `0` | Use system linker instead of lld |
 | `CLANG_TOOL_CHAIN_NO_RPATH` | Linux | Linker | Boolean | `0` | Disable automatic rpath injection |
 | `CLANG_TOOL_CHAIN_NO_SYSROOT` | macOS | SDK | Boolean | `0` | Disable automatic -isysroot injection |
 | `CLANG_TOOL_CHAIN_NO_BUNDLED_UNWIND` | Linux | Libraries | Boolean | `0` | Disable bundled libunwind (use system) |
 | `CLANG_TOOL_CHAIN_NO_BUNDLED_SYSROOT` | Linux, macOS | Libraries | Boolean | `0` | Disable bundled sysroot headers (use system) |
+| `CLANG_TOOL_CHAIN_NO_NIXOS_CFG` | Linux (NixOS) | NixOS | Boolean | `0` | Skip generating clang.cfg/clang++.cfg at install time |
 | `CLANG_TOOL_CHAIN_NO_SHARED_ASAN` | Linux, Windows | Sanitizer | Boolean | `0` | Disable automatic `-shared-libasan` injection |
 | `CLANG_TOOL_CHAIN_NO_SANITIZER_NOTE` | Linux, Windows | Sanitizer | Boolean | `0` | Suppress sanitizer flag injection note |
 | `CLANG_TOOL_CHAIN_NO_SANITIZER_ENV` | All | Sanitizer | Boolean | `0` | Disable automatic ASAN/LSAN options injection |
