@@ -12,6 +12,13 @@ on:
         required: true
         default: 'x86_64,arm64'
 
+# One live run per workflow per ref: a new push to a branch or PR cancels the
+# superseded run instead of queuing behind it in the shared account-wide runner
+# pool. Runs on main get a unique group, so they are never cancelled or coalesced.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   build-lldb-linux-x86_64:
     if: contains(github.event.inputs.architectures, 'x86_64')
