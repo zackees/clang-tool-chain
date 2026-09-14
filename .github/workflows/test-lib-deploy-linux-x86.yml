@@ -7,6 +7,11 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+# Never cancelled and never coalesced: every publish runs to completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   test-lib-deploy-linux-x86:
     name: Lib Deploy (Linux x86_64)
